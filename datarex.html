@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataRex - PDPA Compliance Made Easy</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            color: #1f2937;
+            background-color: #f9fafb;
+            line-height: 1.6;
+        }
+
+        /* ===== HEADER ===== */
+        .header {
+            background-color: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 700;
+            font-size: 1.25rem;
+            color: #2563eb;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background-color: #2563eb;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: #6b7280;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: #2563eb;
+        }
+
+        .btn-primary {
+            background-color: #2563eb;
+            color: white;
+            padding: 0.625rem 1.5rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: background-color 0.3s;
+        }
+
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background-color: white;
+            color: #2563eb;
+            padding: 0.625rem 1.5rem;
+            border: 2px solid #2563eb;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+        }
+
+        .btn-secondary:hover {
+            background-color: #eff6ff;
+        }
+
+        /* ===== PAGES ===== */
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        /* ===== LANDING PAGE ===== */
+        .landing-hero {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+
+        .hero-content {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background-color: #dbeafe;
+            color: #0369a1;
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 1rem;
+            color: #1f2937;
+        }
+
+        .hero-title .highlight {
+            color: #6b7280;
+        }
+
+        .hero-subtitle {
+            font-size: 1.125rem;
+            color: #6b7280;
+            margin-bottom: 2rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+
+        .btn-large {
+            padding: 0.875rem 2rem;
+            font-size: 1rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s;
+        }
+
+        .btn-large-primary {
+            background-color: #2563eb;
+            color: white;
+        }
+
+        .btn-large-primary:hover {
+            background-color: #1d4ed8;
+        }
+
+        .btn-large-secondary {
+            background-color: white;
+            color: #2563eb;
+            border: 2px solid #2563eb;
+        }
+
+        .btn-large-secondary:hover {
+            background-color: #eff6ff;
+        }
+
+        .hero-info {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-bottom: 3rem;
+        }
+
+        .hero-diagram {
+            background-color: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 3rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .diagram-flow {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .diagram-item {
+            text-align: center;
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .diagram-icon {
+            width: 60px;
+            height: 60px;
+            background-color: #dbeafe;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 0.5rem;
+            font-size: 1.5rem;
+        }
+
+        .diagram-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .diagram-arrow {
+            font-size: 1.5rem;
+            color: #d1d5db;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        .feature-card {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background-color: #dbeafe;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            font-size: 1.5rem;
+        }
+
+        .feature-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-description {
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+
+        /* ===== ONBOARDING PAGE ===== */
+        .onboarding-container {
+            max-width: 700px;
+            margin: 3rem auto;
+            padding: 0 2rem;
+        }
+
+        .onboarding-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .step-indicator {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-bottom: 1rem;
+        }
+
+        .onboarding-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .onboarding-subtitle {
+            color: #6b7280;
+            font-size: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #1f2937;
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .form-hint {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+
+        .toggle-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background-color: white;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .toggle-label {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .toggle-hint {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 28px;
+            background-color: #d1d5db;
+            border-radius: 2rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .toggle-switch.active {
+            background-color: #2563eb;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background-color: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s;
+        }
+
+        .toggle-switch.active::after {
+            left: 24px;
+        }
+
+        .form-button-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .btn-continue {
+            flex: 1;
+            padding: 0.875rem 2rem;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.3s;
+        }
+
+        .btn-continue:hover {
+            background-color: #1d4ed8;
+        }
+
+        /* ===== DASHBOARD PAGE ===== */
+        .dashboard-container {
+            display: flex;
+            min-height: calc(100vh - 60px);
+        }
+
+        .sidebar {
+            width: 240px;
+            background-color: white;
+            border-right: 1px solid #e5e7eb;
+            padding: 1.5rem 0;
+            overflow-y: auto;
+            max-height: calc(100vh - 60px);
+        }
+
+        .sidebar-section {
+            margin-bottom: 2rem;
+        }
+
+        .sidebar-section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #9ca3af;
+            text-transform: uppercase;
+            padding: 0 1.5rem;
+            margin-bottom: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
+            color: #6b7280;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.95rem;
+            position: relative;
+        }
+
+        .sidebar-item:hover {
+            background-color: #f3f4f6;
+            color: #2563eb;
+        }
+
+        .sidebar-item.active {
+            background-color: #eff6ff;
+            color: #2563eb;
+            font-weight: 600;
+        }
+
+        .sidebar-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background-color: #2563eb;
+        }
+
+        .sidebar-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .badge {
+            background-color: #ef4444;
+            color: white;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: auto;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .page-title {
+            font-size: 1.875rem;
+            font-weight: 700;
+        }
+
+        .page-subtitle {
+            color: #6b7280;
+            font-size: 1rem;
+            margin-top: 0.25rem;
+        }
+
+        .btn-add {
+            background-color: #2563eb;
+            color: white;
+            padding: 0.625rem 1.5rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-add:hover {
+            background-color: #1d4ed8;
+        }
+
+        .company-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .company-card {
+            background-color: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.3s;
+        }
+
+        .company-card:hover {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .company-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex: 1;
+        }
+
+        .company-icon {
+            width: 48px;
+            height: 48px;
+            background-color: #dbeafe;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .company-details h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .company-details p {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .company-tags {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .tag-active {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        .tag-sensitive {
+            background-color: #fed7aa;
+            color: #92400e;
+        }
+
+        .tag-border {
+            background-color: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .company-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .btn-switch {
+            padding: 0.5rem 1rem;
+            background-color: white;
+            color: #2563eb;
+            border: 1px solid #2563eb;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: all 0.3s;
+        }
+
+        .btn-switch:hover {
+            background-color: #eff6ff;
+        }
+
+        .btn-delete {
+            padding: 0.5rem;
+            background-color: white;
+            color: #ef4444;
+            border: 1px solid #fecaca;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .btn-delete:hover {
+            background-color: #fef2f2;
+        }
+
+        /* ===== CHECKLIST PAGE ===== */
+        .checklist-container {
+            max-width: 1000px;
+        }
+
+        .checklist-section {
+            background-color: white;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #e5e7eb;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .section-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+        }
+
+        .section-progress {
+            font-size: 0.875rem;
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+        .checklist-item {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.75rem;
+            background-color: #f9fafb;
+            transition: all 0.3s;
+        }
+
+        .checklist-item:hover {
+            background-color: #f3f4f6;
+        }
+
+        .checklist-checkbox {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #d1d5db;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            flex-shrink: 0;
+            margin-top: 0.25rem;
+            transition: all 0.3s;
+        }
+
+        .checklist-checkbox:hover {
+            border-color: #2563eb;
+        }
+
+        .checklist-checkbox.checked {
+            background-color: #2563eb;
+            border-color: #2563eb;
+        }
+
+        .checklist-content {
+            flex: 1;
+        }
+
+        .checklist-question {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.25rem;
+        }
+
+        .checklist-description {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        /* ===== UTILITIES ===== */
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                max-height: auto;
+                border-right: none;
+                border-bottom: 1px solid #e5e7eb;
+                display: flex;
+                overflow-x: auto;
+                padding: 0.75rem;
+            }
+
+            .sidebar-section {
+                margin-bottom: 0;
+                margin-right: 2rem;
+                white-space: nowrap;
+            }
+
+            .hero-title {
+                font-size: 2rem;
+            }
+
+            .hero-cta {
+                flex-direction: column;
+            }
+
+            .diagram-flow {
+                flex-direction: column;
+            }
+
+            .company-card {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .company-actions {
+                width: 100%;
+                margin-top: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">D</div>
+            <span>DataRex</span>
+        </div>
+        <nav class="nav-links">
+            <a href="#" onclick="showPage('landing')">How it works</a>
+            <a href="#" onclick="showPage('landing')">Pricing</a>
+            <a href="#" onclick="showPage('onboarding')">Log in</a>
+            <button class="btn-primary" onclick="showPage('onboarding')">Get started</button>
+        </nav>
+    </header>
+
+    <!-- LANDING PAGE -->
+    <div id="landing" class="page active">
+        <div class="landing-hero">
+            <div class="hero-content">
+                <div class="hero-badge">✓ Finally, a PDPA tool you'll actually use after training</div>
+                <h1 class="hero-title">PDPA compliance, <br>done for you. <span class="highlight">Not another checklist.</span></h1>
+                <p class="hero-subtitle">DataRex guides you step-by-step to manage personal data, track risks, and stay audit-ready — even if you just became a DPO.</p>
+                <div class="hero-cta">
+                    <button class="btn-large btn-large-primary" onclick="showPage('onboarding')">Start free →</button>
+                    <button class="btn-large btn-large-secondary" onclick="alert('See how it works feature')">⚙ See how it works</button>
+                </div>
+                <p class="hero-info">No legal jargon. No spreadsheets. No guesswork.</p>
+            </div>
+        </div>
+
+        <div class="hero-diagram">
+            <div class="diagram-flow">
+                <div class="diagram-item">
+                    <div class="diagram-icon">📊</div>
+                    <div class="diagram-label">CRM<br>Customer records</div>
+                </div>
+                <div class="diagram-arrow">→</div>
+                <div class="diagram-item">
+                    <div class="diagram-icon">👥</div>
+                    <div class="diagram-label">HR systems<br>Employee data</div>
+                </div>
+                <div class="diagram-arrow">→</div>
+                <div class="diagram-item">
+                    <div class="diagram-icon">🔐</div>
+                    <div class="diagram-label">DataRex<br>Compliance engine</div>
+                </div>
+                <div class="diagram-arrow">→</div>
+                <div class="diagram-item">
+                    <div class="diagram-icon">✓</div>
+                    <div class="diagram-label">Your safe data<br>Compliant. Audit-ready.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">📋</div>
+                <h3 class="feature-title">Know What Data You Have</h3>
+                <p class="feature-description">Get a complete inventory of all personal data across your systems.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">✓</div>
+                <h3 class="feature-title">Stay Compliant Without Guesswork</h3>
+                <p class="feature-description">Follow step-by-step guidance tailored to your business needs.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔍</div>
+                <h3 class="feature-title">Always Be Audit-Ready</h3>
+                <p class="feature-description">Maintain detailed records and documentation for compliance reviews.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ONBOARDING PAGE -->
+    <div id="onboarding" class="page">
+        <div class="onboarding-container">
+            <div class="onboarding-header">
+                <div class="step-indicator">Step 1 of 3</div>
+                <h2 class="onboarding-title">Tell us about your company</h2>
+                <p class="onboarding-subtitle">We'll tailor your compliance setup based on this.</p>
+            </div>
+
+            <form id="onboardingForm" onsubmit="handleOnboardingSubmit(event)">
+                <div class="form-group">
+                    <label class="form-label">Company name</label>
+                    <input type="text" class="form-input" placeholder="Enter company name" value="dsdsa" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">SSM / Company registration number</label>
+                    <input type="text" class="form-input" placeholder="Enter registration number" value="323" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Industry</label>
+                    <select class="form-select" required>
+                        <option value="">Select an industry</option>
+                        <option value="legal">Legal Firm</option>
+                        <option value="finance">Financial Services</option>
+                        <option value="healthcare">Healthcare</option>
+                        <option value="retail">Retail</option>
+                        <option value="tech">Technology</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Number of employees</label>
+                    <select class="form-select" required>
+                        <option value="">Select range</option>
+                        <option value="1-10">1-10</option>
+                        <option value="11-50">11-50</option>
+                        <option value="51-100">51-100</option>
+                        <option value="101-500">101-500</option>
+                        <option value="500+">500+</option>
+                    </select>
+                </div>
+
+                <div class="toggle-group">
+                    <div>
+                        <div class="toggle-label">Do you process sensitive data?</div>
+                        <div class="toggle-hint">Health, financial, biometric, religion, etc.</div>
+                    </div>
+                    <div class="toggle-switch active" onclick="toggleSwitch(this)"></div>
+                </div>
+
+                <div class="toggle-group">
+                    <div>
+                        <div class="toggle-label">Do you transfer data outside Malaysia?</div>
+                        <div class="toggle-hint">e.g. cloud servers in Singapore, US, EU.</div>
+                    </div>
+                    <div class="toggle-switch active" onclick="toggleSwitch(this)"></div>
+                </div>
+
+                <div class="form-button-group">
+                    <button type="button" class="btn-continue" style="background-color: white; color: #2563eb; border: 1px solid #2563eb;" onclick="showPage('landing')">Back</button>
+                    <button type="button" class="btn-continue" onclick="showPage('dashboard')">Continue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- DASHBOARD PAGE -->
+    <div id="dashboard" class="page">
+        <div class="dashboard-container">
+            <!-- SIDEBAR -->
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">Active Company</div>
+                    <div class="sidebar-item" style="padding: 0.75rem 1.5rem; font-weight: 600;">
+                        <span>dsdsa</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Manage companies')">
+                        <span style="font-size: 1.2rem;">+</span>
+                        <span>Manage companies</span>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">Overview</div>
+                    <div class="sidebar-item active" onclick="switchDashboardView('companies')">
+                        <span class="sidebar-icon">📊</span>
+                        <span>Dashboard</span>
+                    </div>
+                    <div class="sidebar-item" onclick="switchDashboardView('companies')">
+                        <span class="sidebar-icon">🏢</span>
+                        <span>Companies</span>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">Foundation</div>
+                    <div class="sidebar-item" onclick="alert('DPO section')">
+                        <span class="sidebar-icon">👤</span>
+                        <span>DPO</span>
+                    </div>
+                    <div class="sidebar-item" onclick="switchDashboardView('checklist')">
+                        <span class="sidebar-icon">✓</span>
+                        <span>Checklist</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Data Sources section')">
+                        <span class="sidebar-icon">📁</span>
+                        <span>Data Sources</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Data Register section')">
+                        <span class="sidebar-icon">📋</span>
+                        <span>Data Register</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Consent section')">
+                        <span class="sidebar-icon">🤝</span>
+                        <span>Consent</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Access Control section')">
+                        <span class="sidebar-icon">🔐</span>
+                        <span>Access Control</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Retention section')">
+                        <span class="sidebar-icon">⏱️</span>
+                        <span>Retention</span>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">Operations</div>
+                    <div class="sidebar-item" onclick="alert('Data Requests section')">
+                        <span class="sidebar-icon">📧</span>
+                        <span>Data Requests</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Breach Log section')">
+                        <span class="sidebar-icon">⚠️</span>
+                        <span>Breach Log</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('DPIA section')">
+                        <span class="sidebar-icon">📋</span>
+                        <span>DPIA</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Cross-border section')">
+                        <span class="sidebar-icon">🌍</span>
+                        <span>Cross-border</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Vendors section')">
+                        <span class="sidebar-icon">🤝</span>
+                        <span>Vendors</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Training section')">
+                        <span class="sidebar-icon">📚</span>
+                        <span>Training</span>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">Records</div>
+                    <div class="sidebar-item" onclick="alert('Documents section')">
+                        <span class="sidebar-icon">📄</span>
+                        <span>Documents</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Audit Report section')">
+                        <span class="sidebar-icon">📊</span>
+                        <span>Audit Report</span>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">Monitoring</div>
+                    <div class="sidebar-item" onclick="alert('System Integration section')">
+                        <span class="sidebar-icon">⚙️</span>
+                        <span>System Integration</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Activity Monitoring section')">
+                        <span class="sidebar-icon">📈</span>
+                        <span>Activity Monitoring</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Alerts section')">
+                        <span class="sidebar-icon">🔔</span>
+                        <span>Alerts</span>
+                        <div class="badge">1</div>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Cases section')">
+                        <span class="sidebar-icon">📁</span>
+                        <span>Cases</span>
+                    </div>
+                    <div class="sidebar-item" onclick="alert('Monitoring Report section')">
+                        <span class="sidebar-icon">📊</span>
+                        <span>Monitoring Report</span>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- MAIN CONTENT -->
+            <main class="main-content">
+                <!-- COMPANIES VIEW -->
+                <div id="companiesView" class="dashboard-view active">
+                    <div class="page-header">
+                        <div>
+                            <h1 class="page-title">Your companies</h1>
+                            <p class="page-subtitle">Manage compliance for multiple companies from one account.</p>
+                        </div>
+                        <button class="btn-add" onclick="alert('Add company feature')">+ Add company</button>
+                    </div>
+
+                    <div class="company-list">
+                        <div class="company-card">
+                            <div class="company-info">
+                                <div class="company-icon">🏢</div>
+                                <div class="company-details">
+                                    <h3>mac sdn bhd</h3>
+                                    <p>Legal Firm · 1-10 employees · SSM 1234</p>
+                                    <div class="company-tags">
+                                        <span class="tag tag-border">Cross-border</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="company-actions">
+                                <button class="btn-switch">Switch to</button>
+                                <button class="btn-delete">🗑️</button>
+                            </div>
+                        </div>
+
+                        <div class="company-card">
+                            <div class="company-info">
+                                <div class="company-icon">🏢</div>
+                                <div class="company-details">
+                                    <h3>ache sdn bhd</h3>
+                                    <p>HR / Recruitment Agency · 1-10 employees · SSM 456</p>
+                                    <div class="company-tags">
+                                        <span class="tag tag-sensitive">Sensitive data</span>
+                                        <span class="tag tag-border">Cross-border</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="company-actions">
+                                <button class="btn-switch">Switch to</button>
+                                <button class="btn-delete">🗑️</button>
+                            </div>
+                        </div>
+
+                        <div class="company-card">
+                            <div class="company-info">
+                                <div class="company-icon">🏢</div>
+                                <div class="company-details">
+                                    <h3>theroka sdn bhd</h3>
+                                    <p>E-commerce / Retail · 1-10 employees · SSM 123456789D</p>
+                                    <div class="company-tags">
+                                        <span class="tag tag-sensitive">Sensitive data</span>
+                                        <span class="tag tag-border">Cross-border</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="company-actions">
+                                <button class="btn-switch">Switch to</button>
+                                <button class="btn-delete">🗑️</button>
+                            </div>
+                        </div>
+
+                        <div class="company-card">
+                            <div class="company-info">
+                                <div class="company-icon">🏢</div>
+                                <div class="company-details">
+                                    <h3>dsdsa</h3>
+                                    <p>Legal Firm · 1-10 employees · SSM 323</p>
+                                    <div class="company-tags">
+                                        <span class="tag tag-active">✓ Active</span>
+                                        <span class="tag tag-sensitive">Sensitive data</span>
+                                        <span class="tag tag-border">Cross-border</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="company-actions">
+                                <button class="btn-switch" disabled style="opacity: 0.5;">Switch to</button>
+                                <button class="btn-delete">🗑️</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CHECKLIST VIEW -->
+                <div id="checklistView" class="dashboard-view hidden">
+                    <div class="page-header">
+                        <div>
+                            <h1 class="page-title">Compliance Checklist</h1>
+                            <p class="page-subtitle">Complete these items to ensure your company is PDPA compliant.</p>
+                        </div>
+                    </div>
+
+                    <div class="checklist-container">
+                        <!-- SECURITY SECTION -->
+                        <div class="checklist-section">
+                            <div class="section-header">
+                                <h3 class="section-title">Security</h3>
+                                <span class="section-progress">0/5</span>
+                            </div>
+
+                            <div class="checklist-item">
+                                <div class="checklist-checkbox" onclick="toggleCheckbox(this)"></div>
+                                <div class="checklist-content">
+                                    <div class="checklist-question">Is collected data stored securely?</div>
+                                    <div class="checklist-description">Use password protection, encryption, or secure cloud storage.</div>
+                                </div>
+                            </div>
+
+                            <div class="checklist-item">
+                                <div class="checklist-checkbox" onclick="toggleCheckbox(this)"></div>
+                                <div class="checklist-content">
+                                    <div class="checklist-question">Do you control who can access the data?</div>
+                                    <div class="checklist-description">Only authorised staff should see personal data.</div>
+                                </div>
+                            </div>
+
+                            <div class="checklist-item">
+                                <div class="checklist-checkbox" onclick="toggleCheckbox(this)"></div>
+                                <div class="checklist-content">
+                                    <div class="checklist-question">Do you use encryption for sensitive data?</div>
+                                    <div class="checklist-description">Encrypt data at rest and in transit.</div>
+                                </div>
+                            </div>
+
+                            <div class="checklist-item">
+                                <div class="checklist-checkbox" onclick="toggleCheckbox(this)"></div>
+                                <div class="checklist-content">
+                                    <div class="checklist-question">Do you have a password policy?</div>
+                                    <div class="checklist-description">Set rules for password length, change frequency, and 2FA where possible.</div>
+                                </div>
+                            </div>
+
+                            <div class="checklist-item">
+                                <div class="checklist-checkbox" onclick="toggleCheckbox(this)"></div>
+                                <div class="checklist-content">
+                                    <div class="checklist-question">Have you uploaded a written Security Policy?</div>
+                                    <div class="checklist-description">A short policy document everyone can refer to.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RETENTION SECTION -->
+                        <div class="checklist-section">
+                            <div class="section-header">
+                                <h3 class="section-title">Retention</h3>
+                                <span class="section-progress">0/2</span>
+                            </div>
+
+                            <div class="checklist-item">
+                                <div class="checklist-checkbox" onclick="toggleCheckbox(this)"></div>
+                                <div class="checklist-content">
+                                    <div class="checklist-question">Do you delete data when no longer needed?</div>
+                                    <div class="checklist-description">Don't keep data forever — set retention periods.</div>
+                                </div>
+                            </div>
+
+                            <div class="checklist-item">
+                                <div class="checklist-checkbox" onclick="toggleCheckbox(this)"></div>
+                                <div class="checklist-content">
+                                    <div class="checklist-question">Do you have a disposal method?</div>
+                                    <div class="checklist-description">Shredding, secure delete, vendor certificate, etc.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- DATA INTEGRITY SECTION -->
+                        <div class="checklist-section">
+                            <div class="section-header">
+                                <h3 class="section-title">Data Integrity</h3>
+                                <span class="section-progress">0/3</span>
+                            </div>
+
+                            <div class="checklist-item">
+                                <div class="checklist-checkbox" onclick="toggleCheckbox(this)"></div>
+                                <div class="checklist-content">
+                                    <div class="checklist-question">Is your data accurate and up-to-date?</div>
+                                    <div class="checklist-description">Regularly verify and update personal data records.</div>
+                                </div>
+                            </div>
+
+                            <div class="checklist-item">
+                                <div class="checklist-checkbox" onclick="toggleCheckbox(this)"></div>
+                                <div class="checklist-content">
+                                    <div class="checklist-question">Do you have a process to correct errors?</div>
+                                    <div class="checklist-description">Allow individuals to request corrections.</div>
+                                </div>
+                            </div>
+
+                            <div class="checklist-item">
+                                <div class="checklist-checkbox" onclick="toggleCheckbox(this)"></div>
+                                <div class="checklist-content">
+                                    <div class="checklist-question">Do you log data subject requests?</div>
+                                    <div class="checklist-description">Keep a record of every request and how you responded.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        function showPage(pageName) {
+            const pages = document.querySelectorAll('.page');
+            pages.forEach(page => page.classList.remove('active'));
+            document.getElementById(pageName).classList.add('active');
+        }
+
+        function toggleSwitch(element) {
+            element.classList.toggle('active');
+        }
+
+        function toggleCheckbox(element) {
+            element.classList.toggle('checked');
+        }
+
+        function switchDashboardView(viewName) {
+            const views = document.querySelectorAll('.dashboard-view');
+            views.forEach(view => view.classList.add('hidden'));
+            document.getElementById(viewName + 'View').classList.remove('hidden');
+
+            const items = document.querySelectorAll('.sidebar-item');
+            items.forEach(item => item.classList.remove('active'));
+            event.target.closest('.sidebar-item').classList.add('active');
+        }
+
+        function handleOnboardingSubmit(event) {
+            event.preventDefault();
+            showPage('dashboard');
+        }
+    </script>
+</body>
+</html>
