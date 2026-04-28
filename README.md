@@ -39,6 +39,52 @@ DataRex is a web-based PDPA (Personal Data Protection Act) compliance portal des
 | Storage | Browser localStorage (demo) |
 | Testing | pytest + Playwright |
 
+## Git Workflow
+
+### Clone & Setup
+```bash
+# Clone the repository
+git clone https://github.com/v3x5exia555/data_reg.git
+cd data_reg
+
+# Create a new branch for your changes
+git checkout -b feature/your-feature-name
+
+# Make your changes, then add and commit
+git add .
+git commit -m "Description of changes"
+
+# Push your branch to remote
+git push -u origin feature/your-feature-name
+
+# Create Pull Request on GitHub
+```
+
+### Updating existing branch
+```bash
+# Switch to your branch
+git checkout feature/your-feature-name
+
+# Make changes, commit
+git add .
+git commit -m "Updated features"
+
+# Push updates
+git push origin feature/your-feature-name
+```
+
+### Syncing with main
+```bash
+# Fetch latest
+git fetch origin
+
+# Merge main into your branch
+git merge origin/main
+
+# Or rebase
+git rebase origin/main
+```
+
 ## Getting Started
 
 ### Prerequisites
