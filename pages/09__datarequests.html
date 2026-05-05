@@ -1,0 +1,64 @@
+<div id="page-datarequests" class="page-shell">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  
+  <div class="page-header">
+    <h1>Data Subject Requests</h1>
+    <p>Log and track requests from individuals about their data. PDPA gives you 21 days to respond.</p>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-primary">
+        <i class="fa-solid fa-file-alt"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Total Requests</div>
+        <div class="stat-value" id="dsr-total-count">0</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-danger">
+        <i class="fa-solid fa-exclamation-circle"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Overdue</div>
+        <div class="stat-value" id="dsr-overdue-count">0</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-success">
+        <i class="fa-solid fa-check-circle"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Fulfilled</div>
+        <div class="stat-value" id="dsr-fulfilled-count">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-toolbar">
+    <div class="search-box">
+      <i class="fa-solid fa-search"></i>
+      <input type="text" id="datarequests-search" placeholder="Search requests…" oninput="renderDataRequests(state.dataRequests)">
+    </div>
+    <button class="btn btn-primary" onclick="resetDataRequestForm(); openModal('modal-data-request')">
+      <i class="fa-solid fa-plus"></i> Log Request
+    </button>
+  </div>
+
+  <div id="datarequests-body"></div>
+</div>
+
+<style>
+  .data-table-header { grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr auto; }
+  .data-table-row { grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr auto; }
+  .data-name { font-weight: 500; color: var(--text); }
+  .data-email { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .badge-access { background: var(--blue-100); color: var(--primary); }
+  .badge-deletion { background: var(--danger-light); color: var(--danger); }
+  .badge-correction { background: var(--warning-light); color: var(--warning); }
+  .badge-pending { background: var(--warning-light); color: var(--warning); }
+  .badge-progress { background: var(--blue-100); color: var(--primary); }
+  .badge-completed { background: var(--success-light); color: var(--success); }
+  .badge-overdue { background: var(--danger-light); color: var(--danger); }
+</style>

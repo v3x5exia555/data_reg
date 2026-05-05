@@ -4,6 +4,89 @@
    ============================================================ */
 
 /* ───────────────────────────────────────────────
+   JARVIS GLOBAL LOGGING SYSTEM
+   ─────────────────────────────────────────────── */
+const JARVIS_LOG = {
+  enabled: true,
+  
+  log(action, component, data = {}, response = null, error = null) {
+    if (!this.enabled) return;
+    
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+      timestamp,
+      action,
+      component,
+      data,
+      response,
+      error: error ? { message: error.message, code: error.code } : null,
+      user_id: state.user?.id || 'anonymous',
+      user_email: state.user?.email || 'anonymous'
+    };
+    
+    // Console output
+    console.log(
+      `%c[JARVIS] ${timestamp.split('T')[1].split('.')[0]} | ${component} | ${action}`,
+      'color: #4f46e5; font-weight: bold',
+      data,
+      response ? `✓ ${JSON.stringify(response)}` : '',
+      error ? `✗ ${error.message}` : ''
+    );
+    
+    // Save to Supabase (async, non-blocking)
+    this.saveToSupabase(logEntry);
+    
+    return logEntry;
+  },
+  
+  async saveToSupabase(entry) {
+    const supabase = getSupabaseClient();
+    if (!supabase || !isSupabaseConfigured()) return;
+    
+    try {
+      await supabase.from('system_logs').insert([{
+        action: entry.action,
+        component: entry.component,
+        data: entry.data,
+        response: entry.response,
+        error_message: entry.error?.message,
+        error_code: entry.error?.code,
+        user_id: entry.user_id,
+        user_email: entry.user_email
+      }]);
+    } catch (e) {
+      console.error('JARVIS Log Save Error:', e);
+    }
+  },
+  
+  // Convenience methods
+  click(component, element, data = {}) {
+    return this.log('CLICK', component, { element, ...data });
+  },
+  
+  submit(component, formName, data = {}) {
+    return this.log('SUBMIT', component, { form: formName, ...data });
+  },
+  
+  success(component, action, data = {}) {
+    return this.log('SUCCESS', component, { action, ...data });
+  },
+  
+  error(component, action, err, data = {}) {
+    return this.log('ERROR', component, { action, ...data }, null, err);
+  },
+  
+  pageView(page) {
+    return this.log('PAGE_VIEW', page, { url: window.location.hash });
+  }
+};
+
+// Global error handler
+window.addEventListener('error', (e) => {
+  JARVIS_LOG.error('Window', 'JavaScript Error', e.error || new Error(e.message));
+});
+
+/* ───────────────────────────────────────────────
    STATE
    ─────────────────────────────────────────────── */
 const state = {
@@ -44,8 +127,76 @@ const state = {
     { id: 'a2', type: 'error', title: 'Overdue compliance tasks', message: '2 checklist items are overdue. Complete them to maintain your compliance score.', link: 'checklist', linkText: 'View tasks' },
     { id: 'a3', type: 'info', title: 'Consent review due', message: 'Customer consent for newsletter marketing expires in 30 days. Consider renewal.', link: 'consent', linkText: 'Review' },
     { id: 'a4', type: 'warning', title: 'Retention deadline', message: 'Employee records from 2023 should be reviewed for deletion.', link: 'retention', linkText: 'Review records' }
-  ]
+  ],
+  dataRequests: [],
+  vendors: [],
+  trainingRecords: [],
+  dpoRecords: [],
+  processingActivities: []
 };
+
+const PAGES_TO_LOAD = [
+  'auth__landing', 'auth__login', 'auth__register', 'auth__onboarding',
+  '00__dashboard', '01__checklist', '02__companies', '03__datasources', 
+  '04__dataregister', '05__consent', '06__access', '07__retention', 
+  '07__vendors', '08__dpo', '08__training', '09__datarequests', '10__breachlog', 
+  '04__dpia', '06__crossborder', '15__documents', 
+  '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing'
+];
+
+async function loadAllPages() {
+  const mainArea = document.getElementById('main-content-area');
+  const modalContainer = document.getElementById('modal-container');
+  
+  // Load Modals
+  try {
+    const modalRes = await fetch('modals.html');
+    if (modalRes.ok) modalContainer.innerHTML = await modalRes.text();
+    if (typeof initActivityMatrices === 'function') initActivityMatrices();
+  } catch (e) { console.error('Failed to load modals:', e); }
+
+  // Load Pages
+  const loadPromises = PAGES_TO_LOAD.map(async (pageId) => {
+    try {
+      const res = await fetch(`pages/${pageId}.html`);
+      console.log(`Loading page ${pageId}: ${res.status}`);
+      if (res.ok) {
+        const html = await res.text();
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        
+        // Extract and execute scripts before appending
+        const scripts = temp.querySelectorAll('script');
+        const scriptCodes = [];
+        scripts.forEach(script => {
+          scriptCodes.push(script.textContent);
+          script.remove();
+        });
+        
+        const pageEl = temp.firstElementChild;
+        if (pageEl) {
+          console.log(`Page ${pageId} loaded, element ID: ${pageEl.id}`);
+          if (pageId.startsWith('auth__')) {
+            document.getElementById('app').appendChild(pageEl);
+          } else {
+            mainArea.appendChild(pageEl);
+          }
+          // Execute page-specific scripts
+          scriptCodes.forEach(code => {
+            try {
+              eval(code);
+              console.log(`Page ${pageId} script executed`);
+            } catch (e) {
+              console.error(`Script error in ${pageId}:`, e);
+            }
+          });
+        }
+      }
+    } catch (e) { console.error(`Failed to load page ${pageId}:`, e); }
+  });
+
+  await Promise.all(loadPromises);
+}
 
 // ─── LOCAL STORAGE PERSISTENCE ────────────────────────────────
 function loadState() {
@@ -55,7 +206,13 @@ function loadState() {
       const parsed = JSON.parse(saved);
       // Merge saved state into default state
       if (typeof parsed.isLoggedIn !== 'undefined') state.isLoggedIn = parsed.isLoggedIn;
-      if (parsed.user) Object.assign(state.user, parsed.user);
+      if (parsed.user) {
+        Object.assign(state.user, parsed.user);
+        // Migration: Fix non-UUID IDs from legacy registration
+        if (state.user.id && (state.user.id.startsWith('user-') || state.user.id.length < 32)) {
+           state.user.id = '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
+        }
+      }
       if (parsed.bizType) state.bizType = parsed.bizType;
       if (parsed.checks) Object.assign(state.checks, parsed.checks);
       if (parsed.records) state.records = parsed.records;
@@ -79,12 +236,54 @@ function switchOrg(company) {
   state.user.company = company;
   state.company = company;
   saveState();
+  
+  // Update UI immediately
+  const activeCompanyName = document.getElementById('active-company-name');
+  if (activeCompanyName) activeCompanyName.textContent = company;
+  
+  const dropdown = document.getElementById('org-dropdown');
+  if (dropdown) dropdown.classList.remove('open');
+  
   renderCompanies();
   renderRegister();
   renderDocuments();
+  loadDPOFromSupabase();
+  
   const selectEl = document.getElementById('company-select');
   if (selectEl) selectEl.value = company;
+  
   showToast(`Switched to ${company}`, 'success');
+}
+
+function toggleOrgDropdown() {
+  const dropdown = document.getElementById('org-dropdown');
+  if (dropdown) {
+    dropdown.classList.toggle('open');
+    if (dropdown.classList.contains('open')) {
+      renderOrgDropdown();
+    }
+  }
+}
+
+function renderOrgDropdown() {
+  const list = document.getElementById('org-dropdown-list');
+  if (!list) return;
+  
+  const companies = state.companies || [];
+  const current = state.user?.company;
+  
+  if (companies.length === 0) {
+    list.innerHTML = '<div class="org-dropdown-item" style="color:#9ca3af;cursor:default;justify-content:center;">No other companies</div>';
+    return;
+  }
+  
+  list.innerHTML = companies.map(c => `
+    <div class="org-dropdown-item ${c.name === current ? 'active' : ''}" onclick="switchOrg('${c.name}')">
+      <div class="item-icon">🏢</div>
+      <div style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name}</div>
+      ${c.name === current ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color:var(--blue)"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+    </div>
+  `).join('');
 }
 // Pre-populate demo user if not exists
 if (!localStorage.getItem('datarex_users')) {
@@ -125,7 +324,8 @@ function initAuthListener() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', initAuthListener);
+// Initialization moved to consolidated block at end of file
+// document.addEventListener('DOMContentLoaded', initAuthListener);
 
 // ─── TOAST NOTIFICATIONS ─────────────────────────────────────
 function showToast(message, type = 'info') {
@@ -357,6 +557,31 @@ function renderConsentFromDB(data) {
   });
   
   body.innerHTML = html;
+  updateConsentStats();
+}
+
+function updateConsentStats() {
+  const marketingRecordsCount = document.getElementById('marketing-records-count');
+  const missingOptoutCount = document.getElementById('missing-optout-count');
+  const optoutsLoggedCount = document.getElementById('optouts-logged-count');
+
+  if (!marketingRecordsCount) return;
+
+  // Filter records that involve marketing/newsletters
+  const marketingRecords = (state.records || []).filter(r => 
+    r.purpose.toLowerCase().includes('marketing') || 
+    r.purpose.toLowerCase().includes('newsletter') ||
+    r.purpose.toLowerCase().includes('promotions')
+  );
+
+  marketingRecordsCount.textContent = marketingRecords.length;
+  
+  // Check for records that might be missing opt-out info (demo logic)
+  const missing = marketingRecords.filter(r => !r.consent).length;
+  missingOptoutCount.textContent = missing;
+  
+  // Opt-outs logged (could be from a separate state.optouts array if implemented)
+  optoutsLoggedCount.textContent = state.optouts?.length || 0;
 }
 
 async function updateConsentDb(id, checked) {
@@ -399,15 +624,35 @@ function goTo(screenId, noPush) {
 }
 
 function showPage(pageId, navEl, noPush) {
+  console.log('showPage called:', pageId);
+  
+  // Hide all pages
   document.querySelectorAll('.page-shell').forEach(p => p.classList.remove('active'));
+  
+  // Deactivate all nav items
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   
+  // Find and activate target page
   const page = document.getElementById('page-' + pageId);
-  if (page) page.classList.add('active');
+  console.log('Page element found:', !!page);
   
+  if (page) {
+    page.classList.add('active');
+  } else {
+    console.log('ERROR: Page not found - page-' + pageId);
+  }
+  
+  // Activate nav item
   if (!navEl) navEl = document.getElementById('nav-' + pageId);
   if (navEl) navEl.classList.add('active');
   
+  // Page-specific actions
+  if (pageId === 'vendors' && typeof loadVendorsFromSupabase === 'function') loadVendorsFromSupabase();
+  if (pageId === 'training' && typeof loadTrainingFromSupabase === 'function') loadTrainingFromSupabase();
+  if (pageId === 'processing_activities' && typeof loadActivitiesFromSupabase === 'function') loadActivitiesFromSupabase();
+  if (pageId === 'dpo' && typeof loadDPOFromSupabase === 'function') loadDPOFromSupabase();
+  if (pageId === 'dataregister') renderRegister();
+  if (pageId === 'checklist') renderChecklist();
   if (pageId === 'audit') renderAudit();
   if (pageId === 'companies') loadCompaniesFromSupabase();
   if (pageId === 'consent') loadConsentFromSupabase();
@@ -415,21 +660,30 @@ function showPage(pageId, navEl, noPush) {
   if (pageId === 'breachlog') loadBreachLogFromSupabase();
   if (pageId === 'dpiapage') loadDPIAFromSupabase();
   if (pageId === 'crossborder') loadCrossBorderFromSupabase();
-  if (pageId === 'vendors') loadVendorsFromSupabase();
-  if (pageId === 'training') loadTrainingFromSupabase();
   if (pageId === 'alerts') loadAlertsFromSupabase();
   if (pageId === 'cases') loadCasesFromSupabase();
+  if (pageId === 'access') {
+    renderTeam();
+    loadNavPermissions();
+  }
+  if (pageId === 'retention') renderRetention();
   
-  // Show/hide admin-only elements based on user level
+  // Admin-only elements
   const isAdmin = state.currentUserLevel === 'Accountadmin';
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = isAdmin ? '' : 'none';
   });
   
+  // Update URL
   if (!noPush) {
-    history.pushState(null, '', '#/' + pageId);
+    const newUrl = '#/' + pageId;
+    console.log('Updating URL to:', newUrl);
+    history.pushState(null, '', newUrl);
   }
 }
+
+// Expose to global scope for onclick handlers
+window.showPage = showPage;
 
 async function doLogout() {
   const supabase = getSupabaseClient();
@@ -449,20 +703,24 @@ async function doLogout() {
 /* ───────────────────────────────────────────────
    AUTH: SHARED HELPERS
    ─────────────────────────────────────────────── */
-function togglePw(inputId, btn) {
+function togglePassword(inputId, btn) {
   const input = document.getElementById(inputId);
+  if (!input) return;
   const show  = input.type === 'password';
   input.type  = show ? 'text' : 'password';
-  btn.innerHTML = show
-    ? `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-         <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-         <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-         <line x1="1" y1="1" x2="23" y2="23"/>
-       </svg>`
-    : `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-       </svg>`;
+  if (btn) {
+    btn.innerHTML = show
+      ? `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+           <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+           <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+           <line x1="1" y1="1" x2="23" y2="23"/>
+         </svg>`
+      : `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+         </svg>`;
+  }
 }
+const togglePw = togglePassword; // Alias for backward compatibility
 
 function clearErrors(...ids) {
   ids.forEach(id => {
@@ -549,16 +807,17 @@ function clearSession() {
 /* ───────────────────────────────────────────────
    AUTH: LOGIN
    ─────────────────────────────────────────────── */
+
 async function doLogin() {
   console.log('=== LOGIN DEBUG START ===');
-  clearErrors('login-email', 'login-pw');
+  clearErrors('login-email', 'login-password');
   const email = document.getElementById('login-email').value.trim();
   const pw    = document.getElementById('login-password').value;
   console.log('Email:', email);
   console.log('Password:', pw ? 'provided' : 'empty');
 
   if (!isValidEmail(email)) { showError('login-email'); console.log('Invalid email'); return; }
-  if (!pw || pw.length < 4) { showError('login-pw'); console.log('Invalid password'); return; }
+  if (!pw || pw.length < 4) { showError('login-password'); console.log('Invalid password'); return; }
 
   const btn = document.getElementById('login-btn');
   btn.classList.add('loading');
@@ -573,37 +832,39 @@ async function doLogin() {
   try {
     let data = null;
 
-    // Use direct fetch since supabase client may not be initialized yet
-    const SUPABASE_URL = 'https://xvjfosmzmfitrcivsgpu.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_faN2IaAJ6HGApHqzmbvVFQ_vdMleyGH';
-    
-    const url = `${SUPABASE_URL}/rest/v1/app_credentials?email=eq.${encodeURIComponent(email)}&password=eq.${encodeURIComponent(pw)}&is_active=eq.true&limit=1`;
-    console.log('Calling API:', url);
-    
-    const response = await fetch(url, {
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json'
+    // 1. Try Supabase first
+    try {
+      const SUPABASE_URL = 'https://xvjfosmzmfitrcivsgpu.supabase.co';
+      const SUPABASE_ANON_KEY = 'sb_publishable_faN2IaAJ6HGApHqzmbvVFQ_vdMleyGH';
+      const url = `${SUPABASE_URL}/rest/v1/app_credentials?email=eq.${encodeURIComponent(email)}&password=eq.${encodeURIComponent(pw)}&is_active=eq.true&limit=1`;
+      
+      console.log('Calling API:', url);
+      const response = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result && result.length > 0) {
+          data = result[0];
+          console.log('Login SUCCESS (Supabase):', data.email);
+        }
       }
-    });
-    
-    console.log('Response status:', response.status);
-    const result = await response.json();
-    console.log('API Result:', result);
+    } catch (apiError) {
+      console.warn('Supabase login failed, trying fallback...', apiError);
+    }
 
-    if (response.ok && result && result.length > 0) {
-      data = result[0];
-      console.log('Login SUCCESS (Supabase):', data.email);
-    } else {
-      // Try localStorage users
+    // 2. Try LocalStorage fallback if Supabase failed
+    if (!data) {
       const localUsers = JSON.parse(localStorage.getItem('datarex_users') || '[]');
       const localUser = localUsers.find(u => u.email === email && u.password === pw);
       if (localUser) {
         data = localUser;
         console.log('Login SUCCESS (local):', data.email);
-      } else {
-        console.log('Login FAILED - no data returned');
       }
     }
 
@@ -611,9 +872,12 @@ async function doLogin() {
     btn.disabled = false;
 
     if (!data) {
-      showError('login-pw');
-      document.getElementById('login-pw-error').innerHTML =
-        '<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Invalid email or password.';
+      showError('login-password');
+      const errEl = document.getElementById('login-password-error');
+      if (errEl) {
+        errEl.innerHTML = '<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Invalid email or password.';
+        errEl.classList.add('visible');
+      }
       console.log('=== LOGIN DEBUG END (FAILED) ===');
       return;
     }
@@ -621,7 +885,6 @@ async function doLogin() {
     console.log('Creating session...');
     createSession(email);
     
-    // Update state with user info from login
     if (data) {
       state.user = {
         name: data.name || data.company || 'User',
@@ -635,9 +898,14 @@ async function doLogin() {
       saveState();
     }
     
-    document.getElementById('login-form').style.display = 'none';
-    document.getElementById('login-footer').style.display = 'none';
-    document.getElementById('login-success').classList.add('show');
+    const loginForm = document.getElementById('login-form');
+    const loginFooter = document.getElementById('login-footer');
+    const loginSuccess = document.getElementById('login-success');
+    
+    if (loginForm) loginForm.style.display = 'none';
+    if (loginFooter) loginFooter.style.display = 'none';
+    if (loginSuccess) loginSuccess.classList.add('show');
+    
     console.log('Launching app...');
     setTimeout(() => launchApp(), 1200);
     console.log('=== LOGIN DEBUG END (SUCCESS) ===');
@@ -645,7 +913,6 @@ async function doLogin() {
     btn.classList.remove('loading');
     btn.disabled = false;
     console.error('Login EXCEPTION:', error);
-    console.log('=== LOGIN DEBUG END (ERROR) ===');
     showToast('Login failed. Please try again.', 'error');
   }
 }
@@ -792,7 +1059,7 @@ function doRegister() {
     industry: industry,
     companySize: size,
     regNo: regNo,
-    id: 'user-' + Date.now()
+    id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0')
   };
   state.isLoggedIn = true;
   saveState();
@@ -802,7 +1069,21 @@ function doRegister() {
 }
 
 function demoLogin()     { 
+  console.log('Demo Login triggered');
   createSession('admin@datarex.com');
+  
+  // Check for existing demo DPO data
+  const savedDpo = localStorage.getItem('datarex_dpo');
+  if (savedDpo) {
+    try {
+      state.dpo = JSON.parse(savedDpo);
+      state.dpoHistory = [];
+    } catch (e) {
+      state.dpo = null;
+      state.dpoHistory = [];
+    }
+  }
+  
   // Set demo user state with regNo
   state.user = {
     name: 'Demo DPO',
@@ -811,11 +1092,18 @@ function demoLogin()     {
     industry: 'Technology',
     companySize: '11-50',
     regNo: '202001000001 (A)',
-    id: 'demo-user'
+    id: '00000000-0000-0000-0000-000000000001'
   };
   saveState();
   launchApp(); 
 }
+
+window.demoLogin = demoLogin;
+window.doLogin = doLogin;
+window.toggleOrgDropdown = toggleOrgDropdown;
+window.switchOrg = switchOrg;
+window.saveDPOToSupabase = saveDPOToSupabase;
+window.loadDPOFromSupabase = loadDPOFromSupabase;
 
 /* ───────────────────────────────────────────────
    LAUNCH APP
@@ -831,13 +1119,26 @@ function launchApp(user) {
   }
   saveState();
 
-  const firstName = state.user.name.split(' ')[0] || 'Demo';
-  document.getElementById('sidebar-name').textContent   = state.user.name;
-  document.getElementById('sidebar-org').textContent    = state.user.company;
-  document.getElementById('sidebar-avatar').textContent = firstName[0].toUpperCase();
-  document.getElementById('dash-name').textContent      = firstName;
-  document.getElementById('dash-date').textContent =
-    'Today is ' + new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) + '.';
+  const firstName = state.user.name ? state.user.name.split(' ')[0] : 'Demo';
+  const sidebarName = document.getElementById('sidebar-name');
+  if (sidebarName) sidebarName.textContent = state.user.name;
+  
+  const sidebarOrg = document.getElementById('sidebar-org');
+  if (sidebarOrg) sidebarOrg.textContent = state.user.company;
+
+  const activeCompanyName = document.getElementById('active-company-name');
+  if (activeCompanyName) activeCompanyName.textContent = state.user.company || 'Select Company';
+  
+  const sidebarAvatar = document.getElementById('sidebar-avatar');
+  if (sidebarAvatar) sidebarAvatar.textContent = firstName[0] ? firstName[0].toUpperCase() : 'D';
+  
+  const dashName = document.getElementById('dash-name');
+  if (dashName) dashName.textContent = firstName;
+  
+  const dashDate = document.getElementById('dash-date');
+  if (dashDate) {
+    dashDate.textContent = 'Today is ' + new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) + '.';
+  }
 
   renderChecklist();
   renderRegister();
@@ -869,20 +1170,39 @@ function updateScore() {
   const done  = Object.values(state.checks).filter(Boolean).length;
   const pct   = Math.round((done / total) * 100);
 
-  document.getElementById('score-display').textContent   = pct + '%';
-  document.getElementById('score-bar').style.width       = pct + '%';
-  document.getElementById('tasks-done-label').textContent = `${done} of ${total} tasks done`;
-  document.getElementById('stat-completed').textContent   = done;
-  document.getElementById('stat-pending').textContent     = total - done;
-  document.getElementById('prog-label').textContent       = `${done} of ${total} done`;
-  document.getElementById('prog-pct').textContent         = pct + '%';
-  document.getElementById('prog-fill').style.width        = pct + '%';
-  document.getElementById('glance-progress').textContent  = `${done}/${total} →`;
+  const scoreDisplay = document.getElementById('score-display');
+  if (scoreDisplay) scoreDisplay.textContent = pct + '%';
+  
+  const scoreBar = document.getElementById('score-bar');
+  if (scoreBar) scoreBar.style.width = pct + '%';
+  
+  const tasksDoneLabel = document.getElementById('tasks-done-label');
+  if (tasksDoneLabel) tasksDoneLabel.textContent = `${done} of ${total} tasks done`;
+  
+  const statCompleted = document.getElementById('stat-completed');
+  if (statCompleted) statCompleted.textContent = done;
+  
+  const statPending = document.getElementById('stat-pending');
+  if (statPending) statPending.textContent = total - done;
+  
+  const progLabel = document.getElementById('prog-label');
+  if (progLabel) progLabel.textContent = `${done} of ${total} done`;
+  
+  const progPct = document.getElementById('prog-pct');
+  if (progPct) progPct.textContent = pct + '%';
+  
+  const progFill = document.getElementById('prog-fill');
+  if (progFill) progFill.style.width = pct + '%';
+  
+  const glanceProgress = document.getElementById('glance-progress');
+  if (glanceProgress) glanceProgress.textContent = `${done}/${total} →`;
 
   const badge = document.getElementById('risk-badge');
-  if (pct >= 80)      { badge.textContent = 'Low risk';    badge.className = 'badge badge-green'; }
-  else if (pct >= 50) { badge.textContent = 'Medium risk'; badge.className = 'badge badge-amber'; }
-  else                { badge.textContent = 'High risk';   badge.className = 'badge badge-red'; }
+  if (badge) {
+    if (pct >= 80)      { badge.textContent = 'Low risk';    badge.className = 'badge badge-green'; }
+    else if (pct >= 50) { badge.textContent = 'Medium risk'; badge.className = 'badge badge-amber'; }
+    else                { badge.textContent = 'High risk';   badge.className = 'badge badge-red'; }
+  }
 }
 
 /* ───────────────────────────────────────────────
@@ -901,6 +1221,7 @@ function toggleAllChecklist(status) {
 
 async function renderChecklist() {
   const body = document.getElementById('checklist-body');
+  if (!body) return;
   body.innerHTML = '';
   
   const supabase = getSupabaseClient();
@@ -958,18 +1279,22 @@ async function renderChecklist() {
    ONBOARDING
    ─────────────────────────────────────────────── */
 async function renderRegister() {
-  const tbody = document.getElementById('register-body');
-  tbody.innerHTML = '';
+  const body = document.getElementById('register-body-wrap');
+  if (!body) return;
   
   const supabase = getSupabaseClient();
-  if (supabase && isSupabaseConfigured() && state.user.id) {
+  const demoUserId = '00000000-0000-0000-0000-000000000001';
+  
+  console.log('[JARVIS] Fetching from data_records...');
+  if (supabase && isSupabaseConfigured()) {
     const { data, error } = await supabase
       .from('data_records')
       .select('*')
-      .eq('user_id', state.user.id)
+      .eq('user_id', demoUserId)
       .order('created_at', { ascending: false });
     
     if (!error && data) {
+      console.log(`[JARVIS] Fetching from data_records... Success: ${data.length} records found.`);
       state.records = data.map(r => ({
         id: r.id,
         type: r.data_type,
@@ -982,30 +1307,70 @@ async function renderRegister() {
       }));
     }
   }
+
+  const list = state.records || [];
+
+  // Summary
+  const summaryEl = document.getElementById('register-summary');
+  if (summaryEl) {
+    const missingConsent = list.filter(r => !r.consent).length;
+    summaryEl.innerHTML = `
+      <div class="co-stat"><span class="co-stat-num">${list.length}</span><span class="co-stat-label">Total Records</span></div>
+      <div class="co-stat-divider"></div>
+      <div class="co-stat"><span class="co-stat-num co-num-red">${missingConsent}</span><span class="co-stat-label">Missing Consent</span></div>
+    `;
+  }
+
+  // Search
+  const q = (document.getElementById('register-search')?.value || '').toLowerCase();
+  const filtered = q ? list.filter(r => 
+    (r.type||'').toLowerCase().includes(q) || 
+    (r.purpose||'').toLowerCase().includes(q) ||
+    (r.storage||'').toLowerCase().includes(q)
+  ) : list;
+
+  if (filtered.length === 0) {
+    body.innerHTML = `<div class="empty-state"><p>${q ? 'No results for "' + q + '"' : 'No data records yet'}</p><small>Click "+ Add record" to start building your data inventory.</small></div>`;
+    return;
+  }
   
-  state.records.forEach((r, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><strong>${r.type}</strong></td>
-      <td style="color:var(--muted)">${r.purpose}</td>
-      <td style="color:var(--muted)">${r.storage}</td>
-      <td style="color:var(--muted)">${r.access}</td>
-      <td style="color:var(--muted)">${r.retention} mo</td>
-      <td><span class="badge ${r.consent ? 'badge-green' : 'badge-red'}">${r.consent ? 'Yes' : 'Missing'}</span></td>
-      <td><button class="del-btn" onclick="deleteRecord(${i})" title="Delete">✕</button></td>`;
-    tbody.appendChild(tr);
-  });
-  document.getElementById('glance-records').textContent = state.records.length + ' →';
+  body.innerHTML = `<div class="data-table-wrap"><table class="styled-table"><thead style="background:#f8fafc;"><tr style="background:#f8fafc;">
+    <th class="th-narrow" style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">ID</th>
+    <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Data Type</th>
+    <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Purpose</th>
+    <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Storage</th>
+    <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Access</th>
+    <th class="th-narrow" style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Retention</th>
+    <th class="th-narrow" style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Consent</th>
+    <th class="th-actions" style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;"></th>
+  </tr></thead><tbody>${filtered.map((r, i) => `
+    <tr>
+      <td class="td-id">#${i + 1}</td>
+      <td class="td-bold td-type">${r.type}</td>
+      <td class="td-muted td-purpose">${r.purpose}</td>
+      <td class="td-muted">${r.storage}</td>
+      <td class="td-muted">${r.access}</td>
+      <td class="td-muted">${r.retention} mo</td>
+      <td><span class="status-badge ${r.consent ? 'status-active' : 'status-error'}">${r.consent ? 'Yes' : 'Missing'}</span></td>
+      <td><div class="row-actions co-actions td-actions">
+        <button class="btn-edit" onclick="editRecord(${i})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="btn-delete" onclick="deleteRecord(${i})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+      </div></td>
+    </tr>`).join('')}</tbody></table></div>`;
+
+  const glanceRecords = document.getElementById('glance-records');
+  if (glanceRecords) glanceRecords.textContent = list.length + ' →';
 }
 
 async function deleteRecord(i) {
   const record = state.records[i];
   if (confirm(`Delete "${record?.type || 'this record'}"?`)) {
     const supabase = getSupabaseClient();
-    if (supabase && isSupabaseConfigured() && state.user.id && record?.id) {
+    if (supabase && isSupabaseConfigured() && record?.id) {
       await supabase.from('data_records').delete().eq('id', record.id);
     }
     state.records.splice(i, 1);
+    localStorage.setItem('datarex_records', JSON.stringify(state.records));
     saveState();
     renderRegister();
     renderConsent();
@@ -1018,7 +1383,34 @@ async function deleteRecord(i) {
    MODALS
    ─────────────────────────────────────────────── */
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModal(id) { 
+  document.getElementById(id).classList.remove('open'); 
+  if (id === 'modal-record') {
+    resetRecordForm();
+  }
+  if (id === 'modal-data-request') {
+    resetDataRequestForm();
+  }
+}
+
+function editRecord(index) {
+  const record = state.records[index];
+  if (!record) return;
+  
+  document.getElementById('rec-index').value = index;
+  document.getElementById('rec-type').value = record.type || '';
+  document.getElementById('rec-purpose').value = record.purpose || '';
+  document.getElementById('rec-storage').value = record.storage || '';
+  document.getElementById('rec-access').value = record.access || '';
+  document.getElementById('rec-retention').value = record.retention || 12;
+  document.getElementById('rec-consent').checked = record.consent || false;
+  document.getElementById('rec-note').value = record.note || '';
+  
+  document.getElementById('modal-record-title').textContent = 'Edit data record';
+  document.getElementById('rec-save-btn').textContent = 'Update record';
+  
+  openModal('modal-record');
+}
 
 async function saveRecord() {
   const type      = document.getElementById('rec-type').value.trim();
@@ -1028,16 +1420,75 @@ async function saveRecord() {
   const retention = parseInt(document.getElementById('rec-retention').value) || 12;
   const consent   = document.getElementById('rec-consent').checked;
   const note      = document.getElementById('rec-note').value.trim();
+  const editIndex = parseInt(document.getElementById('rec-index').value);
 
   if (!type) {
+    JARVIS_LOG.error('DataRegister', 'Validation failed', new Error('Type of data is required'));
     showToast('Please enter the type of data.', 'error');
     return;
   }
 
+  const recordData = { type, purpose, storage, access, retention, consent, note };
   const supabase = getSupabaseClient();
-  if (supabase && isSupabaseConfigured() && state.user.id) {
+  const demoUserId = '00000000-0000-0000-0000-000000000001';
+  
+  JARVIS_LOG.submit('DataRegister', editIndex >= 0 ? 'Update' : 'Insert', { 
+    form_data: recordData, 
+    editIndex,
+    timestamp: new Date().toISOString() 
+  });
+
+  if (editIndex >= 0) {
+    const existingRecord = state.records[editIndex];
+    Object.assign(state.records[editIndex], recordData);
+    state.records[editIndex].id = existingRecord.id;
+    state.records[editIndex].updated_at = new Date().toISOString();
+    
+    if (supabase && isSupabaseConfigured() && existingRecord.id && !String(existingRecord.id).startsWith('local-')) {
+      const { error } = await supabase.from('data_records').update({
+        data_type: type,
+        purpose: purpose,
+        storage: storage,
+        access_level: access,
+        retention_months: retention,
+        consent_obtained: consent,
+        note: note,
+        updated_at: new Date().toISOString()
+      }).eq('id', existingRecord.id);
+
+      console.table({
+        timestamp: new Date().toISOString(),
+        operation: 'UPDATE',
+        table: 'data_records',
+        record_id: existingRecord.id,
+        supabase_response: error ? `ERROR: ${error.message}` : 'SUCCESS',
+        error_message: error?.message || 'N/A'
+      });
+
+      if (error) {
+        JARVIS_LOG.error('DataRegister', 'Update to Supabase', error);
+      } else {
+        JARVIS_LOG.success('DataRegister', 'Update to Supabase', { id: existingRecord.id });
+      }
+    }
+    
+    localStorage.setItem('datarex_records', JSON.stringify(state.records));
+    saveState();
+    renderRegister();
+    renderConsent();
+    renderRetention();
+    closeModal('modal-record');
+    resetRecordForm();
+    showToast('Record updated!', 'success');
+    return;
+  }
+
+  state.records.unshift(recordData);
+  localStorage.setItem('datarex_records', JSON.stringify(state.records));
+  
+  if (supabase && isSupabaseConfigured()) {
     const { data, error } = await supabase.from('data_records').insert([{
-      user_id: state.user.id,
+      user_id: demoUserId,
       data_type: type,
       purpose: purpose,
       storage: storage,
@@ -1047,19 +1498,26 @@ async function saveRecord() {
       note: note
     }]).select().single();
 
+    console.table({
+      timestamp: new Date().toISOString(),
+      operation: 'INSERT',
+      table: 'data_records',
+      form_data: JSON.stringify(recordData),
+      supabase_response: error ? `ERROR: ${error.code}` : 'SUCCESS',
+      error_message: error?.message || 'N/A',
+      error_details: error ? JSON.stringify(error) : 'N/A'
+    });
+
     if (error) {
-      console.error('Save error:', error);
-      state.records.unshift({ type, purpose, storage, access, retention, consent, note });
-      showToast('Record saved locally', 'success');
+      JARVIS_LOG.error('DataRegister', 'Insert to Supabase', error);
+      showToast('Record saved (local + sync queued)', 'success');
     } else if (data) {
-      state.records.unshift({
-        id: data.id,
-        type, purpose, storage, access, retention, consent, note
-      });
+      recordData.id = data.id;
+      JARVIS_LOG.success('DataRegister', 'Insert to Supabase', { id: data.id });
       showToast('Record saved!', 'success');
     }
   } else {
-    state.records.push({ type, purpose, storage, access, retention, consent, note });
+    recordData.id = 'local-' + Date.now();
     showToast('Record saved locally', 'success');
   }
   
@@ -1068,17 +1526,30 @@ async function saveRecord() {
   renderConsent();
   renderRetention();
   closeModal('modal-record');
-  ['rec-type','rec-purpose','rec-storage','rec-access','rec-note'].forEach(id => document.getElementById(id).value = '');
+  resetRecordForm();
+}
+
+function resetRecordForm() {
+  document.getElementById('rec-index').value = '-1';
+  document.getElementById('rec-type').value = '';
+  document.getElementById('rec-purpose').value = '';
+  document.getElementById('rec-storage').value = '';
+  document.getElementById('rec-access').value = '';
   document.getElementById('rec-retention').value = '12';
   document.getElementById('rec-consent').checked = false;
+  document.getElementById('rec-note').value = '';
+  document.getElementById('modal-record-title').textContent = 'Add data record';
+  document.getElementById('rec-save-btn').textContent = 'Save record';
 }
 
 async function saveCompany() {
+  const id = document.getElementById('company-id').value;
   const name = document.getElementById('company-name').value.trim();
   const country = document.getElementById('company-country').value;
   const dpo = document.getElementById('company-dpo').value.trim();
   const industry = document.getElementById('company-industry').value;
   const regNo = document.getElementById('company-reg-no').value.trim();
+
   
   if (!name) {
     showToast('Please enter a company name.', 'error');
@@ -1093,13 +1564,26 @@ async function saveCompany() {
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured()) {
     try {
-      const { data, error } = await supabase.from('companies').insert([{
+      let query = supabase.from('companies');
+      const companyData = {
         name: name,
         industry: industry,
         country: country,
         dpo_name: dpo,
-        reg_no: regNo
-      }]).select().single();
+        reg_no: regNo,
+        updated_at: new Date().toISOString()
+      };
+      
+      let res;
+      if (id) {
+        // Update existing
+        res = await query.update(companyData).eq('id', id).select().single();
+      } else {
+        // Insert new
+        res = await query.insert([companyData]).select().single();
+      }
+      
+      const { data, error } = res;
       
       if (error) {
         console.error('Save error:', error);
@@ -1112,8 +1596,13 @@ async function saveCompany() {
         renderCompanies();
         showToast(`${name} added! (local)`, 'success');
       } else {
-        state.companies = state.companies || [];
-        state.companies.push(data);
+        // Check if company already exists (by id for SQL or by name for local)
+        const existingIdx = state.companies.findIndex(c => c.id === data.id);
+        if (existingIdx >= 0) {
+          state.companies[existingIdx] = data;
+        } else {
+          state.companies.push(data);
+        }
         state.user.company = name;
         saveState();
         renderCompanies();
@@ -1174,32 +1663,111 @@ function sortCompanies(column) {
 }
 
 function renderCompanies() {
-  const body = document.getElementById('companies-body');
+  const body = document.getElementById('companies-body-wrap');
   if (!body) return;
-  
-  // Get current company from state - handle multiple sources
+
   const currentCompanyName = state.user?.company || state.company || 'Acme Pte Ltd';
   const companies = state.companies || [{ name: 'Acme Pte Ltd', regNo: '202001000001 (A)', industry: 'General', country: 'Singapore', dpo_name: 'Demo DPO' }];
-  
-  const getSortIcon = (col) => {
-    if (companiesSortCol !== col) return '↕';
-    return companiesSortAsc ? '↑' : '↓';
-  };
-  
-  body.innerHTML = companies.map(c => {
-    const isCurrent = (c.name || '').toLowerCase() === (currentCompanyName || '').toLowerCase();
-    return `
-    <tr>
-      <td><strong>${c.name}</strong></td>
-      <td style="font-family:monospace;font-size:13px;">${c.regNo || c.reg_no || '-'}</td>
-      <td>${c.industry || '-'}</td>
-      <td>${c.country || '-'}</td>
-      <td>${c.dpo_name || 'Not assigned'}</td>
-      <td>
-        ${isCurrent ? '<span style="color:var(--blue);font-weight:500;">Active</span>' : `<button class="btn btn-outline btn-sm" onclick="switchOrg('${c.name}')">Switch</button>`}
-      </td>
-    </tr>
-  `}).join('');
+
+  // Summary
+  const summaryEl = document.getElementById('companies-summary');
+  if (summaryEl) {
+    const dpoCount = companies.filter(c => c.dpo_name).length;
+    summaryEl.innerHTML = `
+      <div class="co-stat"><span class="co-stat-num">${companies.length}</span><span class="co-stat-label">Total</span></div>
+      <div class="co-stat-divider"></div>
+      <div class="co-stat"><span class="co-stat-num co-num-green">${dpoCount}</span><span class="co-stat-label">DPO Assigned</span></div>
+      <div class="co-stat-divider"></div>
+      <div class="co-stat"><span class="co-stat-num co-num-blue">1</span><span class="co-stat-label">Active</span></div>
+    `;
+  }
+
+  const q = (document.getElementById('companies-search')?.value || '').toLowerCase();
+  const list = q ? companies.filter(c =>
+    (c.name||'').toLowerCase().includes(q) ||
+    (c.industry||'').toLowerCase().includes(q)
+  ) : companies;
+
+  if (!list.length) {
+    body.innerHTML = `<div class="empty-state"><p>No results for "${q}"</p></div>`;
+    return;
+  }
+
+  const COLORS = ['#3B6FF0','#7C3AED','#0891B2','#059669','#D97706','#DB2777'];
+  const getColor = (s) => COLORS[(s||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0) % COLORS.length];
+
+  body.innerHTML = `<div class="data-table-wrap"><table class="styled-table"><thead><tr>
+    <th class="th-company">Company</th><th class="th-industry">Industry</th><th class="th-country">Country</th><th class="th-dpo">DPO</th><th class="th-date">Updated</th><th class="th-actions"></th>
+  </tr></thead><tbody>${list.map(c => {
+    const isCurrent = (c.name||'').toLowerCase() === (currentCompanyName||'').toLowerCase();
+    const color = getColor(c.name);
+    const initials = (c.name||'?').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+    const lastUpdated = c.updated_at ? new Date(c.updated_at).toLocaleString('en-GB', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+    const cJson = encodeURIComponent(JSON.stringify(c));
+    return `<tr class="${isCurrent ? 'co-row-active' : ''}">
+      <td><div class="table-avatar"><div class="co-avatar" style="background:${color}18;color:${color}">${initials}</div><div><div class="table-avatar-name">${c.name}</div><div class="co-reg">${c.regNo || ''}</div></div></div></td>
+      <td><span class="table-tag">${c.industry || 'General'}</span></td>
+      <td class="td-muted">${c.country || '—'}</td>
+      <td class="td-muted">${c.dpo_name || '—'}</td>
+      <td class="td-muted co-date">${lastUpdated}</td>
+      <td><div class="row-actions co-actions td-actions">
+        ${isCurrent ? '<span class="status-badge status-active">Active</span>' : `<button class="btn-edit" onclick="switchOrg('${c.name}')">Switch</button>`}
+        <button class="btn-edit" onclick="editCompany('${cJson}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="btn-delete" onclick="deleteCompany('${c.id}', '${c.name}')" title="Delete"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+      </div></td>
+    </tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+
+async function deleteCompany(id, name) {
+  if (id === 'undefined' || !id) {
+    // Local delete for demo data
+    if (confirm(`Delete local company "${name}"?`)) {
+      state.companies = state.companies.filter(c => c.name !== name);
+      saveState();
+      renderCompanies();
+      showToast(`Company "${name}" removed`, 'success');
+    }
+    return;
+  }
+
+  if (confirm(`Delete company "${name}"? This will remove all associated data in SQL. This action cannot be undone.`)) {
+    const supabase = getSupabaseClient();
+    if (supabase && isSupabaseConfigured()) {
+      const { error } = await supabase.from('companies').delete().eq('id', id);
+      if (error) {
+        console.error('Delete error:', error);
+        showToast('Failed to delete from SQL: ' + error.message, 'error');
+      } else {
+        state.companies = state.companies.filter(c => c.id !== id);
+        if (state.user.company === name) state.user.company = '';
+        saveState();
+        renderCompanies();
+        showToast(`Company "${name}" deleted from SQL`, 'success');
+      }
+    } else {
+      showToast('Supabase not configured', 'error');
+    }
+  }
+}
+
+function editCompany(cJsonStr) {
+  try {
+    const c = JSON.parse(decodeURIComponent(cJsonStr));
+    const titleEl = document.getElementById('modal-company-title');
+    if (titleEl) titleEl.textContent = 'Update company';
+    
+    document.getElementById('company-id').value = c.id || '';
+    document.getElementById('company-name').value = c.name || '';
+    document.getElementById('company-country').value = c.country || 'Singapore';
+    document.getElementById('company-dpo').value = c.dpo_name || '';
+    document.getElementById('company-industry').value = c.industry || 'General';
+    document.getElementById('company-reg-no').value = c.regNo || c.reg_no || '';
+    
+    openModal('modal-company');
+  } catch(e) {
+    console.error('Failed to parse company data', e);
+  }
 }
 
 async function loadCompaniesFromSupabase() {
@@ -1233,52 +1801,293 @@ async function loadCompaniesFromSupabase() {
 
 async function loadDataRequestsFromSupabase() {
   const supabase = getSupabaseClient();
-  if (!supabase || !isSupabaseConfigured()) return;
   
-  const { data, error } = await supabase
-    .from('data_requests')
-    .select('*')
+  // Load from localStorage first
+  const saved = localStorage.getItem('datarex_dataRequests');
+  if (saved) {
+    try {
+      state.dataRequests = JSON.parse(saved);
+    } catch (e) {}
+  }
+  
+  if (!supabase || !isSupabaseConfigured()) {
+    renderDataRequests(state.dataRequests);
+    return;
+  }
+  
+  let query = supabase.from('data_requests').select('*');
+  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
+  const orgId = currentCompany ? currentCompany.id : state.user?.id;
+  
+  if (orgId) query = query.eq('org_id', orgId);
+  const { data, error } = await query
     .order('created_at', { ascending: false });
   
   if (error) {
     console.error('Failed to load data requests:', error);
+    renderDataRequests(state.dataRequests);
     return;
   }
   
-  renderDataRequests(data);
+  if (data && data.length > 0) {
+    state.dataRequests = data;
+  }
+  renderDataRequests(state.dataRequests);
+}
+
+function editDataRequest(index) {
+  const request = state.dataRequests[index];
+  if (!request) return;
+  
+  document.getElementById('req-index').value = index;
+  document.getElementById('req-name').value = request.requester_name || '';
+  document.getElementById('req-email').value = request.requester_email || '';
+  document.getElementById('req-type').value = request.request_type || 'Access';
+  document.getElementById('req-description').value = request.description || '';
+  document.getElementById('req-assigned').value = request.assigned_to || '';
+  
+  document.querySelector('.modal-dsr-title').textContent = 'Edit data subject request';
+  document.getElementById('req-save-btn').textContent = 'Update Request';
+  
+  openModal('modal-data-request');
+}
+
+async function deleteDataRequest(index) {
+  const request = state.dataRequests[index];
+  if (!request) return;
+  
+  if (confirm(`Delete request from "${request.requester_name}"?`)) {
+    // Delete from Supabase if it has a real ID
+    if (supabase && isSupabaseConfigured() && request.id && !String(request.id).startsWith('local-')) {
+      const { error } = await supabase.from('data_requests').delete().eq('id', request.id);
+      if (error) {
+        console.error('Error deleting data request from Supabase:', error);
+      }
+    }
+    
+    state.dataRequests.splice(index, 1);
+    localStorage.setItem('datarex_dataRequests', JSON.stringify(state.dataRequests));
+    renderDataRequests(state.dataRequests);
+    showToast('Request deleted', 'success');
+  }
+}
+
+function resetDataRequestForm() {
+  document.getElementById('req-index').value = '-1';
+  document.getElementById('req-name').value = '';
+  document.getElementById('req-email').value = '';
+  document.getElementById('req-type').value = 'Access';
+  document.getElementById('req-description').value = '';
+  document.getElementById('req-assigned').value = '';
+  document.querySelector('.modal-dsr-title').textContent = 'New data subject request';
+  document.getElementById('req-save-btn').textContent = 'Log request';
+}
+
+async function saveDataRequest() {
+  const name = document.getElementById('req-name').value.trim();
+  const email = document.getElementById('req-email').value.trim();
+  const type = document.getElementById('req-type').value;
+  const description = document.getElementById('req-description').value.trim();
+  const assigned_to = document.getElementById('req-assigned').value.trim();
+  const editIndex = parseInt(document.getElementById('req-index').value);
+
+  if (!name) {
+    JARVIS_LOG.error('DataRequests', 'Validation failed', new Error('Subject name is required'));
+    showToast('Please enter subject name', 'error');
+    return;
+  }
+
+  const requestData = {
+    requester_name: name,
+    requester_email: email,
+    request_type: type,
+    description: description,
+    assigned_to: assigned_to,
+    status: 'Open'
+  };
+  
+  const supabase = getSupabaseClient();
+  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
+  const orgId = currentCompany ? currentCompany.id : state.user?.id;
+  
+  JARVIS_LOG.submit('DataRequests', editIndex >= 0 ? 'Update' : 'Insert', { requestData, editIndex });
+  
+  if (editIndex >= 0) {
+    const existingRequest = state.dataRequests[editIndex];
+    
+    if (supabase && isSupabaseConfigured() && existingRequest.id && !String(existingRequest.id).startsWith('local-')) {
+      const { error } = await supabase.from('data_requests').update({
+        ...requestData,
+        updated_at: new Date().toISOString()
+      }).eq('id', existingRequest.id);
+      
+      if (error) {
+        JARVIS_LOG.error('DataRequests', 'Update', error);
+        console.error('Error updating data request:', error);
+      } else {
+        JARVIS_LOG.success('DataRequests', 'Update', { id: existingRequest.id });
+      }
+    }
+    
+    Object.assign(state.dataRequests[editIndex], requestData, { id: existingRequest.id });
+    localStorage.setItem('datarex_dataRequests', JSON.stringify(state.dataRequests));
+    renderDataRequests(state.dataRequests);
+    closeModal('modal-data-request');
+    resetDataRequestForm();
+    showToast('Request updated!', 'success');
+    return;
+  }
+
+  // Add new request
+  if (supabase && isSupabaseConfigured()) {
+    const { data, error } = await supabase.from('data_requests').insert([{
+      org_id: orgId,
+      ...requestData
+    }]).select().single();
+
+    if (error) {
+      JARVIS_LOG.error('DataRequests', 'Insert', error);
+      console.error('Error saving data request:', error);
+      const localRequest = { ...requestData, id: 'local-' + Date.now(), created_at: new Date().toISOString() };
+      state.dataRequests.unshift(localRequest);
+      localStorage.setItem('datarex_dataRequests', JSON.stringify(state.dataRequests));
+      renderDataRequests(state.dataRequests);
+      closeModal('modal-data-request');
+      resetDataRequestForm();
+      showToast('Request logged (saved locally)', 'success');
+    } else {
+      JARVIS_LOG.success('DataRequests', 'Insert', { id: data?.id });
+      const syncedRequest = { ...data, ...requestData };
+      state.dataRequests.unshift(syncedRequest);
+      localStorage.setItem('datarex_dataRequests', JSON.stringify(state.dataRequests));
+      renderDataRequests(state.dataRequests);
+      closeModal('modal-data-request');
+      resetDataRequestForm();
+      showToast('Request logged successfully', 'success');
+    }
+  } else {
+    const localRequest = { ...requestData, id: 'local-' + Date.now(), created_at: new Date().toISOString() };
+    state.dataRequests.unshift(localRequest);
+    localStorage.setItem('datarex_dataRequests', JSON.stringify(state.dataRequests));
+    renderDataRequests(state.dataRequests);
+    closeModal('modal-data-request');
+    resetDataRequestForm();
+    showToast('Request logged', 'success');
+  }
 }
 
 function renderDataRequests(requests) {
   const body = document.getElementById('datarequests-body');
   if (!body) return;
+  const list = requests || [];
+
+  const totalCount = document.getElementById('dsr-total-count');
+  const overdueCount = document.getElementById('dsr-overdue-count');
+  const fulfilledCount = document.getElementById('dsr-fulfilled-count');
   
-  if (!requests || requests.length === 0) {
-    body.innerHTML = '<div class="empty-state" style="padding:60px 20px;"><div class="empty-icon" style="font-size:64px;margin-bottom:16px;">📧</div><div class="empty-title" style="font-size:16px;font-weight:600;">No data requests yet</div><div class="empty-sub" style="margin-top:8px;">Track requests from individuals to access, correct, or delete their data.</div></div>';
+  const openOrPending = list.filter(r => r.status === 'Open' || r.status === 'Pending').length;
+  const fulfilled = list.filter(r => r.status === 'Completed' || r.status === 'Fulfilled').length;
+  
+  let overdue = 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  list.forEach(r => {
+    if (r.created_at && (r.status === 'Open' || r.status === 'Pending' || r.status === 'In Progress')) {
+      const deadline = new Date(r.created_at);
+      deadline.setDate(deadline.getDate() + 21);
+      if (deadline < today) overdue++;
+    }
+  });
+  
+  if (totalCount) totalCount.textContent = list.length;
+  if (overdueCount) overdueCount.textContent = overdue;
+  if (fulfilledCount) fulfilledCount.textContent = fulfilled;
+
+  const q = (document.getElementById('datarequests-search')?.value || '').toLowerCase();
+  const filtered = q ? list.filter(r => 
+    (r.requester_name||'').toLowerCase().includes(q) || 
+    (r.request_type||'').toLowerCase().includes(q) ||
+    (r.description||'').toLowerCase().includes(q)
+  ) : list;
+
+  if (filtered.length === 0) {
+    body.innerHTML = `<div class="dsr-empty"><p>${q ? 'No results for "' + q + '"' : 'No data requests yet'}</p><small>Click "Log Request" to create your first data subject request.</small></div>`;
     return;
   }
-  
-  const statusColors = { 'Pending': 'var(--amber)', 'In Progress': 'var(--blue)', 'Completed': 'var(--green)' };
-  body.innerHTML = requests.map(r => `
-    <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:start;">
-        <div>
-          <div style="font-weight:600;">${r.request_type} Request</div>
-          <div style="font-size:13px;color:var(--muted);margin-top:4px;">${r.requester_name} · ${r.requester_email}</div>
-          <div style="font-size:13px;color:var(--muted);margin-top:4px;">${r.description}</div>
-        </div>
-        <span style="font-size:12px;font-weight:500;padding:4px 10px;border-radius:20px;background:${statusColors[r.status] || 'var(--border)'};color:white;">${r.status}</span>
-      </div>
+
+  const getStatusBadge = (status) => {
+    if (status === 'Completed' || status === 'Fulfilled') return '<span class="dsr-badge dsr-badge-fulfilled">Fulfilled</span>';
+    if (status === 'In Progress') return '<span class="dsr-badge dsr-badge-progress">In Progress</span>';
+    return '<span class="dsr-badge dsr-badge-open">Open</span>';
+  };
+
+  const getDeadlineInfo = (createdAt) => {
+    if (!createdAt) return { text: '—', class: '' };
+    const deadline = new Date(createdAt);
+    deadline.setDate(deadline.getDate() + 21);
+    const diff = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
+    
+    if (diff < 0) return { text: 'Overdue', class: 'dsr-deadline-overdue' };
+    if (diff <= 3) return { text: diff + ' days', class: 'dsr-deadline-soon' };
+    if (diff <= 7) return { text: diff + ' days', class: 'dsr-deadline-soon' };
+    return { text: diff + ' days', class: 'dsr-deadline-safe' };
+  };
+
+  const getRef = (index) => {
+    const year = new Date().getFullYear();
+    return `DSAR-${year}-${String(index + 1).padStart(4, '0')}`;
+  };
+
+  body.innerHTML = `
+    <div class="dsr-table-container">
+      <table class="dsr-table">
+        <thead>
+          <tr>
+            <th class="th-narrow">REF</th>
+            <th>SUBJECT</th>
+            <th>TYPE</th>
+            <th>RECEIVED</th>
+            <th>DEADLINE</th>
+            <th>STATUS</th>
+            <th class="th-actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.map((r, i) => {
+            const deadlineInfo = getDeadlineInfo(r.created_at);
+            return `
+            <tr>
+              <td class="dsr-ref">${getRef(i)}</td>
+              <td class="dsr-subject">${r.requester_name || '—'}</td>
+              <td class="dsr-type">${r.request_type || '—'}</td>
+              <td class="dsr-date">${r.created_at ? new Date(r.created_at).toLocaleDateString('en-GB') : '—'}</td>
+              <td class="dsr-deadline ${deadlineInfo.class}">${deadlineInfo.text}</td>
+              <td>${getStatusBadge(r.status)}</td>
+              <td>
+                <div class="row-actions td-actions">
+                  <button class="btn-edit" onclick="editDataRequest(${i})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="btn-delete" onclick="deleteDataRequest(${i})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+              </td>
+            </tr>
+          `}).join('')}
+        </tbody>
+      </table>
     </div>
-  `).join('');
+  `;
 }
 
 async function loadBreachLogFromSupabase() {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
   
-  const { data, error } = await supabase
-    .from('breach_log')
-    .select('*')
+  let query = supabase.from('breach_log').select('*');
+  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
+  const orgId = currentCompany ? currentCompany.id : state.user?.id;
+  
+  if (orgId) query = query.eq('org_id', orgId);
+  
+  const { data, error } = await query
     .order('created_at', { ascending: false });
   
   if (error) {
@@ -1292,186 +2101,276 @@ async function loadBreachLogFromSupabase() {
 function renderBreachLog(breaches) {
   const body = document.getElementById('breachlog-body');
   if (!body) return;
+  const list = breaches || [];
+
+  // Update summary cards
+  const totalCount = document.getElementById('breach-total-count');
+  const pendingCount = document.getElementById('breach-pending-count');
+  const resolvedCount = document.getElementById('breach-resolved-count');
   
-  if (!breaches || breaches.length === 0) {
-    body.innerHTML = '<div class="empty-state" style="padding:60px 20px;"><div class="empty-icon" style="font-size:64px;margin-bottom:16px;">⚠️</div><div class="empty-title" style="font-size:16px;font-weight:600;">No breaches recorded</div><div class="empty-sub" style="margin-top:8px;">Record data breaches for compliance reporting.</div></div>';
+  if (totalCount) totalCount.textContent = list.length;
+  if (pendingCount) pendingCount.textContent = list.filter(b => b.resolution_status === 'Pending' || b.resolution_status === 'Under Investigation').length;
+  if (resolvedCount) resolvedCount.textContent = list.filter(b => b.resolution_status === 'Resolved').length;
+
+  if (list.length === 0) {
+    body.innerHTML = `<div class="breach-empty"><p>No breaches recorded</p><small>If a breach occurs, log it here immediately.</small></div>`;
     return;
   }
+
+  const getStatusBadge = (status) => {
+    if (status === 'Resolved') return '<span class="vendor-badge vendor-badge-low">Resolved</span>';
+    if (status === 'Under Investigation') return '<span class="vendor-badge vendor-badge-medium">Under Investigation</span>';
+    return '<span class="vendor-badge vendor-badge-high">Pending</span>';
+  };
+
+  body.innerHTML = `<table class="breach-table">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Affected</th>
+        <th>Date</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      ${list.map((b, i) => `
+        <tr>
+          <td><b>${b.breach_type || '—'}</b></td>
+          <td>${b.description || '—'}</td>
+          <td>${b.affected_count || '—'}</td>
+          <td>${b.incident_date || '—'}</td>
+          <td>${getStatusBadge(b.resolution_status)}</td>
+          <td>
+            <div class="breach-actions">
+              <button class="btn-edit" onclick="editBreach(${i})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="btn-delete" onclick="deleteBreach(${i})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            </div>
+          </td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function saveDPIA() {
+  const name = document.getElementById('dpia-name').value;
+  const description = document.getElementById('dpia-description').value;
+  const sensitive = document.getElementById('dpia-sensitive').checked;
+  const monitoring = document.getElementById('dpia-monitoring').checked;
+  const largeScale = document.getElementById('dpia-large-scale').checked;
+  const mitigation = document.getElementById('dpia-mitigation').value;
+
+  if (!name) {
+    JARVIS_LOG.error('DPIA', 'Validation failed', new Error('Project name is required'));
+    showToast('Please enter a project name', 'warning');
+    return;
+  }
+
+  if (!state.user?.company) {
+    JARVIS_LOG.error('DPIA', 'Validation failed', new Error('No company selected'));
+    showToast('Please select a company in the sidebar first', 'warning');
+    return;
+  }
+
+  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
+  const orgId = currentCompany ? currentCompany.id : state.user?.id;
+
+  const dpiaData = {
+    org_id: orgId,
+    activity_name: name,
+    description: description,
+    processing_purpose: description.substring(0, 50),
+    is_necessary: true,
+    risk_level: sensitive ? 'High' : monitoring ? 'Medium' : 'Low',
+    mitigation_measures: mitigation,
+    status: 'Draft'
+  };
+
+  JARVIS_LOG.submit('DPIA', 'Insert', { dpiaData });
+
+  const supabase = getSupabaseClient();
+  if (supabase && isSupabaseConfigured()) {
+    const { error } = await supabase.from('dpia_assessments').insert([dpiaData]);
+    if (error) {
+      JARVIS_LOG.error('DPIA', 'Insert', error);
+      console.error('Save DPIA error:', error);
+      showToast('Error saving DPIA', 'error');
+      return;
+    }
+    JARVIS_LOG.success('DPIA', 'Insert', { activity_name: name });
+  }
+
+  showSuccess('DPIA Assessment saved');
+  closeModal('modal-dpia');
   
-  const statusColors = { 'Under Investigation': 'var(--amber)', 'Resolved': 'var(--green)', 'Pending': 'var(--red)' };
-  body.innerHTML = breaches.map(b => `
-    <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;">
-        <div><strong>${b.breach_type}</strong></div>
-        <span style="font-size:12px;font-weight:500;padding:4px 10px;border-radius:20px;background:${statusColors[b.resolution_status] || 'var(--border)'};color:white;">${b.resolution_status}</span>
-      </div>
-      <div style="font-size:13px;color:var(--muted);margin-top:8px;">${b.description}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:8px;">Affected: ${b.affected_count} records · ${b.incident_date}</div>
-    </div>
-  `).join('');
+  // Clear form
+  document.getElementById('dpia-name').value = '';
+  document.getElementById('dpia-description').value = '';
+  document.getElementById('dpia-mitigation').value = '';
+  document.getElementById('dpia-sensitive').checked = false;
+  document.getElementById('dpia-monitoring').checked = false;
+  document.getElementById('dpia-large-scale').checked = false;
+
+  loadDPIAFromSupabase();
 }
 
 async function loadDPIAFromSupabase() {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
   
-  const { data, error } = await supabase
-    .from('dpia_assessments')
-    .select('*')
-    .order('created_at', { ascending: false });
-  
-  if (error) {
-    console.error('Failed to load DPIA:', error);
-    return;
+  console.log('[JARVIS] Fetching DPIAs...');
+  try {
+    const { data, error } = await supabase
+      .from('dpia_assessments')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('[JARVIS] DPIA Fetch Error:', error.message);
+      renderDPIA([]);
+      return;
+    }
+    
+    if (data) {
+      console.log(`[JARVIS] Fetching DPIAs... Success: ${data.length} records retrieved.`);
+      renderDPIA(data);
+    }
+  } catch (err) {
+    console.error('[JARVIS] DPIA Exception:', err);
+    renderDPIA([]);
   }
-  
-  renderDPIA(data);
 }
 
 function renderDPIA(dpiaItems) {
   const body = document.getElementById('dpiapage-body');
   if (!body) return;
-  
-  if (!dpiaItems || dpiaItems.length === 0) {
-    body.innerHTML = '<div class="empty-state" style="padding:60px 20px;"><div class="empty-icon" style="font-size:64px;margin-bottom:16px;">🔍</div><div class="empty-title" style="font-size:16px;font-weight:600;">No DPIA assessments</div><div class="empty-sub" style="margin-top:8px;">Conduct impact assessments for high-risk processing.</div></div>';
+  const list = dpiaItems || [];
+
+  const summaryEl = document.getElementById('dpia-summary');
+  if (summaryEl) {
+    const highRisk = list.filter(item => item.risk_level === 'High').length;
+    summaryEl.innerHTML = `
+      <div class="vendor-stat-card"><div class="vendor-stat-label">Total DPIAs</div><div class="vendor-stat-value">${list.length}</div></div>
+      <div class="vendor-stat-card"><div class="vendor-stat-label">High Risk</div><div class="vendor-stat-value" style="color:#ef4444">${highRisk}</div></div>
+    `;
+  }
+
+  const q = (document.getElementById('dpia-search')?.value || '').toLowerCase();
+  const filtered = q ? list.filter(item => 
+    (item.activity_name||'').toLowerCase().includes(q) || 
+    (item.description||'').toLowerCase().includes(q)
+  ) : list;
+
+  if (filtered.length === 0) {
+    body.innerHTML = `<div class="empty-state"><div style="font-size:36px">🛡️</div><p>${q ? 'No results for "' + q + '"' : 'No DPIAs yet'}</p></div>`;
     return;
   }
-  
-  const riskColors = { 'Low': 'var(--green)', 'Medium': 'var(--amber)', 'High': 'var(--red)' };
-  body.innerHTML = dpiaItems.map(d => `
-    <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;">
-        <div><strong>${d.activity_name}</strong></div>
-        <span style="font-size:12px;font-weight:500;padding:4px 10px;border-radius:20px;background:${riskColors[d.risk_level] || 'var(--border)'};color:white;">${d.risk_level} Risk</span>
-      </div>
-      <div style="font-size:13px;color:var(--muted);margin-top:8px;">${d.description}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:8px;">Status: ${d.status}</div>
-    </div>
-  `).join('');
+
+  const riskClass = { 'High': 'status-error', 'Medium': 'status-pending', 'Low': 'status-active' };
+  body.innerHTML = `<div class="data-table-wrap"><table class="styled-table">
+    <thead>
+      <tr>
+        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Activity</th>
+        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Description</th>
+        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Risk</th>
+        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Date</th>
+        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em; width:100px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>${filtered.map(item => `
+    <tr>
+      <td class="td-bold">${item.activity_name || '—'}</td>
+      <td class="td-muted">${item.description || '—'}</td>
+      <td><span class="status-badge ${riskClass[item.risk_level] || 'status-inactive'}">${item.risk_level || '—'}</span></td>
+      <td class="td-muted co-date">${item.created_at ? new Date(item.created_at).toLocaleDateString() : '—'}</td>
+      <td><button class="btn-edit" onclick="viewDPIADetails('${item.id}')">View</button></td>
+    </tr>`).join('')}</tbody></table></div>`;
 }
 
 async function loadCrossBorderFromSupabase() {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
   
-  const { data, error } = await supabase
-    .from('cross_border_transfers')
-    .select('*')
-    .order('created_at', { ascending: false });
-  
-  if (error) {
-    console.error('Failed to load cross border:', error);
-    return;
+  console.log('[JARVIS] Fetching Cross-Border Transfers...');
+  try {
+    const { data, error } = await supabase
+      .from('cross_border_transfers')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('[JARVIS] Cross-Border Fetch Error:', error.message);
+      renderCrossBorder([]);
+      return;
+    }
+    
+    if (data) {
+      console.log(`[JARVIS] Fetching Cross-Border... Success: ${data.length} records retrieved.`);
+      renderCrossBorder(data);
+    }
+  } catch (err) {
+    console.error('[JARVIS] Cross-Border Exception:', err);
+    renderCrossBorder([]);
   }
-  
-  renderCrossBorder(data);
 }
 
 function renderCrossBorder(transfers) {
-  const body = document.getElementById('crossborder-body');
+  const body = document.getElementById('crossborder-tbody');
   if (!body) return;
-  
-  if (!transfers || transfers.length === 0) {
-    body.innerHTML = '<div class="empty-state" style="padding:60px 20px;"><div class="empty-icon" style="font-size:64px;margin-bottom:16px;">🌍</div><div class="empty-title" style="font-size:16px;font-weight:600;">No cross-border transfers</div><div class="empty-sub" style="margin-top:8px;">Track data transferred outside Malaysia.</div></div>';
+  const list = transfers || [];
+
+  const summaryEl = document.getElementById('crossborder-summary');
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div class="vendor-stat-card"><div class="vendor-stat-label">Total Transfers</div><div class="vendor-stat-value">${list.length}</div></div>
+    `;
+  }
+
+  const q = (document.getElementById('crossborder-search')?.value || '').toLowerCase();
+  const filtered = q ? list.filter(t => 
+    (t.destination_country||'').toLowerCase().includes(q) || 
+    (t.recipient_name||'').toLowerCase().includes(q)
+  ) : list;
+
+  if (filtered.length === 0) {
+    body.innerHTML = `<div class="empty-state"><div style="font-size:36px">🌍</div><p>No transfers found</p></div>`;
     return;
   }
-  
-  body.innerHTML = transfers.map(t => `
-    <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;">
-        <div><strong>${t.destination_country}</strong></div>
-        <span style="font-size:12px;font-weight:500;padding:4px 10px;border-radius:20px;background:var(--blue);color:white;">${t.status}</span>
-      </div>
-      <div style="font-size:13px;color:var(--muted);margin-top:8px;">${t.recipient_name}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px;">Data: ${(t.data_categories || []).join(', ')}</div>
-    </div>
-  `).join('');
+
+  const statusClass = { 'Active': 'status-active', 'Pending': 'status-pending', 'Inactive': 'status-inactive' };
+  body.innerHTML = `<div class="data-table-wrap"><table class="styled-table">
+    <thead>
+      <tr>
+        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Destination</th>
+        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Recipient</th>
+        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Data Types</th>
+        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Status</th>
+        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em; width:100px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>${filtered.map((t, i) => `
+    <tr>
+      <td class="td-bold">${t.destination_country || '—'}</td>
+      <td>${t.recipient_name || '—'}</td>
+      <td class="td-muted">${t.data_categories || '—'}</td>
+      <td><span class="status-badge ${statusClass[t.status] || 'status-inactive'}">${t.status || '—'}</span></td>
+      <td><button class="btn-edit" onclick="editCrossBorder(${i})">Edit</button></td>
+    </tr>`).join('')}</tbody></table></div>`;
 }
 
-async function loadVendorsFromSupabase() {
-  const supabase = getSupabaseClient();
-  if (!supabase || !isSupabaseConfigured()) return;
-  
-  const { data, error } = await supabase
-    .from('vendors')
-    .select('*')
-    .order('vendor_name');
-  
-  if (error) {
-    console.error('Failed to load vendors:', error);
-    return;
-  }
-  
-  renderVendors(data);
-}
-
-function renderVendors(vendors) {
-  const body = document.getElementById('vendors-body');
-  if (!body) return;
-  
-  if (!vendors || vendors.length === 0) {
-    body.innerHTML = '<div class="empty-state" style="padding:60px 20px;"><div class="empty-icon" style="font-size:64px;margin-bottom:16px;">🤝</div><div class="empty-title" style="font-size:16px;font-weight:600;">No vendors yet</div><div class="empty-sub" style="margin-top:8px;">Manage third-party data processors.</div></div>';
-    return;
-  }
-  
-  body.innerHTML = vendors.map(v => `
-    <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;">
-        <div><strong>${v.vendor_name}</strong></div>
-        <span style="font-size:12px;font-weight:500;padding:4px 10px;border-radius:20px;background:${v.has_dpa ? 'var(--green)' : 'var(--amber)'};color:white;">${v.has_dpa ? 'DPA' : 'No DPA'}</span>
-      </div>
-      <div style="font-size:13px;color:var(--muted);margin-top:8px;">${v.service_type}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px;">Data: ${(v.data_processed || []).join(', ')}</div>
-    </div>
-  `).join('');
-}
-
-async function loadTrainingFromSupabase() {
-  const supabase = getSupabaseClient();
-  if (!supabase || !isSupabaseConfigured()) return;
-  
-  const { data, error } = await supabase
-    .from('training_records')
-    .select('*')
-    .order('training_date', { ascending: false });
-  
-  if (error) {
-    console.error('Failed to load training:', error);
-    return;
-  }
-  
-  renderTraining(data);
-}
-
-function renderTraining(records) {
-  const body = document.getElementById('training-body');
-  if (!body) return;
-  
-  if (!records || records.length === 0) {
-    body.innerHTML = '<div class="empty-state" style="padding:60px 20px;"><div class="empty-icon" style="font-size:64px;margin-bottom:16px;">📚</div><div class="empty-title" style="font-size:16px;font-weight:600;">No training records</div><div class="empty-sub" style="margin-top:8px;">Track staff training on data protection.</div></div>';
-    return;
-  }
-  
-  const statusColors = { 'Completed': 'var(--green)', 'In Progress': 'var(--blue)' };
-  body.innerHTML = records.map(t => `
-    <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;">
-        <div><strong>${t.employee_name}</strong></div>
-        <span style="font-size:12px;font-weight:500;padding:4px 10px;border-radius:20px;background:${statusColors[t.status] || 'var(--border)'};color:white;">${t.status}</span>
-      </div>
-      <div style="font-size:13px;color:var(--muted);margin-top:8px;">${t.training_type}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px;">${t.training_date} · Expires: ${t.expires_at || 'N/A'}</div>
-    </div>
-  `).join('');
-}
+// JARVIS_LOG consolidated at top of file
 
 async function loadAlertsFromSupabase() {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
   
-  const { data, error } = await supabase
-    .from('alerts')
-    .select('*')
+  let query = supabase.from('alerts').select('*');
+  if (state.user?.id) query = query.eq('org_id', state.user.id);
+  if (state.user?.company) query = query.eq('company_id', state.user.company);
+
+  const { data, error } = await query
     .order('created_at', { ascending: false });
   
   if (error) {
@@ -1487,9 +2386,13 @@ async function loadCasesFromSupabase() {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
   
-  const { data, error } = await supabase
-    .from('cases')
-    .select('*')
+  let query = supabase.from('cases').select('*');
+  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
+  const orgId = currentCompany ? currentCompany.id : state.user?.id;
+  
+  if (orgId) query = query.eq('org_id', orgId);
+
+  const { data, error } = await query
     .order('created_at', { ascending: false });
   
   if (error) {
@@ -1503,24 +2406,43 @@ async function loadCasesFromSupabase() {
 function renderCases(cases) {
   const body = document.getElementById('cases-body');
   if (!body) return;
-  
-  if (!cases || cases.length === 0) {
-    body.innerHTML = '<div class="empty-state" style="padding:60px 20px;"><div class="empty-icon" style="font-size:64px;margin-bottom:16px;">📁</div><div class="empty-title" style="font-size:16px;font-weight:600;">No cases yet</div><div class="empty-sub" style="margin-top:8px;">Manage compliance cases and investigations.</div></div>';
+  const list = cases || [];
+
+  // Summary
+  const summaryEl = document.getElementById('cases-summary');
+  if (summaryEl) {
+    const highPriority = list.filter(c => c.priority === 'High').length;
+    summaryEl.innerHTML = `
+      <div class="co-stat"><span class="co-stat-num">${list.length}</span><span class="co-stat-label">Total Cases</span></div>
+      <div class="co-stat-divider"></div>
+      <div class="co-stat"><span class="co-stat-num co-num-red">${highPriority}</span><span class="co-stat-label">High Priority</span></div>
+    `;
+  }
+
+  // Search
+  const q = (document.getElementById('cases-search')?.value || '').toLowerCase();
+  const filtered = q ? list.filter(c => 
+    (c.case_number||'').toLowerCase().includes(q) || 
+    (c.description||'').toLowerCase().includes(q)
+  ) : list;
+
+  if (filtered.length === 0) {
+    body.innerHTML = `<div class="empty-state"><div style="font-size:36px">📂</div><p>${q ? 'No results for "' + q + '"' : 'No active cases'}</p><small>Cases will appear here when investigations or requests need tracking.</small></div>`;
     return;
   }
-  
-  const priorityColors = { 'High': 'var(--red)', 'Medium': 'var(--amber)', 'Low': 'var(--green)' };
-  body.innerHTML = cases.map(c => `
-    <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;">
-        <div><strong>${c.case_number}</strong></div>
-        <span style="font-size:12px;font-weight:500;padding:4px 10px;border-radius:20px;background:${priorityColors[c.priority] || 'var(--border)'};color:white;">${c.priority}</span>
-      </div>
-      <div style="font-size:13px;color:var(--muted);margin-top:8px;">${c.case_type}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px;">${c.description}</div>
-      <div style="font-size:12px;margin-top:8px;">Status: ${c.status} · Assigned: ${c.assigned_to}</div>
-    </div>
-  `).join('');
+
+  const priorityClass = { 'High': 'status-error', 'Medium': 'status-pending', 'Low': 'status-active' };
+  body.innerHTML = `<div class="data-table-wrap"><table class="styled-table"><thead><tr>
+    <th class="th-case">Case No.</th><th class="th-type">Type</th><th>Description</th><th class="th-assigned">Assigned</th><th class="th-narrow">Priority</th><th class="th-narrow">Status</th>
+  </tr></thead><tbody>${filtered.map(c => `
+    <tr>
+      <td class="td-bold td-mono">${c.case_number}</td>
+      <td><span class="table-tag">${c.case_type}</span></td>
+      <td class="td-muted td-desc">${c.description || '—'}</td>
+      <td class="td-muted">${c.assigned_to || '—'}</td>
+      <td><span class="status-badge ${priorityClass[c.priority] || 'status-inactive'}">${c.priority}</span></td>
+      <td><span class="status-badge status-inactive">${c.status}</span></td>
+    </tr>`).join('')}</tbody></table></div>`;
 }
 
 /* ───────────────────────────────────────────────
@@ -1572,6 +2494,7 @@ function renderConsent() {
       </div>`;
     body.appendChild(div);
   });
+  updateConsentStats();
 }
 
 function updateConsentToggle(categoryIndex, toggleIndex, checked) {
@@ -1593,174 +2516,326 @@ function saveConsentNote(btn) {
    ─────────────────────────────────────────────── */
 function renderRetention() {
   const body = document.getElementById('retention-body');
+  if (!body) return;
   body.innerHTML = '';
-  RETENTION_DATA.forEach(item => {
-    const div = document.createElement('div');
-    div.className = 'retention-item';
-    div.innerHTML = `
-      <div class="ret-info">
-        <div class="ret-title">
-          ${item.title}
-          ${item.active
-            ? '<span class="badge badge-green">Active</span>'
-            : '<span class="badge" style="background:var(--bg);color:var(--muted)">Inactive</span>'}
-        </div>
-        <div class="ret-sub">${item.sub}</div>
-      </div>
-      <div class="ret-control">
-        <input class="months-input" type="number" value="${item.months}" min="1" max="360">
-        <span class="months-label">months</span>
-      </div>`;
-    body.appendChild(div);
+  
+  const html = `
+    <div class="data-table-wrap">
+      <table class="styled-table">
+        <thead>
+          <tr>
+            <th>Data Category</th>
+            <th class="th-desc">Description</th>
+            <th class="th-narrow">Status</th>
+            <th class="th-period">Retention Period</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${RETENTION_DATA.map(item => `
+            <tr>
+              <td class="td-bold">${item.title}</td>
+              <td class="td-muted td-desc">${item.sub}</td>
+              <td>
+                <span class="status-badge ${item.active ? 'status-active' : 'status-inactive'}">
+                  ${item.active ? 'Active' : 'Inactive'}
+                </span>
+              </td>
+              <td>
+                <div class="retention-input-wrap">
+                  <input class="months-input" type="number" value="${item.months}" min="1" max="360">
+                  <span class="td-muted">mo</span>
+                </div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  body.innerHTML = html;
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// DPO logic moved to dpo_logic.js
+
+async function jarvisDPODiagnostics() {
+  const supabase = getSupabaseClient();
+  console.log('%c[JARVIS DPO Diagnostics]', 'color:#4f46e5;font-weight:bold');
+  console.log('Supabase configured:', isSupabaseConfigured());
+  console.log('Supabase client:', !!supabase);
+  console.log('User ID:', state.user?.id);
+  console.log('User Email:', state.user?.email);
+  
+  if (!supabase || !isSupabaseConfigured()) {
+    console.log('Result: Using localStorage fallback');
+    return;
+  }
+  
+  try {
+    const { data, error } = await supabase.from('dpo').select('*').limit(5);
+    if (error) {
+      console.error('Table query error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      if (error.code === 'PGRST204') {
+        console.log('%c[JARVIS] ACTION REQUIRED: Run the DPO migration in Supabase SQL Editor', 'color:red;font-weight:bold');
+      }
+    } else {
+      console.log('DPO records found:', data?.length || 0);
+      console.log('Records:', data);
+    }
+  } catch (e) {
+    console.error('Unexpected error:', e);
+  }
+}
+
+async function loadDPOFromSupabase() {
+  const supabase = getSupabaseClient();
+  const timestamp = new Date().toISOString();
+  const userId = state.user?.id || '00000000-0000-0000-0000-000000000001';
+  
+  console.table({
+    timestamp,
+    operation: 'LOAD_DPO',
+    table: 'dpo',
+    user_id: userId,
+    supabase_configured: isSupabaseConfigured()
   });
+  
+  if (!supabase || !isSupabaseConfigured()) {
+    console.table({
+      timestamp,
+      operation: 'LOAD_LOCAL',
+      table: 'dpo',
+      supabase_response: 'USING_LOCALSTORAGE'
+    });
+    const savedDpo = localStorage.getItem('datarex_dpo');
+    if (savedDpo) {
+      state.dpo = JSON.parse(savedDpo);
+      state.dpoHistory = [];
+    } else {
+      state.dpo = null;
+      state.dpoHistory = [];
+    }
+    renderDPO();
+    return;
+  }
+  
+  if (!userId) {
+    state.dpo = null;
+    state.dpoHistory = [];
+    renderDPO();
+    return;
+  }
+  
+  console.log('[JARVIS] Fetching from dpo...');
+  try {
+    const { data, error } = await supabase
+      .from('dpo')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('JARVIS [DPO] Load Error:', error);
+      showToast('Database error: ' + error.message, 'error');
+    }
+    
+    if (data) {
+      console.table({
+        timestamp,
+        operation: 'LOAD_SUCCESS',
+        table: 'dpo',
+        dpo_name: data.name,
+        dpo_email: data.email,
+        supabase_response: 'FOUND'
+      });
+      state.dpo = {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        nationality: data.nationality,
+        appointment_date: data.appointment_date,
+        appointment_letter_url: data.appointment_letter_url,
+        training_status: data.training_status || 'pending',
+        updated_at: data.updated_at
+      };
+      state.dpoHistory = [];
+      localStorage.setItem('datarex_dpo', JSON.stringify(state.dpo));
+    } else {
+      console.table({
+        timestamp,
+        operation: 'LOAD_EMPTY',
+        table: 'dpo',
+        supabase_response: 'NO_DATA'
+      });
+      state.dpo = null;
+      state.dpoHistory = [];
+    }
+  } catch (e) {
+    console.error('JARVIS [DPO] Unexpected Error:', e);
+    console.table({
+      timestamp,
+      operation: 'LOAD_EXCEPTION',
+      table: 'dpo',
+      supabase_response: 'EXCEPTION',
+      error_message: e.message
+    });
+    state.dpo = null;
+    state.dpoHistory = [];
+  }
+  
+  renderDPO();
+}
+
+async function saveDPOToSupabase() {
+  const supabase = getSupabaseClient();
+  const timestamp = new Date().toISOString();
+  
+  JARVIS_LOG.submit('DPO', 'saveDPOToSupabase', { dpoData: state.dpo, timestamp });
+  
+  if (!supabase || !isSupabaseConfigured()) {
+    console.table({
+      timestamp,
+      operation: 'SAVE',
+      table: 'dpo',
+      supabase_response: 'NOT_CONFIGURED',
+      error_message: 'Supabase not configured'
+    });
+    JARVIS_LOG.warn('DPO', 'Supabase not configured, using localStorage only');
+    showToast('DPO saved locally', 'success');
+    return;
+  }
+  if (!state.dpo) return;
+  
+  const userId = state.user?.id || '00000000-0000-0000-0000-000000000001';
+  
+  try {
+    const { data: existing, error: fetchError } = await supabase
+      .from('dpo')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.table({
+        timestamp,
+        operation: 'FETCH_ERROR',
+        table: 'dpo',
+        supabase_response: `ERROR: ${fetchError.code}`,
+        error_message: fetchError.message
+      });
+      JARVIS_LOG.error('DPO', 'Fetch existing DPO', fetchError);
+    }
+    
+    if (existing?.id) {
+      const { data: updateData, error } = await supabase
+        .from('dpo')
+        .update({
+          name: state.dpo.name,
+          email: state.dpo.email,
+          phone: state.dpo.phone,
+          nationality: state.dpo.nationality,
+          appointment_date: state.dpo.appointment_date,
+          appointment_letter_url: state.dpo.appointment_letter_url,
+          training_status: state.dpo.training_status,
+          updated_at: timestamp
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+      
+      console.table({
+        timestamp,
+        operation: error ? 'UPDATE_FAILED' : 'UPDATE_SUCCESS',
+        table: 'dpo',
+        record_id: existing.id,
+        form_data: JSON.stringify({ name: state.dpo.name, email: state.dpo.email }),
+        supabase_response: error ? `ERROR: ${error.code}` : 'SUCCESS',
+        error_message: error?.message || 'N/A'
+      });
+      
+      if (error) {
+        JARVIS_LOG.error('DPO', 'Update DPO', error);
+        showToast('Cloud update failed: ' + error.message, 'error');
+      } else {
+        JARVIS_LOG.success('DPO', 'Update DPO', { id: existing.id });
+        showToast('DPO updated in cloud!', 'success');
+      }
+    } else {
+      const { data: insertData, error } = await supabase
+        .from('dpo')
+        .insert([{
+          user_id: userId,
+          name: state.dpo.name,
+          email: state.dpo.email,
+          phone: state.dpo.phone,
+          nationality: state.dpo.nationality,
+          appointment_date: state.dpo.appointment_date,
+          appointment_letter_url: state.dpo.appointment_letter_url,
+          training_status: state.dpo.training_status || 'pending',
+          company_id: state.user?.company || ''
+        }])
+        .select()
+        .single();
+      
+      console.table({
+        timestamp,
+        operation: error ? 'INSERT_FAILED' : 'INSERT_SUCCESS',
+        table: 'dpo',
+        user_id: userId,
+        form_data: JSON.stringify({ name: state.dpo.name, email: state.dpo.email }),
+        supabase_response: error ? `ERROR: ${error.code}` : 'SUCCESS',
+        error_message: error?.message || 'N/A'
+      });
+      
+      if (error) {
+        JARVIS_LOG.error('DPO', 'Insert DPO', error);
+        showToast('Cloud save failed: ' + error.message, 'error');
+      } else {
+        JARVIS_LOG.success('DPO', 'Insert DPO', { id: insertData?.id });
+        showToast('DPO saved to cloud!', 'success');
+      }
+    }
+  } catch (e) {
+    console.table({
+      timestamp,
+      operation: 'SAVE_EXCEPTION',
+      table: 'dpo',
+      supabase_response: 'EXCEPTION',
+      error_message: e.message
+    });
+    JARVIS_LOG.error('DPO', 'Save DPO', e);
+    showToast('Save failed: ' + e.message, 'error');
+  }
 }
 
 /* ───────────────────────────────────────────────
    DOCUMENTS
    ─────────────────────────────────────────────── */
-function renderDocuments() {
-  const listEl = document.getElementById('documents-list');
-  const emptyEl = document.getElementById('documents-empty');
-  
-  if (!listEl) return;
-  
-  if (state.documents.length === 0) {
-    listEl.innerHTML = '';
-    if (emptyEl) emptyEl.style.display = 'flex';
-    return;
-  }
-  
-  if (emptyEl) emptyEl.style.display = 'none';
-  
-  listEl.innerHTML = state.documents.map((doc, i) => `
-    <div class="doc-item">
-      <div class="doc-icon">📄</div>
-      <div class="doc-info">
-        <div class="doc-name">${doc.name}</div>
-        <div class="doc-meta">${doc.type} · ${formatFileSize(doc.size)} · ${formatDate(doc.uploadedAt)}</div>
-      </div>
-      <button class="doc-delete" onclick="deleteDocument(${i})">✕</button>
-    </div>
-  `).join('');
-}
-
-function formatFileSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
-
-function formatDate(dateStr) {
-  return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-async function handleFileUpload(event) {
-  const fileInput = document.getElementById('file-input');
-  const categorySelect = document.getElementById('doc-category');
-  const files = fileInput.files;
-  if (!files.length) {
-    showToast('Please select a file to upload', 'warning');
-    return;
-  }
-
-  const supabase = getSupabaseClient();
-  const category = categorySelect.value;
-  const uploaderName = state.user.name;
-
-  showToast(`Uploading ${files.length} file(s)...`, 'info');
-
-  for (const file of files) {
-    const fileExt = file.name.split('.').pop();
-    const uniqueName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-    const storagePath = `${state.user.id}/${uniqueName}`;
-
-    let storageUrl = null;
-
-    if (supabase && isSupabaseConfigured()) {
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .upload(storagePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (error) {
-        console.error('Storage upload error:', error);
-        showToast(`Failed to upload ${file.name}`, 'error');
-        continue;
-      }
-
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(storagePath);
-      storageUrl = urlData.publicUrl;
-
-      const { error: dbError } = await supabase.from('documents').insert({
-        user_id: state.user.id,
-        uploader_name: uploaderName,
-        name: file.name,
-        doc_type: getDocType(file.name),
-        category: category,
-        file_size: file.size,
-        storage_path: storagePath
-      });
-
-      if (dbError) {
-        console.error('Database save error:', dbError);
-        showToast(`File saved but metadata failed for ${file.name}`, 'warning');
-      }
-    }
-
-    const doc = {
-      id: Date.now() + Math.random().toString(36).substr(2, 9),
-      uploader: uploaderName,
-      name: file.name,
-      type: getDocType(file.name),
-      category: category,
-      size: file.size,
-      uploadedAt: new Date().toISOString(),
-      storagePath: storageUrl
-    };
-
-    state.documents.push(doc);
-  }
-
-  saveState();
-  renderDocuments();
-  showSuccess(`${files.length} file(s) uploaded successfully!`);
-  fileInput.value = '';
-}
-
-function getDocType(filename) {
-  const ext = filename.split('.').pop().toLowerCase();
-  const types = {
-    pdf: 'PDF Document',
-    doc: 'Word Document', docx: 'Word Document',
-    xls: 'Excel Spreadsheet', xlsx: 'Excel Spreadsheet',
-    png: 'Image', jpg: 'Image', jpeg: 'Image'
-  };
-  return types[ext] || 'Other Document';
-}
-
 async function renderDocuments() {
-  const listEl = document.getElementById('documents-list');
-  const emptyEl = document.getElementById('documents-empty');
-  const countEl = document.getElementById('doc-count');
-  const filterCat = document.getElementById('doc-filter')?.value || '';
-
-  if (!listEl) return;
+  const body = document.getElementById('documents-list');
+  if (!body) return;
 
   const supabase = getSupabaseClient();
   let docs = [];
 
   if (supabase && isSupabaseConfigured() && state.user.id) {
+    const filterCat = document.getElementById('doc-filter')?.value || '';
     let query = supabase
       .from('documents')
       .select('*')
       .eq('user_id', state.user.id)
       .order('created_at', { ascending: false });
 
-    if (filterCat) {
-      query = query.eq('category', filterCat);
-    }
+    if (filterCat) query = query.eq('category', filterCat);
 
     const { data, error } = await query;
     if (!error && data) {
@@ -1772,47 +2847,55 @@ async function renderDocuments() {
         category: r.category,
         size: r.file_size,
         uploadedAt: r.created_at,
-        storagePath: r.storage_path,
-        storagePathRaw: r.storage_path
+        storagePath: r.storage_path
       }));
       state.documents = docs;
     }
   } else {
-    docs = filterCat ? state.documents.filter(d => d.category === filterCat) : state.documents;
+    docs = state.documents || [];
   }
 
+  // Summary
+  const countEl = document.getElementById('doc-count');
   if (countEl) countEl.textContent = `${docs.length} document${docs.length !== 1 ? 's' : ''}`;
 
-  if (docs.length === 0) {
-    listEl.innerHTML = '';
-    if (emptyEl) emptyEl.style.display = 'flex';
+  // Search
+  const q = (document.getElementById('doc-search')?.value || '').toLowerCase();
+  const filtered = q ? docs.filter(d => 
+    (d.name||'').toLowerCase().includes(q) || 
+    (d.category||'').toLowerCase().includes(q)
+  ) : docs;
+
+  if (filtered.length === 0) {
+    body.innerHTML = `<div class="empty-state"><div style="font-size:36px">📂</div><p>${q ? 'No results for "' + q + '"' : 'No documents yet'}</p><small>Upload your first compliance document to get started.</small></div>`;
     return;
   }
 
-  if (emptyEl) emptyEl.style.display = 'none';
+  const fmtSize = (b) => b < 1024 ? b + ' B' : b < 1048576 ? (b/1024).toFixed(1) + ' KB' : (b/1048576).toFixed(1) + ' MB';
+  const fmtDate = (d) => new Date(d).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'});
 
-  listEl.innerHTML = docs.map(doc => `
-    <div class="doc-item" data-doc-id="${doc.id}">
-      <div class="doc-icon">${getDocIcon(doc.type)}</div>
-      <div class="doc-info">
-        <div class="doc-name">${doc.name}</div>
-        <div class="doc-meta">
-          <span class="doc-cat-badge">${doc.category || 'Other'}</span>
-          ${doc.size ? `<span>${formatFileSize(doc.size)}</span>` : ''}
-          <span>${formatDate(doc.uploadedAt)}</span>
-          <span>by ${doc.uploader || 'Unknown'}</span>
+  body.innerHTML = `<div class="data-table-wrap"><table><thead><tr>
+    <th>Document</th><th>Category</th><th>Size</th><th>Uploaded</th><th>Actions</th>
+  </tr></thead><tbody>${filtered.map((doc, i) => `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-size:18px;">📄</div>
+          <div class="table-avatar-name">${doc.name}</div>
         </div>
-      </div>
-      <div class="doc-actions">
-        ${doc.storagePath ? `<a href="${doc.storagePath}" target="_blank" class="doc-download" title="Download">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        </a>` : ''}
-        <button class="doc-delete" onclick="deleteDocument('${doc.id}')" title="Delete">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-    </div>
-  `).join('');
+      </td>
+      <td><span class="table-tag">${doc.category}</span></td>
+      <td class="td-muted">${fmtSize(doc.size)}</td>
+      <td class="td-muted co-date">${fmtDate(doc.uploadedAt)}</td>
+      <td>
+        <div class="row-actions co-actions">
+          <button class="btn-edit" onclick="downloadDocument('${doc.id}')">Download</button>
+          <button class="btn-delete" onclick="deleteDocument('${doc.id}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`).join('')}</tbody></table></div>`;
 }
 
 function getDocIcon(type) {
@@ -1823,19 +2906,24 @@ function getDocIcon(type) {
   return '📄';
 }
 
+async function downloadDocument(docId) {
+  const doc = state.documents.find(d => d.id === docId);
+  if (!doc) return;
+  const supabase = getSupabaseClient();
+  if (supabase && isSupabaseConfigured()) {
+    const { data } = supabase.storage.from('documents').getPublicUrl(doc.storagePath);
+    window.open(data.publicUrl + '?download=', '_blank');
+  }
+}
+
 async function deleteDocument(docId) {
   if (!confirm('Delete this document?')) return;
-
   const supabase = getSupabaseClient();
   const doc = state.documents.find(d => d.id === docId);
-
   if (supabase && isSupabaseConfigured()) {
-    if (doc?.storagePathRaw) {
-      await supabase.storage.from('documents').remove([doc.storagePathRaw]);
-    }
+    if (doc?.storagePath) await supabase.storage.from('documents').remove([doc.storagePath]);
     await supabase.from('documents').delete().eq('id', docId);
   }
-
   state.documents = state.documents.filter(d => d.id !== docId);
   saveState();
   renderDocuments();
@@ -2418,74 +3506,156 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
   });
 });
 
-// Auto-login & Routing check on boot
-if (state.isLoggedIn) {
-  setTimeout(() => launchApp(), 50);
-} else {
-  setTimeout(() => {
-    const hash = window.location.hash.replace('#/', '');
-    if (hash === 'login') {
-      goTo('screen-' + hash, true);
-    }
-  }, 50);
-}
-
 // Handle browser back/forward buttons
-window.addEventListener('hashchange', () => {
-  const hash = window.location.hash.replace('#/', '');
-  if (!hash || hash === 'landing') {
-    goTo('screen-landing', true);
-  } else if (['login', 'onboarding'].includes(hash)) {
-    goTo('screen-' + hash, true);
-  } else {
-    if (state.isLoggedIn) {
-      goTo('screen-app', true);
-      showPage(hash, null, true);
-    } else {
-      goTo('screen-landing', true);
-    }
-  }
-});
+// TEMPORARILY DISABLED FOR DEBUGGING
+// window.addEventListener('hashchange', () => {
+//   const hash = window.location.hash.replace('#/', '');
+//   if (!hash || hash === 'landing') {
+//     goTo('screen-landing', true);
+//   } else if (['login', 'onboarding'].includes(hash)) {
+//     goTo('screen-' + hash, true);
+//   } else {
+//     if (state.isLoggedIn) {
+//       goTo('screen-app', true);
+//       showPage(hash, null, true);
+//     } else {
+//       goTo('screen-landing', true);
+//     }
+//   }
+// });
 
-// Credentials auto-fill and session check on DOM ready
-document.addEventListener('DOMContentLoaded', () => {
-  // Check for existing session
+// Global Error Handler for debugging
+window.onerror = function(msg, url, line, col, error) {
+  console.error("GLOBAL ERROR: ", msg, " at ", url, ":", line);
+  return false;
+};
+
+// ─── CONSOLIDATED APP INITIALIZATION ─────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  // 1. Create Debug Overlay
+  document.body.insertAdjacentHTML('afterbegin', `
+    <div id="jarvis-status" style="position:fixed; top:0; left:0; width:100%; height:3px; background:#e2e8f0; z-index:9999; overflow:hidden;">
+      <div id="jarvis-progress" style="width:0%; height:100%; background:#2563eb; transition:width 0.3s ease;"></div>
+    </div>
+    <div id="jarvis-debug" style="position:fixed; bottom:10px; right:10px; background:rgba(15,23,42,0.9); color:#fff; font-size:10px; padding:8px 12px; border-radius:6px; z-index:9999; pointer-events:none; font-family:monospace; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
+      [JARVIS] Initializing...
+    </div>
+  `);
+
+  const updateDebug = (msg, progress) => {
+    console.log('[JARVIS] ' + msg);
+    const debug = document.getElementById('jarvis-debug');
+    const prog = document.getElementById('jarvis-progress');
+    if (debug) debug.innerText = '[JARVIS] ' + msg;
+    if (prog) prog.style.width = progress + '%';
+  };
+
+  try {
+    updateDebug('Loading state...', 10);
+    loadState();
+    
+    updateDebug('Loading core components...', 25);
+    await loadAllPages();
+    
+    updateDebug('Initializing Auth...', 60);
+    initAuthListener();
+    
+    updateDebug('Checking credentials...', 80);
+    checkAuth();
+    
+    updateDebug('System Ready.', 100);
+    setTimeout(() => {
+      document.getElementById('jarvis-status')?.remove();
+      document.getElementById('jarvis-debug')?.remove();
+    }, 2000);
+  } catch (err) {
+    updateDebug('ERROR: ' + err.message, 0);
+    console.error('[JARVIS] Boot Error:', err);
+  }
+
+  // 1. Restore Hash Routing Logic
+  window.addEventListener('hashchange', handleHashRoute);
+  window.addEventListener('popstate', handleHashRoute);
+  
   if (loadSession()) {
     launchApp();
+  } else {
+    handleHashRoute();
+  }
+
+  // 2. Attach Global Event Handlers
+  document.addEventListener('click', (e) => {
+    if (e.target.id === 'demo-btn' || e.target.closest('#demo-btn')) demoLogin();
+    if (e.target.id === 'login-btn' || e.target.closest('#login-btn')) doLogin();
+    if (e.target.id === 'finish-onboard' || e.target.closest('#finish-onboard')) finishOnboard();
+  });
+
+  const dpoForm = document.getElementById('dpo-form');
+  if (dpoForm) dpoForm.addEventListener('submit', (e) => { e.preventDefault(); saveDPO(); });
+
+  if (window.envLoaded) fillCredentials();
+  else document.addEventListener('envReady', fillCredentials);
+});
+
+// ─── GLOBALIZED CORE FUNCTIONS (Extracted from listener) ───────
+
+function handleHashRoute() {
+  const raw = window.location.hash.replace('#/', '').replace('#', '');
+  const hash = raw || 'landing';
+  console.log("Routing to hash:", hash);
+
+  const authScreens = ['landing', 'login', 'register', 'onboarding'];
+  if (authScreens.includes(hash)) {
+    goTo('screen-' + hash, true);
     return;
   }
 
-  // Demo button
-  const demoBtn = document.getElementById('demo-btn');
-  if (demoBtn) {
-    demoBtn.addEventListener('click', () => demoLogin());
+  if (!state.isLoggedIn) {
+    goTo('screen-landing', true);
+    return;
   }
 
-  // Login button
-  const loginBtn = document.getElementById('login-btn');
-  if (loginBtn) {
-    loginBtn.addEventListener('click', () => doLogin());
-  }
+  goTo('screen-app', true);
+  showPage(hash, null, true);
+}
 
-  // Finish onboarding
-  const finishBtn = document.getElementById('finish-onboard');
-  if (finishBtn) {
-    finishBtn.addEventListener('click', () => finishOnboard());
+function fillCredentials() {
+  const emailInput = document.getElementById('login-email');
+  const pwInput = document.getElementById('login-password');
+  if (window.ENV?.APP_EMAIL) {
+    if (emailInput) emailInput.value = window.ENV.APP_EMAIL;
+    if (pwInput) pwInput.value = window.ENV.APP_PASSWORD;
   }
+}
 
-  // Auto-fill credentials from ENV when available
-  function fillCredentials() {
-    if (window.ENV?.APP_EMAIL) {
-      const emailInput = document.getElementById('login-email');
-      const pwInput = document.getElementById('login-password');
-      if (emailInput) emailInput.value = window.ENV.APP_EMAIL;
-      if (pwInput) pwInput.value = window.ENV.APP_PASSWORD;
-    }
-  }
+async function loadAllSampleData() {
+  if (!state.isLoggedIn) { showToast('Please login first', 'error'); return; }
+  if (!confirm('Load sample data?')) return;
+  
+  const companyId = state.user.company;
+  showToast('Loading sample data...', 'info');
+  
+  await seedProcessingActivitiesToSupabase(companyId);
+  await seedDataRecordsToSupabase(companyId);
+  await seedDataRequestsToSupabase(companyId);
+  await seedBreachLogToSupabase(companyId);
+  await seedDPIAToSupabase(companyId);
+  await seedCrossBorderToSupabase(companyId);
+  await seedVendorsToSupabase(companyId);
+  await seedTrainingToSupabase(companyId);
+  await seedAlertsToSupabase(companyId);
+  await seedCasesToSupabase(companyId);
+  await seedTeamMembersToSupabase(companyId);
+  
+  showToast('Sample data loaded!', 'success');
+}
+window.loadAllSampleData = loadAllSampleData;
 
-  if (window.envLoaded) {
-    fillCredentials();
-  } else {
-    document.addEventListener('envReady', fillCredentials);
+
+// Global click listener to close dropdowns
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.org-context')) {
+    const dropdown = document.getElementById('org-dropdown');
+    if (dropdown) dropdown.classList.remove('open');
   }
 });

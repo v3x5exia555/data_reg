@@ -1,0 +1,1413 @@
+<div id="page-processing_activities" class="page-shell">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+  <div class="page-header">
+    <h1>Processing Activities</h1>
+    <p>Record of every personal-data processing activity.</p>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-primary">
+        <i class="fa-solid fa-cogs"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Total Activities</div>
+        <div class="stat-value" id="pa-total-count">0</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-warning">
+        <i class="fa-solid fa-globe"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Cross-border</div>
+        <div class="stat-value" id="pa-crossborder-count">0</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-danger">
+        <i class="fa-solid fa-lock"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">With Sensitive Data</div>
+        <div class="stat-value" id="pa-sensitive-count">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-toolbar">
+    <div class="search-box">
+      <i class="fa-solid fa-search"></i>
+      <input type="text" id="processing-search" placeholder="Search activities…" oninput="renderProcessingActivities(state.processingActivities)">
+    </div>
+    <div class="toolbar-actions">
+      <button class="btn btn-secondary" onclick="loadSampleProcessingActivities()">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Try Sample Data
+      </button>
+      <button class="btn btn-primary" onclick="openProcessingModal()">
+        <i class="fa-solid fa-plus"></i> Add Activity
+      </button>
+    </div>
+  </div>
+
+  <div id="processing-activities-empty" class="empty-state" style="display: none;">
+    <i class="fa-solid fa-inbox"></i>
+    <h3>No Processing Activities Recorded</h3>
+    <p>Click "Add Activity" to record your first processing activity.</p>
+  </div>
+
+  <div id="processing-activities-table-wrap" class="data-table-wrap" style="display: none;">
+    <table class="styled-table">
+      <thead>
+        <tr>
+          <th class="th-narrow">#</th>
+          <th class="th-activity">ACTIVITY NAME</th>
+          <th>PURPOSE</th>
+          <th>DATA CATEGORIES</th>
+          <th>LEGAL BASIS</th>
+          <th class="th-narrow">FREQ</th>
+          <th class="th-narrow">SUBJECTS</th>
+          <th class="th-narrow">CROSS-BORDER</th>
+          <th class="th-actions">ACTIONS</th>
+        </tr>
+      </thead>
+      <tbody id="processing-activities-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="modal-overlay" id="modal-processing">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2 id="pa2-modal-title">New Processing Activity</h2>
+        <button class="modal-close-btn" onclick="closeProcessingModal()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="section">
+          <div class="progress-header">
+            <span class="section-title">Setup Progress</span>
+            <span id="pa2-progress-text" class="progress-text">0/10 complete</span>
+          </div>
+          <div class="progress-grid">
+            <div id="step-basics" class="step">1. Basics</div>
+            <div id="step-nature" class="step">2. Nature</div>
+            <div id="step-scope" class="step">3. Scope</div>
+            <div id="step-context" class="step">4. Context</div>
+            <div id="step-legal" class="step">5. Legal Basis</div>
+            <div id="step-data" class="step">6. Data Categories</div>
+            <div id="step-recip" class="step">7. Recipients</div>
+            <div id="step-retention" class="step">8. Retention</div>
+            <div id="step-volume" class="step">9. Volume</div>
+            <div id="step-crossborder" class="step">10. Cross-border</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">1. Basics</span>
+          <div class="input-group">
+            <label>Activity Name *</label>
+            <input type="text" id="pa2-name" class="form-input" placeholder="e.g. Employee payroll processing">
+          </div>
+          <div class="input-group">
+            <label>Purpose</label>
+            <textarea id="pa2-purpose" class="form-input" rows="3" placeholder="Why this data is processed"></textarea>
+          </div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">2. Nature of Processing</span>
+          <p class="section-hint">PDPA defines processing broadly — pick every operation that applies.</p>
+          <div class="selection-grid" id="pa2-natureGrid"></div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">3. Processing Scope</span>
+          <p class="section-hint">Who is affected and how often is the data processed?</p>
+          <div class="input-group">
+            <label>Who are the data subjects?</label>
+            <div class="selection-grid" id="pa2-whoGrid"></div>
+          </div>
+          <div class="input-group">
+            <label>Processing Frequency</label>
+            <select id="pa2-freq" class="form-input">
+              <option value="">Select frequency</option>
+              <option value="One-time">One-time</option>
+              <option value="Daily">Daily</option>
+              <option value="Weekly">Weekly</option>
+              <option value="Monthly">Monthly</option>
+              <option value="Continuous">Continuous</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Storage Type</label>
+            <select id="pa2-storage" class="form-input">
+              <option value="">Select storage type</option>
+              <option value="On-premise">On-premise</option>
+              <option value="Cloud system">Cloud system</option>
+              <option value="Hybrid">Hybrid</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">4. Context & Relationship</span>
+          <p class="section-hint">Select the context that best describes this processing activity.</p>
+          <div class="selection-grid" id="pa2-contextGrid"></div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">5. Legal Basis Under PDPA</span>
+          <p class="section-hint">At least one legal basis must be selected.</p>
+          <div id="pa2-legalGrid"></div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">6. Data Categories</span>
+          <p class="section-hint">Select all categories of personal data processed.</p>
+          <div class="selection-grid" id="pa2-dataGrid"></div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">7. Recipients</span>
+          <p class="section-hint">Who receives or accesses this data?</p>
+          <div class="selection-grid" id="pa2-recipGrid"></div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">8. Retention Policy</span>
+          <div class="input-group">
+            <label>Retention Type</label>
+            <select id="pa2-retType" class="form-input">
+              <option value="">Select retention type</option>
+              <option value="Employment records">Employment records (7 years)</option>
+              <option value="Payroll records">Payroll records (7 years)</option>
+              <option value="Customer data">Customer data (5 years)</option>
+              <option value="Financial data">Financial data (7 years)</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Retention Period (years)</label>
+            <input type="text" id="pa2-retYears" class="form-input" placeholder="e.g. 7">
+          </div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">9. Subject Volume</span>
+          <div class="volume-grid">
+            <div class="stat-card-inline">
+              <div class="stat-label">Total Data Subjects</div>
+              <input type="text" id="pa2-total" class="volume-input" placeholder="0">
+            </div>
+            <div class="stat-card-inline">
+              <div class="stat-label">Sensitive Data Subjects</div>
+              <input type="text" id="pa2-sensitive" class="volume-input" placeholder="0">
+            </div>
+          </div>
+          <div id="pa2-dpia-indicator" class="dpia-indicator">
+            <div class="dpia-indicator-header">
+              <span id="pa2-dpia-status">DPIA Not Required</span>
+              <span id="pa2-dpia-badge" class="badge badge-info">Below Threshold</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">10. Cross-border Transfers</span>
+          <div class="checkbox-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="pa2-crossBorder">
+              <span>Transfer data outside Malaysia</span>
+            </label>
+          </div>
+          <div id="pa2-country-section" class="country-section">
+            <div class="input-group">
+              <label>Destination Country</label>
+              <select id="pa2-country" class="form-input">
+                <option value="">Select country</option>
+                <option value="Singapore">Singapore</option>
+                <option value="Indonesia">Indonesia</option>
+                <option value="Thailand">Thailand</option>
+                <option value="Philippines">Philippines</option>
+                <option value="Vietnam">Vietnam</option>
+                <option value="United States">United States</option>
+                <option value="United Kingdom">United Kingdom</option>
+                <option value="European Union">European Union</option>
+                <option value="Australia">Australia</option>
+                <option value="China">China</option>
+                <option value="Japan">Japan</option>
+                <option value="South Korea">South Korea</option>
+                <option value="India">India</option>
+                <option value="Hong Kong">Hong Kong</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Safeguards</label>
+              <div class="selection-grid" id="pa2-safeguardsGrid"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="pa2-compliance-box" class="alert-box" style="display: none;">
+          <strong>Compliance Gaps Detected</strong>
+          <ul id="pa2-compliance-list"></ul>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="pa2Discard()">Discard Draft</button>
+        <button class="btn btn-primary" onclick="pa2Save()">Save Activity</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .toolbar-actions {
+    display: flex;
+    gap: var(--space-3);
+  }
+
+  /* ─── Data Register TH Blueprint ─── */
+  #page-processing_activities .styled-table thead th {
+    background: #f8fafc;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    padding: 12px 16px;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+  }
+  #page-processing_activities .styled-table {
+    table-layout: auto;
+  }
+  #page-processing_activities .styled-table td {
+    padding: 14px 16px;
+    vertical-align: top;
+    font-size: 13px;
+  }
+  #page-processing_activities .styled-table .td-categories,
+  #page-processing_activities .styled-table .td-legal {
+    max-width: 260px;
+  }
+  #page-processing_activities .styled-table .td-purpose {
+    max-width: 220px;
+    white-space: normal;
+    line-height: 1.5;
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+
+  /* Tag pills for data categories and legal basis */
+  .table-tag {
+    display: inline-block;
+    background: var(--bg, #f1f5f9);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted, #64748b);
+    margin: 2px;
+    white-space: nowrap;
+  }
+  .table-tag.tag-sensitive {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #b91c1c;
+  }
+  .table-tag.tag-legal {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+  }
+
+  /* Action buttons for table rows */
+  .btn-icon {
+    background: none;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 6px;
+    padding: 6px 8px;
+    cursor: pointer;
+    color: var(--muted, #64748b);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    font-size: 12px;
+  }
+  .btn-icon:hover {
+    background: var(--blue-100, #eff6ff);
+    border-color: var(--blue, #3b82f6);
+    color: var(--blue, #3b82f6);
+  }
+  .btn-icon.btn-icon-danger:hover {
+    background: #fef2f2;
+    border-color: #ef4444;
+    color: #ef4444;
+  }
+  .row-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  /* Modal - Elite Card Style */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center; /* Vertically center */
+    justify-content: center; /* Horizontally center */
+    z-index: 9999;
+    padding: 2rem;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-container {
+    background: #ffffff;
+    width: 100%;
+    max-width: 800px; /* Wider for matrix grid */
+    max-height: 90vh; /* Better vertical fit */
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin: auto; /* Absolute center anchor */
+  }
+  .modal-header {
+    padding: 24px 28px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    background: linear-gradient(to bottom, #ffffff, #f8fafc);
+  }
+  .modal-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+  }
+  .modal-close-btn {
+    background: #f1f5f9;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #64748b;
+    padding: 8px 12px;
+    line-height: 1;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  .modal-close-btn:hover { 
+    background: #e2e8f0; 
+    color: #0f172a;
+  }
+  .modal-body {
+    padding: 24px 28px;
+    overflow-y: auto;
+    flex: 1;
+    background: #fafbfc;
+  }
+  .modal-footer {
+    padding: 20px 28px;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: #ffffff;
+    flex-shrink: 0;
+  }
+  /* Progress Stepper */
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+  }
+  .progress-text { 
+    font-size: 13px; 
+    color: #64748b;
+    font-weight: 600;
+  }
+  .progress-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .step {
+    font-size: 10px;
+    padding: 8px 4px;
+    border: 1px solid #f1f5f9;
+    background: #ffffff;
+    border-radius: 8px;
+    color: #94a3b8;
+    text-align: center;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    transition: all 0.2s;
+  }
+  .step.active {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #3b82f6;
+  }
+  .step.complete {
+    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+    border-color: #22c55e;
+    color: #15803d;
+  }
+  /* Section Headers - Data Register Style */
+  .section {
+    margin-bottom: 24px;
+    padding: 20px;
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+  }
+  .section-title {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #f1f5f9;
+  }
+  .section-hint {
+    font-size: 12px;
+    color: #94a3b8;
+    margin: -8px 0 12px 0;
+  }
+  /* Input Groups */
+  .input-group { margin-bottom: 16px; }
+  .input-group label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+    color: #64748b;
+  }
+  /* Selection Grid - High Density Matrix */
+  .selection-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 4 columns for elite density */
+    gap: 8px;
+  }
+  .chip {
+    border: 1px solid #e2e8f0;
+    padding: 8px 10px; /* Reduced padding for density */
+    border-radius: 8px;
+    font-size: 11px; /* Smaller font for matrix */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #ffffff;
+    color: #334155;
+    font-weight: 500;
+  }
+  .chip:hover { 
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+  }
+  .chip.selected {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border-color: #3b82f6;
+    color: #1d4ed8;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  }
+  .chip input[type="checkbox"] { display: none; }
+  .chip-checkbox {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #cbd5e1;
+    border-radius: 5px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .chip.selected .chip-checkbox {
+    background: #3b82f6;
+    border-color: #3b82f6;
+  }
+  .chip.selected .chip-checkbox::after {
+    content: '✓';
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .chip.sensitive {
+    border-color: #fecaca;
+    background: #fef2f2;
+  }
+  .chip.sensitive:hover {
+    background: #fee2e2;
+    border-color: #f87171;
+  }
+  .chip.sensitive.selected {
+    background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
+    border-color: #ef4444;
+    color: #b91c1c;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+  }
+  .chip.sensitive.selected .chip-checkbox {
+    background: #ef4444;
+    border-color: #ef4444;
+  }
+  .volume-grid {
+    display: flex;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+  .volume-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: var(--space-1) 0 0 0;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .volume-input:focus { outline: none; }
+  .dpia-indicator {
+    background: var(--success-light);
+    border: 1px solid var(--success);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+  }
+  .dpia-indicator.warning {
+    background: var(--warning-light);
+    border-color: var(--warning);
+  }
+  .dpia-indicator.danger {
+    background: var(--danger-light);
+    border-color: var(--danger);
+  }
+  .dpia-indicator-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    cursor: pointer;
+  }
+  .checkbox-label input[type="checkbox"] { width: auto; }
+  .country-section { display: none; }
+  .alert-box {
+    background: var(--warning-light);
+    border: 1px solid var(--warning);
+    color: var(--warning);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    font-size: 13px;
+  }
+  .alert-box ul { margin: var(--space-2) 0 0 var(--space-5); padding: 0; }
+  .pa-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-5);
+    transition: box-shadow 0.2s;
+  }
+  .pa-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .pa-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-3);
+  }
+  .pa-card-title { font-size: 16px; font-weight: 600; color: var(--text); margin: 0; }
+  .pa-card-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 var(--space-4) 0;
+    line-height: 1.5;
+  }
+  .pa-card-stats {
+    display: flex;
+    gap: var(--space-3);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+  }
+  .pa-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+  }
+  .pa-card-actions button {
+    background: none;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    color: var(--text);
+  }
+  .pa-card-actions button:hover { text-decoration: underline; }
+  .pa-card-actions .delete-btn { color: var(--danger); }
+</style>
+
+<script>
+let pa2State = {
+    name: "",
+    purpose: "",
+    nature: [],
+    who: [],
+    freq: "",
+    storage: "",
+    context: [],
+    legal: [],
+    data: [],
+    recip: [],
+    retType: "",
+    retYears: 0,
+    total: 0,
+    sensitive: 0,
+    crossBorder: false,
+    country: "",
+    safeguards: [],
+    editIndex: -1
+};
+
+const NATURE = ["Collection", "Recording", "Storage", "Organisation", "Retrieval", "Use", "Disclosure", "Transfer", "Deletion / Disposal"];
+const WHO = ["Internal employees", "Customers", "Vendors", "Public users"];
+const CONTEXT = ["Employer-employee relationship", "Customer-business relationship", "Public data collection", "Third-party processing"];
+const LEGAL = [
+    { label: "Consent (Section 6)", tip: "Data subject has given clear consent for the specific purpose." },
+    { label: "Contract necessity (Section 6)", tip: "Processing necessary for performance of a contract." },
+    { label: "Legal obligation", tip: "Required by Malaysian law (e.g. tax, employment statutes)." },
+    { label: "Vital interests", tip: "Necessary to protect life or physical safety." },
+    { label: "Legitimate interest", tip: "Pursued by controller, balanced against rights of subject." },
+    { label: "Sensitive data (Section 40)", tip: "Special handling for health, biometric, religion, etc." },
+    { label: "Cross-border (Section 129)", tip: "Transfer outside Malaysia requires safeguards." }
+];
+const DATA = [
+    { label: "Name", sensitive: false },
+    { label: "IC / Passport", sensitive: false },
+    { label: "Email", sensitive: false },
+    { label: "Phone", sensitive: false },
+    { label: "Address", sensitive: false },
+    { label: "Financial data", sensitive: false },
+    { label: "Salary", sensitive: false },
+    { label: "Attendance logs", sensitive: false },
+    { label: "Biometric data", sensitive: true },
+    { label: "Health data", sensitive: true },
+    { label: "Religion / Belief", sensitive: true },
+    { label: "Political opinion", sensitive: true }
+];
+const RECIP = ["Internal department", "HR", "IT", "Vendors", "Payroll provider", "Government agencies"];
+const SAFEGUARDS = ["Contract clauses", "Encryption", "Access control", "Vendor compliance"];
+
+function initPA2Form() {
+    const natureGrid = document.getElementById('pa2-natureGrid');
+    if (natureGrid) {
+        natureGrid.innerHTML = NATURE.map(n => `
+            <label class="chip" onclick="toggleChip(this, 'nature', '${n}')">
+                <input type="checkbox" value="${n}">
+                <div class="chip-checkbox"></div>
+                ${n}
+            </label>
+        `).join('');
+    }
+
+    const whoGrid = document.getElementById('pa2-whoGrid');
+    if (whoGrid) {
+        whoGrid.innerHTML = WHO.map(w => `
+            <label class="chip" onclick="toggleChip(this, 'who', '${w}')">
+                <input type="checkbox" value="${w}">
+                <div class="chip-checkbox"></div>
+                ${w}
+            </label>
+        `).join('');
+    }
+
+    const contextGrid = document.getElementById('pa2-contextGrid');
+    if (contextGrid) {
+        contextGrid.innerHTML = CONTEXT.map(c => `
+            <label class="chip" onclick="toggleChip(this, 'context', '${c}')">
+                <input type="checkbox" value="${c}">
+                <div class="chip-checkbox"></div>
+                ${c}
+            </label>
+        `).join('');
+    }
+
+    const legalGrid = document.getElementById('pa2-legalGrid');
+    if (legalGrid) {
+        legalGrid.innerHTML = LEGAL.map(l => `
+            <label class="chip" onclick="toggleChip(this, 'legal', '${l.label}')" title="${l.tip}">
+                <input type="checkbox" value="${l.label}">
+                <div class="chip-checkbox"></div>
+                ${l.label}
+            </label>
+        `).join('');
+    }
+
+    const dataGrid = document.getElementById('pa2-dataGrid');
+    if (dataGrid) {
+        dataGrid.innerHTML = DATA.map(d => `
+            <label class="chip ${d.sensitive ? 'sensitive' : ''}" onclick="toggleChip(this, 'data', '${d.label}')">
+                <input type="checkbox" value="${d.label}">
+                <div class="chip-checkbox"></div>
+                ${d.label}${d.sensitive ? ' 🔒' : ''}
+            </label>
+        `).join('');
+    }
+
+    const recipGrid = document.getElementById('pa2-recipGrid');
+    if (recipGrid) {
+        recipGrid.innerHTML = RECIP.map(r => `
+            <label class="chip" onclick="toggleChip(this, 'recip', '${r}')">
+                <input type="checkbox" value="${r}">
+                <div class="chip-checkbox"></div>
+                ${r}
+            </label>
+        `).join('');
+    }
+
+    const safeguardsGrid = document.getElementById('pa2-safeguardsGrid');
+    if (safeguardsGrid) {
+        safeguardsGrid.innerHTML = SAFEGUARDS.map(s => `
+            <label class="chip" onclick="toggleChip(this, 'safeguards', '${s}')">
+                <input type="checkbox" value="${s}">
+                <div class="chip-checkbox"></div>
+                ${s}
+            </label>
+        `).join('');
+    }
+
+    const crossBorderEl = document.getElementById('pa2-crossBorder');
+    if (crossBorderEl) {
+        crossBorderEl.addEventListener('change', function() {
+            document.getElementById('pa2-country-section').style.display = this.checked ? 'block' : 'none';
+        });
+    }
+
+    ['pa2-total', 'pa2-sensitive'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updateDPIAIndicator);
+    });
+
+    ['pa2-name', 'pa2-purpose', 'pa2-freq', 'pa2-storage', 'pa2-retType', 'pa2-retYears', 'pa2-country'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updateProgress);
+    });
+}
+
+function toggleChip(label, key, value) {
+    const input = label.querySelector('input[type="checkbox"]');
+    input.checked = !input.checked;
+    label.classList.toggle('selected', input.checked);
+    
+    if (key === 'nature') {
+        if (input.checked) { if (!pa2State.nature.includes(value)) pa2State.nature.push(value); }
+        else { pa2State.nature = pa2State.nature.filter(n => n !== value); }
+    } else if (key === 'who') {
+        if (input.checked) { if (!pa2State.who.includes(value)) pa2State.who.push(value); }
+        else { pa2State.who = pa2State.who.filter(w => w !== value); }
+    } else if (key === 'context') {
+        if (input.checked) { if (!pa2State.context.includes(value)) pa2State.context.push(value); }
+        else { pa2State.context = pa2State.context.filter(c => c !== value); }
+    } else if (key === 'legal') {
+        if (input.checked) { if (!pa2State.legal.includes(value)) pa2State.legal.push(value); }
+        else { pa2State.legal = pa2State.legal.filter(l => l !== value); }
+    } else if (key === 'data') {
+        if (input.checked) { if (!pa2State.data.includes(value)) pa2State.data.push(value); }
+        else { pa2State.data = pa2State.data.filter(d => d !== value); }
+    } else if (key === 'recip') {
+        if (input.checked) { if (!pa2State.recip.includes(value)) pa2State.recip.push(value); }
+        else { pa2State.recip = pa2State.recip.filter(r => r !== value); }
+    } else if (key === 'safeguards') {
+        if (input.checked) { if (!pa2State.safeguards.includes(value)) pa2State.safeguards.push(value); }
+        else { pa2State.safeguards = pa2State.safeguards.filter(s => s !== value); }
+    }
+    updateProgress();
+}
+
+function updateProgress() {
+    let complete = 0;
+    if (document.getElementById('pa2-name')?.value) complete++;
+    if (pa2State.nature.length > 0) complete++;
+    if (document.getElementById('pa2-freq')?.value) complete++;
+    if (pa2State.context.length > 0) complete++;
+    if (pa2State.legal.length > 0) complete++;
+    if (pa2State.data.length > 0) complete++;
+    if (pa2State.recip.length > 0) complete++;
+    if (document.getElementById('pa2-retType')?.value) complete++;
+    if (parseInt(document.getElementById('pa2-total')?.value || 0) > 0) complete++;
+    if (!document.getElementById('pa2-crossBorder')?.checked || document.getElementById('pa2-country')?.value) complete++;
+    
+    const text = document.getElementById('pa2-progress-text');
+    if (text) text.textContent = `${complete}/10 complete`;
+    
+    const steps = ['basics', 'nature', 'scope', 'context', 'legal', 'data', 'recip', 'retention', 'volume', 'crossborder'];
+    steps.forEach((step, i) => {
+        const el = document.getElementById('step-' + step);
+        if (el) {
+            const isComplete = (i === 0 && document.getElementById('pa2-name')?.value) ||
+                               (i === 1 && pa2State.nature.length > 0) ||
+                               (i === 2 && document.getElementById('pa2-freq')?.value) ||
+                               (i === 3 && pa2State.context.length > 0) ||
+                               (i === 4 && pa2State.legal.length > 0) ||
+                               (i === 5 && pa2State.data.length > 0) ||
+                               (i === 6 && pa2State.recip.length > 0) ||
+                               (i === 7 && document.getElementById('pa2-retType')?.value) ||
+                               (i === 8 && parseInt(document.getElementById('pa2-total')?.value || 0) > 0) ||
+                               (i === 9 && (!document.getElementById('pa2-crossBorder')?.checked || document.getElementById('pa2-country')?.value));
+            el.classList.toggle('complete', isComplete);
+        }
+    });
+}
+
+function updateDPIAIndicator() {
+    const total = parseInt(document.getElementById('pa2-total')?.value || 0);
+    const sensitive = parseInt(document.getElementById('pa2-sensitive')?.value || 0);
+    const indicator = document.getElementById('pa2-dpia-indicator');
+    const status = document.getElementById('pa2-dpia-status');
+    const badge = document.getElementById('pa2-dpia-badge');
+    
+    if (!indicator) return;
+    
+    if (total > 20000 || sensitive > 10000) {
+        indicator.className = 'dpia-indicator danger';
+        status.textContent = '🛡️ DPIA Required';
+        badge.textContent = 'Above Threshold';
+        badge.className = 'badge badge-danger';
+    } else if (total > 10000 || sensitive > 5000) {
+        indicator.className = 'dpia-indicator warning';
+        status.textContent = '⚠️ DPIA May Be Required';
+        badge.textContent = 'Approaching Threshold';
+        badge.className = 'badge badge-warning';
+    } else {
+        indicator.className = 'dpia-indicator';
+        status.textContent = '🛡️ DPIA Not Required';
+        badge.textContent = 'Below Threshold';
+        badge.className = 'badge badge-success';
+    }
+}
+
+function openProcessingModal() {
+    if (!document.getElementById('pa2-natureGrid')?.children.length) {
+        initPA2Form();
+    }
+    resetPA2Form();
+    document.getElementById('pa2-modal-title').textContent = 'New Processing Activity';
+    document.getElementById('modal-processing').classList.add('open');
+}
+
+function closeProcessingModal() {
+    document.getElementById('modal-processing').classList.remove('open');
+}
+
+function resetPA2Form() {
+    pa2State = {
+        name: "", purpose: "", nature: [], who: [], freq: "", storage: "",
+        context: [], legal: [], data: [], recip: [], retType: "", retYears: 0,
+        total: 0, sensitive: 0, crossBorder: false, country: "", safeguards: [], editIndex: -1
+    };
+    
+    ['pa2-name', 'pa2-purpose', 'pa2-freq', 'pa2-storage', 'pa2-retType', 'pa2-retYears', 'pa2-total', 'pa2-sensitive', 'pa2-country'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    
+    document.querySelectorAll('#modal-processing input[type="checkbox"]').forEach(cb => cb.checked = false);
+    document.querySelectorAll('#modal-processing .chip').forEach(chip => chip.classList.remove('selected'));
+    document.getElementById('pa2-country-section').style.display = 'none';
+    updateDPIAIndicator();
+    updateProgress();
+}
+
+function pa2Discard() {
+    if (confirm('Discard this draft?')) {
+        closeProcessingModal();
+        resetPA2Form();
+    }
+}
+
+async function pa2Save() {
+    const timestamp = new Date().toISOString();
+    
+    pa2State.name = document.getElementById('pa2-name')?.value || '';
+    pa2State.purpose = document.getElementById('pa2-purpose')?.value || '';
+    pa2State.freq = document.getElementById('pa2-freq')?.value || '';
+    pa2State.storage = document.getElementById('pa2-storage')?.value || '';
+    pa2State.retType = document.getElementById('pa2-retType')?.value || '';
+    pa2State.retYears = parseInt(document.getElementById('pa2-retYears')?.value || 0);
+    pa2State.total = parseInt(document.getElementById('pa2-total')?.value || 0);
+    pa2State.sensitive = parseInt(document.getElementById('pa2-sensitive')?.value || 0);
+    pa2State.crossBorder = document.getElementById('pa2-crossBorder')?.checked || false;
+    pa2State.country = document.getElementById('pa2-country')?.value || '';
+    
+    if (!pa2State.name) {
+        JARVIS_LOG.error('ProcessingActivities', 'Validation failed', new Error('Activity name is required'));
+        alert('Please enter an activity name.');
+        return;
+    }
+    
+    const activityData = {
+        name: pa2State.name,
+        purpose: pa2State.purpose,
+        nature: pa2State.nature,
+        who: pa2State.who,
+        freq: pa2State.freq,
+        storage: pa2State.storage,
+        context: pa2State.context,
+        legal: pa2State.legal,
+        data: pa2State.data,
+        recip: pa2State.recip,
+        ret_type: pa2State.retType,
+        ret_years: pa2State.retYears,
+        total: pa2State.total,
+        sensitive: pa2State.sensitive,
+        cross_border: pa2State.crossBorder,
+        country: pa2State.country,
+        safeguards: pa2State.safeguards,
+        company_id: state?.user?.company,
+        user_id: state?.user?.id,
+        updated_at: timestamp
+    };
+    
+    JARVIS_LOG.submit('ProcessingActivities', pa2State.editIndex >= 0 ? 'Update' : 'Insert', { 
+        activity_name: pa2State.name,
+        timestamp,
+        checkbox_values: {
+            nature: pa2State.nature,
+            data: pa2State.data,
+            legal: pa2State.legal,
+            context: pa2State.context
+        }
+    });
+    
+    const supabase = getSupabaseClient();
+    if (supabase && isSupabaseConfigured()) {
+        try {
+            if (pa2State.editIndex >= 0) {
+                const existingActivity = state.processingActivities[pa2State.editIndex];
+                activityData.id = existingActivity.id;
+                activityData.created_at = existingActivity.created_at;
+                const { data, error } = await supabase
+                    .from('processing_activities')
+                    .upsert([activityData])
+                    .select();
+                
+                console.table({
+                    timestamp,
+                    operation: error ? 'UPDATE_FAILED' : 'UPDATE_SUCCESS',
+                    table: 'processing_activities',
+                    record_id: activityData.id,
+                    supabase_response: error ? `ERROR: ${error.code}` : 'SUCCESS',
+                    error_message: error?.message || 'N/A'
+                });
+                
+                if (!error && data) {
+                    state.processingActivities[pa2State.editIndex] = data[0];
+                    JARVIS_LOG.success('ProcessingActivities', 'Update to Supabase', { id: data[0]?.id });
+                } else {
+                    JARVIS_LOG.error('ProcessingActivities', 'Update to Supabase', error);
+                }
+            } else {
+                activityData.created_at = timestamp;
+                const { data, error } = await supabase
+                    .from('processing_activities')
+                    .insert([activityData])
+                    .select();
+                
+                console.table({
+                    timestamp,
+                    operation: error ? 'INSERT_FAILED' : 'INSERT_SUCCESS',
+                    table: 'processing_activities',
+                    form_data: JSON.stringify({ name: pa2State.name, data_categories: pa2State.data }),
+                    supabase_response: error ? `ERROR: ${error.code}` : 'SUCCESS',
+                    error_message: error?.message || 'N/A'
+                });
+                
+                if (!error && data) {
+                    state.processingActivities.unshift(data[0]);
+                    JARVIS_LOG.success('ProcessingActivities', 'Insert to Supabase', { id: data[0]?.id });
+                } else {
+                    state.processingActivities.unshift({ ...pa2State, id: 'local-' + Date.now(), created_at: timestamp });
+                    JARVIS_LOG.error('ProcessingActivities', 'Insert to Supabase', error);
+                }
+            }
+        } catch (e) {
+            console.table({
+                timestamp,
+                operation: 'SAVE_EXCEPTION',
+                table: 'processing_activities',
+                supabase_response: 'EXCEPTION',
+                error_message: e.message
+            });
+            JARVIS_LOG.error('ProcessingActivities', 'Save exception', e);
+            if (pa2State.editIndex >= 0) {
+                state.processingActivities[pa2State.editIndex] = { ...pa2State };
+            } else {
+                state.processingActivities.unshift({ ...pa2State, id: 'pa-' + Date.now(), created_at: timestamp });
+            }
+        }
+    } else {
+        console.table({
+            timestamp,
+            operation: 'SAVE_LOCAL',
+            table: 'processing_activities',
+            supabase_response: 'NOT_CONFIGURED',
+            error_message: 'Supabase not configured'
+        });
+        if (pa2State.editIndex >= 0) {
+            state.processingActivities[pa2State.editIndex] = { ...pa2State };
+        } else {
+            state.processingActivities.unshift({ ...pa2State, id: 'pa-' + Date.now(), created_at: timestamp });
+        }
+    }
+    
+    localStorage.setItem('datarex_processing_activities', JSON.stringify(state.processingActivities));
+    renderProcessingActivities(state.processingActivities);
+    closeProcessingModal();
+    resetPA2Form();
+    
+    showToast('Activity saved successfully!');
+}
+
+function pa2EditActivity(index) {
+    const activity = state.processingActivities[index];
+    if (!activity) return;
+    
+    if (!document.getElementById('pa2-natureGrid')?.children.length) {
+        initPA2Form();
+    }
+    
+    pa2State = { ...activity, editIndex: index };
+    
+    document.getElementById('pa2-name').value = activity.name || '';
+    document.getElementById('pa2-purpose').value = activity.purpose || '';
+    document.getElementById('pa2-freq').value = activity.freq || '';
+    document.getElementById('pa2-storage').value = activity.storage || '';
+    document.getElementById('pa2-retType').value = activity.retType || '';
+    document.getElementById('pa2-retYears').value = activity.retYears || '';
+    document.getElementById('pa2-total').value = activity.total || '';
+    document.getElementById('pa2-sensitive').value = activity.sensitive || '';
+    document.getElementById('pa2-crossBorder').checked = activity.crossBorder || false;
+    document.getElementById('pa2-country').value = activity.country || '';
+    
+    if (activity.crossBorder) {
+        document.getElementById('pa2-country-section').style.display = 'block';
+    }
+    
+    ['nature', 'who', 'context', 'legal', 'data', 'recip', 'safeguards'].forEach(key => {
+        if (activity[key] && Array.isArray(activity[key])) {
+            activity[key].forEach(val => {
+                const chip = document.querySelector(`#pa2-${key}Grid .chip input[value="${val}"]`);
+                if (chip) {
+                    chip.checked = true;
+                    chip.closest('.chip').classList.add('selected');
+                }
+            });
+        }
+    });
+    
+    document.getElementById('pa2-modal-title').textContent = 'Edit Processing Activity';
+    document.getElementById('modal-processing').classList.add('open');
+    updateDPIAIndicator();
+    updateProgress();
+}
+
+async function pa2DeleteActivity(index) {
+    const activity = state.processingActivities[index];
+    if (!activity) return;
+    if (confirm(`Delete "${activity.name}"?`)) {
+        const supabase = window.supabaseClient;
+        if (supabase && window.ENV?.SUPABASE_URL && activity.id && !activity.id.startsWith('local-') && !activity.id.startsWith('sample-')) {
+            try {
+                await supabase.from('processing_activities').delete().eq('id', activity.id);
+            } catch (e) {}
+        }
+        
+        state.processingActivities.splice(index, 1);
+        localStorage.setItem('datarex_processing_activities', JSON.stringify(state.processingActivities));
+        renderProcessingActivities(state.processingActivities);
+    }
+}
+
+async function loadProcessingActivities() {
+    const timestamp = new Date().toISOString();
+    const supabase = getSupabaseClient();
+    
+    console.table({
+        timestamp,
+        operation: 'LOAD_PROCESSING_ACTIVITIES',
+        table: 'processing_activities',
+        user_company: state?.user?.company,
+        supabase_configured: isSupabaseConfigured()
+    });
+
+    console.log('[JARVIS] Fetching from processing_activities...');
+    if (supabase && isSupabaseConfigured()) {
+        try {
+            const { data, error } = await supabase
+                .from('processing_activities')
+                .select('*')
+                .eq('company_id', state?.user?.company)
+                .order('created_at', { ascending: false });
+            
+            if (error) {
+                console.error('[JARVIS] Fetching from processing_activities... Error:', error.message);
+            } else if (data) {
+                console.log(`[JARVIS] Fetching from processing_activities... Success: ${data.length} records found.`);
+                state.processingActivities = data;
+                localStorage.setItem('datarex_processing_activities', JSON.stringify(data));
+                renderProcessingActivities(state.processingActivities);
+                return;
+            } else {
+                console.table({
+                    timestamp,
+                    operation: 'LOAD_EMPTY',
+                    table: 'processing_activities',
+                    supabase_response: 'NO_DATA'
+                });
+            }
+        } catch (e) {
+            console.table({
+                timestamp,
+                operation: 'LOAD_EXCEPTION',
+                table: 'processing_activities',
+                supabase_response: 'EXCEPTION',
+                error_message: e.message
+            });
+        }
+    }
+    
+    const saved = localStorage.getItem('datarex_processing_activities');
+    if (saved) {
+        try {
+            state.processingActivities = JSON.parse(saved);
+        } catch (e) {
+            state.processingActivities = [];
+        }
+    }
+    renderProcessingActivities(state.processingActivities);
+}
+
+function renderProcessingActivities(activities) {
+    const tableWrap = document.getElementById('processing-activities-table-wrap');
+    const tbody = document.getElementById('processing-activities-tbody');
+    const emptyEl = document.getElementById('processing-activities-empty');
+    if (!tbody || !tableWrap) return;
+    
+    // Apply search filter
+    const searchVal = (document.getElementById('processing-search')?.value || '').toLowerCase();
+    let list = (activities || []).filter(a => {
+        if (!searchVal) return true;
+        return (a.name || '').toLowerCase().includes(searchVal) ||
+               (a.purpose || '').toLowerCase().includes(searchVal);
+    });
+    
+    if (list.length === 0) {
+        if (emptyEl) emptyEl.style.display = 'block';
+        tableWrap.style.display = 'none';
+        tbody.innerHTML = '';
+        updatePAStats(0, 0, 0);
+        return;
+    }
+    
+    if (emptyEl) emptyEl.style.display = 'none';
+    tableWrap.style.display = 'block';
+    
+    let crossBorderCount = 0;
+    let sensitiveCount = 0;
+    
+    const formatArray = (arr) => {
+        if (!arr) return [];
+        if (typeof arr === 'string') {
+            try { arr = JSON.parse(arr); } catch (e) { arr = [arr]; }
+        }
+        return Array.isArray(arr) ? arr : [arr];
+    };
+    
+    const SENSITIVE_CATS = ['Biometric data', 'Health data', 'Religion / Belief', 'Political opinion'];
+    
+    tbody.innerHTML = list.map((activity, i) => {
+        const isCrossBorder = activity.crossBorder || activity.cross_border;
+        const dataCategories = formatArray(activity.data || []);
+        const legalBasis = formatArray(activity.legal || []);
+        
+        if (isCrossBorder) crossBorderCount++;
+        if (activity.sensitive > 0 || dataCategories.some(d => SENSITIVE_CATS.includes(d))) sensitiveCount++;
+        
+        const dataTags = dataCategories.length > 0
+            ? dataCategories.map(d => `<span class="table-tag ${SENSITIVE_CATS.includes(d) ? 'tag-sensitive' : ''}">${d}</span>`).join(' ')
+            : '<span class="td-muted">—</span>';
+        
+        const legalTags = legalBasis.length > 0
+            ? legalBasis.map(l => `<span class="table-tag tag-legal">${l}</span>`).join(' ')
+            : '<span class="td-muted">—</span>';
+        
+        return `
+        <tr>
+            <td class="td-id">#${i + 1}</td>
+            <td class="td-bold">${activity.name || 'Untitled Activity'}</td>
+            <td class="td-purpose">${activity.purpose || '—'}</td>
+            <td class="td-categories">${dataTags}</td>
+            <td class="td-legal">${legalTags}</td>
+            <td>${activity.freq || '—'}</td>
+            <td>${(activity.total || 0).toLocaleString()}</td>
+            <td>${isCrossBorder ? '<span class="status-badge status-active">Yes</span>' : '<span class="td-muted">No</span>'}</td>
+            <td>
+                <div class="row-actions">
+                    <button class="btn-icon" onclick="pa2EditActivity(${i})" title="Edit">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="btn-icon btn-icon-danger" onclick="pa2DeleteActivity(${i})" title="Delete">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `}).join('');
+    
+    updatePAStats(list.length, crossBorderCount, sensitiveCount);
+}
+
+function updatePAStats(total, crossBorder, sensitive) {
+    const totalEl = document.getElementById('pa-total-count');
+    const cbEl = document.getElementById('pa-crossborder-count');
+    const sensEl = document.getElementById('pa-sensitive-count');
+    if (totalEl) totalEl.textContent = total;
+    if (cbEl) cbEl.textContent = crossBorder;
+    if (sensEl) sensEl.textContent = sensitive;
+}
+
+function loadSampleProcessingActivities() {
+    const sampleActivities = [
+        {
+            id: 'sample-1',
+            name: 'Employee Payroll Processing',
+            purpose: 'Compute and disburse monthly salary, statutory contributions, and tax filings for Malaysian employees.',
+            nature: ['Collection', 'Storage', 'Use', 'Disclosure', 'Transfer'],
+            who: ['Internal employees'],
+            freq: 'Monthly',
+            storage: 'Cloud system',
+            context: ['Employer-employee relationship', 'Third-party processing'],
+            legal: ['Contract necessity (Section 6)', 'Legal obligation'],
+            data: ['Name', 'IC / Passport', 'Email', 'Phone', 'Address', 'Salary', 'Financial data', 'Health data'],
+            recip: ['HR', 'Payroll provider', 'Government agencies'],
+            retType: 'Payroll records',
+            retYears: 7,
+            total: 25000,
+            sensitive: 12000,
+            crossBorder: true,
+            country: 'Singapore',
+            safeguards: ['Contract clauses', 'Encryption'],
+            created_at: new Date().toISOString()
+        },
+        {
+            id: 'sample-2',
+            name: 'Customer Onboarding',
+            purpose: 'Account creation & KYC verification for new customers.',
+            nature: ['Collection', 'Storage', 'Retrieval'],
+            who: ['Customers'],
+            freq: 'Continuous',
+            storage: 'Cloud system',
+            context: ['Customer-business relationship'],
+            legal: ['Consent (Section 6)', 'Contract necessity (Section 6)'],
+            data: ['Name', 'IC / Passport', 'Email', 'Phone'],
+            recip: ['Internal department', 'HR'],
+            retType: 'Customer data',
+            retYears: 5,
+            total: 5000,
+            sensitive: 0,
+            crossBorder: false,
+            country: '',
+            safeguards: [],
+            created_at: new Date().toISOString()
+        },
+        {
+            id: 'sample-3',
+            name: 'Marketing Campaigns',
+            purpose: 'Email promotions and targeted advertising to customers.',
+            nature: ['Collection', 'Use', 'Disclosure'],
+            who: ['Customers'],
+            freq: 'Weekly',
+            storage: 'Cloud system',
+            context: ['Customer-business relationship', 'Third-party processing'],
+            legal: ['Consent (Section 6)', 'Legitimate interest'],
+            data: ['Name', 'Email', 'Phone'],
+            recip: ['Vendors'],
+            retType: 'Customer data',
+            retYears: 3,
+            total: 15000,
+            sensitive: 0,
+            crossBorder: true,
+            country: 'Singapore',
+            safeguards: ['Contract clauses', 'Access control'],
+            created_at: new Date().toISOString()
+        }
+    ];
+    
+    state.processingActivities = sampleActivities;
+    localStorage.setItem('datarex_processing_activities', JSON.stringify(state.processingActivities));
+    renderProcessingActivities(state.processingActivities);
+    showToast('Sample data loaded!');
+}
+
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--success);color:white;padding:12px 20px;border-radius:var(--radius-lg);font-weight:600;z-index:9999;';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+window.addEventListener('click', function(e) {
+    if (e.target.id === 'modal-processing') {
+        closeProcessingModal();
+    }
+});
+
+window.openProcessingModal = openProcessingModal;
+window.closeProcessingModal = closeProcessingModal;
+window.resetPA2Form = resetPA2Form;
+window.pa2EditActivity = pa2EditActivity;
+window.pa2DeleteActivity = pa2DeleteActivity;
+window.loadProcessingActivities = loadProcessingActivities;
+window.loadSampleProcessingActivities = loadSampleProcessingActivities;
+window.initPA2Form = initPA2Form;
+console.log('Processing activities page script loaded');
+</script>

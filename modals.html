@@ -1,0 +1,344 @@
+<!-- MODAL: Add/Edit Record -->
+<div class="modal-overlay" id="modal-record">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modal-record-title">Add data record</h3><button class="modal-close" onclick="closeModal('modal-record')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rec-index" value="-1">
+      <div class="form-group"><label>Type of data</label><input class="form-input no-icon" id="rec-type"
+          placeholder="e.g. Customer email"></div>
+      <div class="form-group"><label>Purpose</label><input class="form-input no-icon" id="rec-purpose"
+          placeholder="e.g. Order updates"></div>
+      <div class="form-group"><label>Where is it stored?</label><input class="form-input no-icon" id="rec-storage"
+          placeholder="e.g. Google Sheets, CRM"></div>
+      <div class="form-group"><label>Who has access?</label><input class="form-input no-icon" id="rec-access"
+          placeholder="e.g. Marketing team"></div>
+      <div class="form-group"><label>Retention (months)</label><input class="form-input no-icon"
+          id="rec-retention" type="number" value="12"></div>
+      <div class="toggle-field">
+        <div class="toggle-field-text"><label>Consent obtained</label><small>Did the person agree to this?</small>
+        </div>
+        <label class="toggle-wrap"><input type="checkbox" id="rec-consent"><span
+            class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group"><label>Note (optional)</label><textarea class="form-input no-icon" id="rec-note"
+          rows="3" placeholder="Anything to remember…" style="resize:none;height:80px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-record')">Cancel</button>
+      <button class="btn-save" id="rec-save-btn" onclick="saveRecord()">Save record</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Add Company -->
+<div class="modal-overlay" id="modal-company">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modal-company-title">Add company</h3><button class="modal-close" onclick="closeModal('modal-company')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="company-id" value="">
+      <div class="form-group"><label>Company Name</label><input class="form-input no-icon" id="company-name"
+          placeholder="e.g. Acme Pte Ltd"></div>
+      <div class="form-group"><label>Company Reg. No. (SSM/ROC)</label><input class="form-input no-icon"
+          id="company-reg-no" placeholder="e.g. 202001000001 (A)"></div>
+      <div class="form-group"><label>Country</label>
+        <select class="form-input no-icon" id="company-country">
+          <option value="Singapore">🇸🇬 Singapore</option>
+          <option value="Thailand">🇹🇭 Thailand</option>
+          <option value="Malaysia">🇲🇾 Malaysia</option>
+          <option value="Indonesia">🇮🇩 Indonesia</option>
+          <option value="Philippines">🇵🇭 Philippines</option>
+        </select>
+      </div>
+      <div class="form-group"><label>DPO Name</label><input class="form-input no-icon" id="company-dpo"
+          placeholder="Data Protection Officer name"></div>
+      <div class="form-group"><label>Industry</label>
+        <select class="form-input no-icon" id="company-industry">
+          <option value="General">General Business</option>
+          <option value="Healthcare">🏥 Healthcare</option>
+          <option value="Finance">💰 Finance</option>
+          <option value="Ecommerce">🛒 E-Commerce</option>
+          <option value="Education">🎓 Education</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-company')">Cancel</button>
+      <button class="btn-save" onclick="saveCompany()">Add Company</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Add Person -->
+<div class="modal-overlay" id="modal-person">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Add team member</h3><button class="modal-close" onclick="closeModal('modal-person')">✕</button>
+    </div>
+    <div class="form-group"><label>Name</label><input class="form-input no-icon" id="person-name"
+        placeholder="Full name"></div>
+    <div class="form-group"><label>Role / Department</label><input class="form-input no-icon" id="person-role"
+        placeholder="e.g. Marketing Lead"></div>
+    <div class="form-group"><label>Access level</label>
+      <select class="form-input no-icon" id="person-access">
+        <option value="Accountadmin">Accountadmin</option>
+        <option value="security_user">Security User</option>
+        <option value="useradmin">Useradmin</option>
+        <option value="user" selected>User</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-person')">Cancel</button>
+      <button class="btn-save" onclick="savePerson()">Add Member</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Add New Role -->
+<div class="modal-overlay" id="modal-add-role">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Add New Role</h3><button class="modal-close" onclick="closeModal('modal-add-role')">✕</button>
+    </div>
+    <div class="form-group"><label>Role Name</label><input class="form-input no-icon" id="new-role-name"
+        placeholder="e.g. Editor, Viewer"></div>
+    <div class="form-group"><label>Base Permissions</label>
+      <select class="form-input no-icon" id="new-role-base">
+        <option value="user">User (Standard)</option>
+        <option value="useradmin">Useradmin</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-add-role')">Cancel</button>
+      <button class="btn-save" onclick="addNewRole()">Create Role</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: New DPIA -->
+<div class="modal-overlay" id="modal-dpia">
+  <div class="modal max-w-32rem">
+    <div class="modal-head">
+      <h3>New DPIA</h3>
+      <button class="modal-close" onclick="closeModal('modal-dpia')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Project / activity name</label>
+        <input type="text" id="dpia-name" placeholder="e.g. Patient mobile app" class="form-input w-full">
+      </div>
+
+      <div class="form-group">
+        <label>What it does</label>
+        <textarea id="dpia-description" rows="3" class="form-input w-full resize-none"></textarea>
+      </div>
+
+      <div class="dpia-toggle-group">
+        <div class="dpia-toggle-item">
+          <span>Involves sensitive data?</span>
+          <label class="toggle-wrap"><input type="checkbox" id="dpia-sensitive"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="dpia-toggle-item">
+          <span>Involves monitoring people?</span>
+          <label class="toggle-wrap"><input type="checkbox" id="dpia-monitoring"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="dpia-toggle-item">
+          <span>Large-scale processing?</span>
+          <label class="toggle-wrap"><input type="checkbox" id="dpia-large-scale"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>How will you reduce the risk?</label>
+        <textarea id="dpia-mitigation" rows="3" placeholder="e.g. encrypt data, restrict access, get consent" class="form-input w-full resize-none"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-dpia')">Cancel</button>
+      <button class="btn-save" onclick="saveDPIA()">Save DPIA</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Data Request -->
+<div class="modal-overlay" id="modal-data-request">
+  <div class="modal-dsr">
+    <div class="modal-dsr-header">
+      <div class="modal-dsr-title">New data subject request</div>
+      <div class="modal-dsr-close" onclick="closeModal('modal-data-request')">&times;</div>
+    </div>
+    <input type="hidden" id="req-index" value="-1">
+    <div class="modal-dsr-body">
+      <div class="form-group">
+        <label>Subject name *</label>
+        <input type="text" id="req-name" placeholder="e.g. Tan Boon Hock">
+      </div>
+      <div class="form-group">
+        <label>Subject email</label>
+        <input type="email" id="req-email" placeholder="e.g. tan@example.com">
+      </div>
+      <div class="form-group">
+        <label>Request type</label>
+        <select id="req-type">
+          <option value="Access">Access (view their data)</option>
+          <option value="Correction">Correction</option>
+          <option value="Deletion">Deletion</option>
+          <option value="Objection">Objection</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>What are they asking for?</label>
+        <textarea id="req-description" rows="3" placeholder="Describe what the data subject is requesting..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Assigned to</label>
+        <input type="text" id="req-assigned" placeholder="DPO name">
+      </div>
+    </div>
+    <div class="modal-dsr-footer">
+      <button class="btn-dsr-cancel" onclick="closeModal('modal-data-request')">Cancel</button>
+      <button class="btn-dsr-submit" id="req-save-btn" onclick="saveDataRequest()">Log request</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Vendor -->
+<div class="modal-overlay" id="modal-vendor" style="display: none; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999;">
+  <div class="modal-vendor" style="background: white; width: 100%; max-width: 550px; max-height: 90vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; margin: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+    <div class="modal-vendor-header">
+      <div class="modal-vendor-title">Add vendor</div>
+      <div class="modal-vendor-close" onclick="closeModal('modal-vendor')">&times;</div>
+    </div>
+    <input type="hidden" id="vendor-index" value="-1">
+    <div class="modal-vendor-body">
+      <div class="form-group">
+        <label>Vendor name *</label>
+        <input type="text" id="vendor-name" placeholder="e.g. Mailchimp">
+      </div>
+      <div class="form-group">
+        <label>Service</label>
+        <input type="text" id="vendor-service" placeholder="e.g. Email marketing">
+      </div>
+      <div class="form-group">
+        <label>Data shared</label>
+        <input type="text" id="vendor-data-shared" placeholder="e.g. Customer email, name">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Risk</label>
+          <select id="vendor-risk">
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="vendor-status">
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Agreement</label>
+          <select id="vendor-agreement">
+            <option value="Signed">Signed</option>
+            <option value="Missing">Missing</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Agreement date</label>
+          <input type="date" id="vendor-agreement-date" placeholder="">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="vendor-notes" rows="3" placeholder="Additional notes..."></textarea>
+      </div>
+    </div>
+    <div class="modal-vendor-footer">
+      <button class="btn-vendor-cancel" onclick="closeModal('modal-vendor')">Cancel</button>
+      <button class="btn-vendor-submit" id="vendor-save-btn" onclick="saveVendor()">Add vendor</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Add Training -->
+<div class="modal-overlay" id="modal-training" style="display: none; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999;">
+  <div class="modal" style="background: white; width: 100%; max-width: 500px; max-height: 90vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; margin: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+    <div class="modal-head" style="padding: 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
+      <h3>Add Training Record</h3>
+      <button class="modal-close" onclick="closeModal('modal-training')" style="background:none; border:none; font-size:20px; cursor:pointer; color:#64748b;">✕</button>
+    </div>
+    <div class="modal-body" style="padding: 20px; overflow-y: auto;">
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Employee Name *</label>
+        <input type="text" id="train-employee" class="form-input" placeholder="e.g. John Doe" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+      </div>
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Course Title *</label>
+        <input type="text" id="train-course" class="form-input" placeholder="e.g. PDPA Foundation" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+      </div>
+      <div class="form-row" style="display:flex; gap:12px; margin-bottom:16px;">
+        <div class="form-group" style="flex:1;">
+          <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Training Date</label>
+          <input type="date" id="train-date" class="form-input" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Expiry Date</label>
+          <input type="date" id="train-expiry" class="form-input" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Status</label>
+        <select id="train-status" class="form-input" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+          <option value="Completed">Completed</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Planned">Planned</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer" style="padding: 20px; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end; gap: 12px;">
+      <button class="btn-cancel" onclick="closeModal('modal-training')" style="padding:10px 20px; border:1px solid #e2e8f0; background:white; border-radius:6px; cursor:pointer;">Cancel</button>
+      <button class="btn-save" onclick="saveTraining()" style="padding:10px 20px; background:#2563eb; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Save Record</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DPO Appointment -->
+<div class="modal-overlay" id="modal-dpo" style="display: none; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999;">
+  <div class="modal" style="background: white; width: 100%; max-width: 500px; max-height: 90vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; margin: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+    <div class="modal-head" style="padding: 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
+      <h3>DPO Appointment</h3>
+      <button class="modal-close" onclick="closeDPOModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#64748b;">✕</button>
+    </div>
+    <div class="modal-body" style="padding: 20px; overflow-y: auto;">
+      <input type="hidden" id="dpo-edit-index" value="-1">
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Full Name *</label>
+        <input type="text" id="dpo-name" class="form-input" placeholder="e.g. Tan Ah Kow" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+      </div>
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Email Address *</label>
+        <input type="email" id="dpo-email" class="form-input" placeholder="e.g. dpo@company.com" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+      </div>
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Phone Number</label>
+        <input type="text" id="dpo-phone" class="form-input" placeholder="e.g. +60123456789" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+      </div>
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Appointment Date</label>
+        <input type="date" id="dpo-appointment-date-input" class="form-input" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+      </div>
+    </div>
+    <div class="modal-footer" style="padding: 20px; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end; gap: 12px;">
+      <button class="btn-cancel" onclick="closeDPOModal()" style="padding:10px 20px; border:1px solid #e2e8f0; background:white; border-radius:6px; cursor:pointer;">Cancel</button>
+      <button class="btn-save" onclick="saveDPO()" style="padding:10px 20px; background:#2563eb; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Save Appointment</button>
+    </div>
+  </div>
+</div>

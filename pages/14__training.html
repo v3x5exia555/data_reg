@@ -1,0 +1,27 @@
+<div id="page-training" class="page-shell">
+  <div class="page-top-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div class="page-header mb-0">
+      <div class="page-title">📚 Training & Awareness</div>
+      <div class="page-sub">Track staff training on data protection.</div>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <div class="search-wrap" style="position: relative;">
+        <input type="text" id="training-search" placeholder="Search employee..." onkeyup="loadTrainingFromSupabase()" style="padding: 8px 12px 8px 32px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px;">
+        <svg style="position: absolute; left: 10px; top: 10px; color: #94a3b8;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('modal-training')">+ Add training</button>
+    </div>
+  </div>
+
+  <div class="vendor-stats" id="training-summary" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px;">
+    <!-- Stats will be injected here -->
+  </div>
+
+  <div id="training-body">
+    <div class="empty-state empty-state-lg">
+      <div class="empty-icon">🎓</div>
+      <div class="empty-title">Training records loading...</div>
+      <div class="empty-sub mt-8">Please wait while we fetch the latest training data from the cloud.</div>
+    </div>
+  </div>
+</div>

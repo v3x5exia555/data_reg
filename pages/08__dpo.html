@@ -1,0 +1,873 @@
+<div id="page-dpo" class="page-shell">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+  <div class="page-header">
+    <div class="page-title">Data Protection Officer</div>
+    <div class="page-sub">Record your DPO details and keep the appointment letter on file.</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-primary">
+        <i class="fa-solid fa-user-shield"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">DPO Status</div>
+        <div class="stat-value" id="dpo-status-badge">
+          <span class="badge badge-warning">Not Appointed</span>
+        </div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-success">
+        <i class="fa-solid fa-calendar-check"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Appointment Date</div>
+        <div class="stat-value stat-value-lg" id="dpo-appointment-date">-</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-warning">
+        <i class="fa-solid fa-certificate"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Training Status</div>
+        <div class="stat-value stat-value-lg" id="dpo-training-status">-</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-toolbar">
+    <div class="search-box hidden" id="dpo-search">
+      <i class="fa-solid fa-search"></i>
+      <input type="text" placeholder="Search DPO records...">
+    </div>
+    <div class="toolbar-actions">
+      <button class="btn btn-primary" id="dpo-add-btn" onclick="openDPOModal()">
+        <i class="fa-solid fa-plus"></i>
+        <span id="dpo-add-btn-text">Add DPO</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="dpo-content">
+    <!-- Loading State -->
+    <div id="dpo-loading" class="dpo-loading hidden">
+      <div class="dpo-loading-spinner">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+      </div>
+      <p>Loading DPO data...</p>
+    </div>
+
+    <!-- Empty State -->
+    <div id="dpo-empty-state" class="empty-state hidden">
+      <div style="font-size: 48px; margin-bottom: 20px;">🛡️</div>
+      <h3>No DPO Appointed</h3>
+      <p>Click "Add DPO" to record your first Data Protection Officer appointment.</p>
+    </div>
+
+    <!-- DPO Table (shown when DPO exists) -->
+    <div id="dpo-table-container" class="hidden">
+      <div class="data-table-wrap">
+        <table class="styled-table">
+          <thead>
+            <tr>
+              <th class="th-narrow">ID</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Nationality</th>
+              <th class="th-date">Appointment Date</th>
+              <th class="th-narrow">Status</th>
+              <th class="th-actions"></th>
+            </tr>
+          </thead>
+          <tbody id="dpo-table-body">
+            <!-- Rendered via dpo_logic.js -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="dpo-empty-state" class="dpo-empty-state hidden">
+      <div class="dpo-empty-icon">
+        <i class="fa-solid fa-user-shield"></i>
+      </div>
+      <h3 class="dpo-empty-title">No DPO Appointed</h3>
+      <p class="dpo-empty-text">Appoint a Data Protection Officer to maintain PDPA compliance.</p>
+      <button class="btn btn-primary mt-16" onclick="openDPOModal()">
+        <i class="fa-solid fa-plus"></i> Appoint DPO
+      </button>
+    </div>
+  </div>
+
+  <!-- DPO Detail Modal -->
+  <div class="modal-overlay" id="modal-dpo-detail" onclick="if(event.target===this)closeDPODetailModal()">
+    <div class="modal-container max-w-600px">
+      <div class="modal-header">
+        <h2>DPO Details</h2>
+        <button class="modal-close-btn" onclick="closeDPODetailModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="dpo-detail-header">
+          <div class="dpo-detail-avatar" id="dpo-detail-avatar">-</div>
+          <div class="dpo-detail-info">
+            <h3 id="dpo-detail-name">-</h3>
+            <p id="dpo-detail-email">-</p>
+            <span class="badge badge-success" id="dpo-detail-badge">Active</span>
+          </div>
+        </div>
+
+        <div class="section mt-24">
+          <span class="section-title">Contact Information</span>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="detail-label">Full Name</div>
+              <div class="detail-value" id="dpo-detail-fullname">-</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Email</div>
+              <div class="detail-value" id="dpo-detail-email-val">-</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Phone</div>
+              <div class="detail-value" id="dpo-detail-phone">-</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Nationality</div>
+              <div class="detail-value" id="dpo-detail-nationality">-</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">Appointment Details</span>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="detail-label">Appointment Date</div>
+              <div class="detail-value" id="dpo-detail-date">-</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Appointment Letter</div>
+              <div class="detail-value" id="dpo-detail-letter-link">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeDPODetailModal()">Close</button>
+        <button class="btn btn-primary" onclick="closeDPODetailModal();openDPOModal(true)">
+          <i class="fa-solid fa-edit"></i> Edit DPO
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DPO Form Modal -->
+  <div class="modal-overlay" id="modal-dpo-form" onclick="if(event.target===this)closeDPOModal()">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2 id="dpo-modal-title">Appoint Data Protection Officer</h2>
+        <button class="modal-close-btn" onclick="closeDPOModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="dpo-form" onsubmit="event.preventDefault(); saveDPO();">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="dpo-name">Full Name *</label>
+              <input type="text" id="dpo-name" class="form-input" placeholder="Enter full name" required>
+            </div>
+            <div class="form-group">
+              <label for="dpo-email">Email *</label>
+              <input type="email" id="dpo-email" class="form-input" placeholder="dpo@company.com" required>
+            </div>
+            <div class="form-group">
+              <label for="dpo-phone">Phone</label>
+              <input type="tel" id="dpo-phone" class="form-input" placeholder="+60 12 345 6789">
+            </div>
+            <div class="form-group">
+              <label for="dpo-nationality">Nationality *</label>
+              <select id="dpo-nationality" class="form-input" required>
+                <option value="">Select nationality</option>
+                <option value="Malaysian">Malaysian</option>
+                <option value="Singaporean">Singaporean</option>
+                <option value="Indonesian">Indonesian</option>
+                <option value="Thai">Thai</option>
+                <option value="Filipino">Filipino</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Appointment Letter</label>
+            <div class="upload-zone" id="dpo-upload-zone">
+              <input type="file" id="dpo-appointment" accept=".pdf,.jpg,.jpeg,.png" onchange="handleDPOFileUpload(this)" hidden>
+              <div class="upload-zone-inner" id="dpo-upload-inner">
+                <i class="fa-solid fa-cloud-arrow-up upload-zone-icon"></i>
+                <p class="upload-zone-text">Drag & drop or <button type="button" class="upload-browse-btn" onclick="document.getElementById('dpo-appointment').click()">browse files</button></p>
+                <p class="upload-zone-hint">PDF, JPG, PNG · Max 50MB</p>
+              </div>
+              <div class="upload-progress" id="dpo-upload-progress">
+                <div class="upload-file-info">
+                  <i class="fa-solid fa-file-pdf"></i>
+                  <div class="upload-file-details">
+                    <span class="upload-file-name" id="dpo-upload-name">file.pdf</span>
+                    <span class="upload-file-size" id="dpo-upload-size">0 KB</span>
+                  </div>
+                </div>
+                <div class="upload-bar-container">
+                  <div class="upload-bar" id="dpo-upload-bar"></div>
+                </div>
+                <span class="upload-percent" id="dpo-upload-percent">0%</span>
+              </div>
+              <div class="upload-complete" id="dpo-upload-complete">
+                <i class="fa-solid fa-circle-check"></i>
+                <span id="dpo-upload-complete-text">File uploaded</span>
+              </div>
+              <div class="upload-error" id="dpo-upload-error">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span id="dpo-upload-error-text">File is too large</span>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeDPOModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveDPO()">
+          <i class="fa-solid fa-save"></i> Save DPO
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* DPO Loading State */
+  .dpo-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 40px;
+    text-align: center;
+  }
+
+  .dpo-loading-spinner {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+
+  .dpo-loading-spinner i {
+    font-size: 32px;
+    color: var(--primary);
+  }
+
+  .dpo-loading p {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  /* DPO action buttons - inherit styled-table standards */
+  .btn-edit {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 6px 10px;
+    cursor: pointer;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+
+  .btn-edit:hover {
+    background: var(--blue-100);
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+
+  /* DPO Empty State */
+  .dpo-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 40px;
+    text-align: center;
+  }
+
+  .dpo-empty-icon {
+    width: 80px;
+    height: 80px;
+    background: var(--bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24px;
+  }
+
+  .dpo-empty-icon i {
+    font-size: 36px;
+    color: var(--text-muted);
+  }
+
+  .dpo-empty-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 8px 0;
+  }
+
+  .dpo-empty-text {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 0;
+    max-width: 320px;
+  }
+
+  /* DPO Detail Modal */
+  .dpo-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 24px;
+    background: var(--bg);
+    border-radius: var(--radius-lg);
+    margin-bottom: 24px;
+  }
+
+  .dpo-detail-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .dpo-detail-info {
+    flex: 1;
+  }
+
+  .dpo-detail-info h3 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 4px 0;
+  }
+
+  .dpo-detail-info p {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 0 0 8px 0;
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  .detail-item {
+    padding: 16px;
+    background: var(--bg);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+  }
+
+  .detail-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+
+  .detail-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  /* Upload Zone */
+  .upload-zone {
+    position: relative;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    text-align: center;
+    transition: all 0.2s;
+    background: var(--bg);
+  }
+
+  .upload-zone:hover {
+    border-color: var(--primary);
+    background: var(--primary-light);
+  }
+
+  .upload-zone-icon {
+    font-size: 40px;
+    color: var(--text-light);
+    margin-bottom: 12px;
+  }
+
+  .upload-zone-text {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 0 0 4px 0;
+  }
+
+  .upload-zone-hint {
+    font-size: 12px;
+    color: var(--text-light);
+    margin: 0;
+  }
+
+  .upload-browse-btn {
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .upload-file-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .upload-file-info i {
+    font-size: 24px;
+    color: var(--primary);
+  }
+
+  .upload-file-name {
+    font-weight: 600;
+    color: var(--text);
+    display: block;
+  }
+
+  .upload-file-size {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .upload-bar-container {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+
+  .upload-bar {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .upload-percent {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .upload-complete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--success);
+    font-weight: 600;
+  }
+
+  .upload-complete i {
+    font-size: 20px;
+  }
+
+  .upload-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--warning);
+    font-weight: 600;
+    padding: 16px;
+    background: var(--warning-light);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-md);
+    margin-top: 12px;
+  }
+
+  .upload-error i {
+    font-size: 18px;
+  }
+
+  .upload-zone.error {
+    border-color: var(--warning);
+    background: var(--warning-light);
+  }
+
+  .upload-zone.error .upload-zone-icon {
+    color: var(--warning);
+  }
+
+  .upload-zone-inner,
+  .upload-progress,
+  .upload-complete,
+  .upload-error {
+    display: none;
+  }
+
+  .upload-zone-inner:not(.hidden) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .upload-progress:not(.hidden) {
+    display: block;
+  }
+
+  .upload-complete:not(.hidden) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .upload-error:not(.hidden) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .section {
+    margin-top: 24px;
+  }
+
+  .section-title {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+  }
+
+  /* DPO table header blueprint loyalty */
+  #page-dpo .styled-table thead th {
+    background: #f8fafc !important;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    padding: 12px 25px;
+    border-bottom: 2px solid #e2e8f0;
+  }
+
+  /* Vertical Gravity Centering */
+  #page-dpo .modal-overlay {
+    display: none;
+    align-items: center; /* Vertically center */
+    justify-content: center; /* Horizontally center */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    padding: 2rem;
+  }
+
+  #page-dpo .modal-overlay.open {
+    display: flex !important;
+  }
+
+  #page-dpo .modal-container {
+    background: var(--bg-card);
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh; /* Increased slightly for better fit */
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin: auto; /* Ensure it stays centered if flex container grows */
+  }
+
+  #page-dpo .modal-overlay .modal-container {
+    animation: modalSlideUp 0.3s ease-out;
+  }
+
+  @keyframes modalSlideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  /* DPO table specific widths */
+  #page-dpo .th-date { width: 160px; }
+  #page-dpo .th-narrow { width: 80px; }
+  #page-dpo .th-actions { width: 120px; }
+</style>
+
+<script>
+  let dpoTempFile = null;
+
+  function openDPOModal(isEdit = false) {
+    const modal = document.getElementById('modal-dpo-form');
+    const title = document.getElementById('dpo-modal-title');
+    const btnText = document.getElementById('dpo-add-btn-text');
+
+    if (isEdit && state.dpo) {
+      title.textContent = 'Edit DPO Details';
+      btnText.textContent = 'Edit DPO';
+      document.getElementById('dpo-name').value = state.dpo.name || '';
+      document.getElementById('dpo-email').value = state.dpo.email || '';
+      document.getElementById('dpo-phone').value = state.dpo.phone || '';
+      document.getElementById('dpo-nationality').value = state.dpo.nationality || '';
+    } else {
+      title.textContent = 'Appoint Data Protection Officer';
+      btnText.textContent = 'Add DPO';
+      document.getElementById('dpo-form').reset();
+    }
+
+    modal.classList.add('open');
+  }
+
+  function closeDPOModal() {
+    document.getElementById('modal-dpo-form').classList.remove('open');
+    document.getElementById('dpo-form').reset();
+    resetUploadZone();
+  }
+
+  function viewDPODetails() {
+    if (!state.dpo) return;
+
+    const d = state.dpo;
+
+    const avatar = document.getElementById('dpo-detail-avatar');
+    if (avatar) avatar.textContent = d.name ? d.name.charAt(0).toUpperCase() : '-';
+
+    document.getElementById('dpo-detail-name').textContent = d.name || '-';
+    document.getElementById('dpo-detail-email').textContent = d.email || '-';
+    document.getElementById('dpo-detail-fullname').textContent = d.name || '-';
+    document.getElementById('dpo-detail-email-val').textContent = d.email || '-';
+    document.getElementById('dpo-detail-phone').textContent = d.phone || '-';
+    document.getElementById('dpo-detail-nationality').textContent = d.nationality || '-';
+    document.getElementById('dpo-detail-date').textContent = d.appointment_date || '-';
+
+    const letterEl = document.getElementById('dpo-detail-letter-link');
+    if (letterEl) {
+      if (d.appointment_letter_url) {
+        letterEl.innerHTML = '<a href="' + d.appointment_letter_url + '" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-download"></i> Download</a>';
+      } else {
+        letterEl.textContent = 'Not uploaded';
+      }
+    }
+
+    document.getElementById('modal-dpo-detail').classList.add('open');
+  }
+
+  function closeDPODetailModal() {
+    document.getElementById('modal-dpo-detail').classList.remove('open');
+  }
+
+  function handleDPOFileUpload(input) {
+    if (!input.files || !input.files[0]) return;
+
+    const file = input.files[0];
+    const maxSize = 50 * 1024 * 1024;
+
+    const uploadZone = document.getElementById('dpo-upload-zone');
+    const uploadInner = document.getElementById('dpo-upload-inner');
+    const uploadProgress = document.getElementById('dpo-upload-progress');
+    const uploadError = document.getElementById('dpo-upload-error');
+    const uploadName = document.getElementById('dpo-upload-name');
+    const uploadSize = document.getElementById('dpo-upload-size');
+    const uploadBar = document.getElementById('dpo-upload-bar');
+    const uploadPercent = document.getElementById('dpo-upload-percent');
+    const uploadComplete = document.getElementById('dpo-upload-complete');
+
+    if (file.size > maxSize) {
+      uploadInner.classList.add('hidden');
+      uploadProgress.classList.add('hidden');
+      uploadComplete.classList.add('hidden');
+      uploadError.classList.remove('hidden');
+      uploadZone.classList.add('error');
+
+      document.getElementById('dpo-upload-error-text').textContent =
+        'File too large: ' + formatFileSize(file.size) + '. Maximum allowed is 50MB.';
+
+      input.value = '';
+      dpoTempFile = null;
+      return;
+    }
+
+    uploadError.classList.add('hidden');
+    uploadZone.classList.remove('error');
+
+    uploadInner.classList.add('hidden');
+    uploadComplete.classList.add('hidden');
+    uploadProgress.classList.remove('hidden');
+
+    uploadName.textContent = file.name;
+    uploadSize.textContent = formatFileSize(file.size);
+
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += 10;
+      uploadBar.style.width = progress + '%';
+      uploadPercent.textContent = progress + '%';
+
+      if (progress >= 100) {
+        clearInterval(interval);
+        uploadProgress.classList.add('hidden');
+        uploadComplete.classList.remove('hidden');
+        document.getElementById('dpo-upload-complete-text').textContent =
+          file.name + ' uploaded successfully';
+        dpoTempFile = file;
+      }
+    }, 100);
+  }
+
+  function resetUploadZone() {
+    const uploadZone = document.getElementById('dpo-upload-zone');
+    uploadZone.classList.remove('error');
+
+    document.getElementById('dpo-upload-inner').classList.remove('hidden');
+    document.getElementById('dpo-upload-progress').classList.add('hidden');
+    document.getElementById('dpo-upload-complete').classList.add('hidden');
+    document.getElementById('dpo-upload-error').classList.add('hidden');
+    document.getElementById('dpo-upload-bar').style.width = '0%';
+    dpoTempFile = null;
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  async function saveDPO() {
+    const name = document.getElementById('dpo-name').value.trim();
+    const email = document.getElementById('dpo-email').value.trim();
+    const phone = document.getElementById('dpo-phone').value.trim();
+    const nationality = document.getElementById('dpo-nationality').value;
+
+    if (!name) { showToast('Please enter DPO full name', 'error'); return; }
+    if (!email) { showToast('Please enter DPO email', 'error'); return; }
+    if (!nationality) { showToast('Please select nationality', 'error'); return; }
+
+    showToast('Saving DPO...', 'info');
+
+    let letterUrl = state.dpo?.appointment_letter_url || null;
+    if (dpoTempFile) {
+      const reader = new FileReader();
+      letterUrl = await new Promise(resolve => {
+        reader.onload = e => resolve(e.target.result);
+        reader.readAsDataURL(dpoTempFile);
+      });
+    }
+
+    state.dpo = {
+      name,
+      email,
+      phone,
+      nationality,
+      appointment_date: new Date().toISOString().split('T')[0],
+      appointment_letter_url: letterUrl,
+      training_status: 'pending',
+      updated_at: new Date().toISOString()
+    };
+
+    await saveDPOToSupabase();
+
+    localStorage.setItem('datarex_dpo', JSON.stringify(state.dpo));
+    saveState();
+
+    closeDPOModal();
+    renderDPO();
+  }
+
+  function renderDPO() {
+    const dpoLoading = document.getElementById('dpo-loading');
+    const dpoTableContainer = document.getElementById('dpo-table-container');
+    const emptyState = document.getElementById('dpo-empty-state');
+    const statusBadge = document.getElementById('dpo-status-badge');
+
+    dpoLoading.classList.add('hidden');
+
+    if (!state.dpo || !state.dpo.name) {
+      dpoTableContainer.classList.add('hidden');
+      emptyState.classList.remove('hidden');
+      if (statusBadge) statusBadge.innerHTML = '<span class="badge badge-warning">Not Appointed</span>';
+      return;
+    }
+
+    dpoTableContainer.classList.remove('hidden');
+    emptyState.classList.add('hidden');
+
+    const d = state.dpo;
+
+    document.getElementById('dpo-display-name').textContent = d.name;
+    document.getElementById('dpo-display-email').textContent = d.email;
+    document.getElementById('dpo-display-phone').textContent = d.phone || '-';
+    document.getElementById('dpo-display-nationality').textContent = d.nationality || '-';
+    document.getElementById('dpo-display-date').textContent = d.appointment_date || '-';
+
+    if (statusBadge) statusBadge.innerHTML = '<span class="badge badge-success">Appointed</span>';
+
+    // Update status cell in table
+    const dpoStatusCell = document.getElementById('dpo-status');
+    if (dpoStatusCell) {
+      dpoStatusCell.className = 'status-badge status-active';
+      dpoStatusCell.textContent = 'Active';
+    }
+
+    const apptDate = document.getElementById('dpo-appointment-date');
+    if (apptDate) apptDate.textContent = d.appointment_date || '-';
+
+    const trainingStatus = document.getElementById('dpo-training-status');
+    if (trainingStatus) trainingStatus.textContent = d.training_status === 'certified' ? 'Certified' : 'Pending';
+  }
+
+  window.openDPOModal = openDPOModal;
+  window.closeDPOModal = closeDPOModal;
+  window.viewDPODetails = viewDPODetails;
+  window.closeDPODetailModal = closeDPODetailModal;
+  window.saveDPO = saveDPO;
+  window.renderDPO = renderDPO;
+  window.handleDPOFileUpload = handleDPOFileUpload;
+
+  console.log('DPO page loaded');
+</script>

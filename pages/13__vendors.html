@@ -1,0 +1,63 @@
+<div id="page-vendors" class="page-shell">
+  <div class="vendor-header">
+    <div>
+      <div class="vendor-title">Vendors / Third Parties</div>
+      <div class="vendor-subtitle">Track who you share data with and whether you have a signed agreement.</div>
+    </div>
+    <button class="vendor-btn" onclick="resetVendorForm(); openModal('modal-vendor')">+ Add vendor</button>
+  </div>
+
+  <div class="vendor-stats" id="vendors-summary">
+    <div class="vendor-stat-card">
+      <div class="vendor-stat-label">Total vendors</div>
+      <div class="vendor-stat-value" id="vendor-total-count">0</div>
+    </div>
+    <div class="vendor-stat-card">
+      <div class="vendor-stat-label">High risk</div>
+      <div class="vendor-stat-value vendor-stat-red" id="vendor-high-risk-count">0</div>
+    </div>
+    <div class="vendor-stat-card">
+      <div class="vendor-stat-label">No agreement</div>
+      <div class="vendor-stat-value vendor-stat-red" id="vendor-no-agreement-count">0</div>
+    </div>
+  </div>
+
+  <div class="vendor-table-wrap">
+    <table class="styled-table">
+      <thead>
+        <tr>
+          <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Vendor Name</th>
+          <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Service Type</th>
+          <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Data Shared</th>
+          <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Risk Level</th>
+          <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Agreement</th>
+          <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em; width: 100px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="vendors-tbody">
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+  #page-vendors .vendor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  #page-vendors .vendor-title { font-size: 24px; font-weight: 700; color: #0f172a; }
+  #page-vendors .vendor-subtitle { color: #64748b; font-size: 14px; margin-top: 4px; }
+  #page-vendors .vendor-btn {
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #page-vendors .vendor-btn:hover { background: #1d4ed8; }
+</style>

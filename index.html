@@ -3,990 +3,241 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DataRex — PDPA Compliance, Made Simple</title>
-  <meta name="description" content="DataRex guides Data Protection Officers through PDPA compliance step by step. Guided checklists, data registers, and audit-ready reports.">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap" rel="stylesheet">
+  <title>DataRex — PDPA Compliance Portal</title>
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+  <div id="app" class="app-container">
+    <!-- AUTH SCREENS (Landing, Login, etc.) will be loaded here -->
 
-<!-- ============================================================
-     SCREEN 1: LANDING
-     ============================================================ -->
-<div id="screen-landing" class="screen active">
-  <nav class="landing-nav">
-    <div class="logo">
-      <div class="logo-icon">D</div>
-      <span class="logo-name">DataRex</span>
-    </div>
-    <div class="nav-links">
-      <button class="btn btn-ghost" onclick="goTo('screen-login')">Log in</button>
-      <button class="btn btn-primary" onclick="goTo('screen-login')">Get started free</button>
-    </div>
-  </nav>
-
-  <div class="landing-hero">
-    <div class="hero-badge">🛡️ PDPA compliance, made simple</div>
-    <h1 class="hero-h1">Compliance shouldn't<br>feel like a <span>maze.</span></h1>
-    <p class="hero-p">DataRex guides first-time Data Protection Officers through PDPA step by step. No legal jargon. Just clear tasks, simple forms, and audit-ready reports.</p>
-    <div class="hero-ctas">
-      <button class="btn btn-primary btn-lg" onclick="goTo('screen-login')">Start for free →</button>
-      <button class="btn btn-outline btn-lg" id="demo-btn">See demo</button>
-    </div>
-    <div class="feature-grid">
-      <div class="feature-card">
-        <div class="feature-icon">☑️</div>
-        <h3>Guided checklist</h3>
-        <p>Plain-English tasks tailored to your business type. Know exactly what to do next.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🗄️</div>
-        <h3>Data register</h3>
-        <p>Track what you collect, why, who can access it, and how long to keep it.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">📊</div>
-        <h3>Audit reports</h3>
-        <p>One click to generate a clean, shareable compliance report — print or save as PDF.</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="trust-strip">
-    <div class="trust-item"><div class="trust-dot"></div> PDPA 2024 ready</div>
-    <div class="trust-item"><div class="trust-dot"></div> No data stored on servers (demo)</div>
-    <div class="trust-item"><div class="trust-dot"></div> Trusted by 500+ DPOs</div>
-    <div class="trust-item"><div class="trust-dot"></div> Free to start</div>
-  </div>
-</div>
-
-
-<!-- ============================================================
-     SCREEN 2: LOGIN
-     ============================================================ -->
-<div id="screen-login" class="screen">
-  <div class="auth-bg" style="flex:1">
-    <a class="auth-logo logo" href="#" onclick="goTo('screen-landing');return false;">
-      <div class="logo-icon">D</div>
-      <span class="logo-name">DataRex</span>
-    </a>
-
-    <div class="auth-card">
-      <div id="login-form">
-        <h1 class="auth-title">Welcome back</h1>
-        <p class="auth-sub">Log in to continue your compliance work</p>
-
-        <div class="form-group">
-          <label for="login-email">Email</label>
-          <div class="input-wrap">
-            <span class="icon">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg>
-            </span>
-            <input class="form-input" type="email" id="login-email" placeholder="dpo@company.com" autocomplete="email" value="admin@datarex.com">
+    <!-- APP LAYOUT -->
+    <div id="screen-app" class="screen app-layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-header" style="padding: 1.25rem 1rem; display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 2rem; height: 2rem; background-color: #2563eb; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; color: #ffffff; font-weight: 700; font-size: 1.125rem;">D</div>
+          <div style="display: flex; flex-direction: column; line-height: 1.2;">
+            <h1 style="font-size: 0.875rem; font-weight: 700; color: #111827; margin: 0;">DataRex</h1>
+            <p style="font-size: 0.625rem; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em; margin: 0;">PDPA Compliance</p>
           </div>
-          <div class="error-msg" id="login-email-error">
-            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Please enter a valid email address.
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="login-password">Password</label>
-          <div class="input-wrap">
-            <span class="icon">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            </span>
-            <input class="form-input" type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password" value="Admin123!@#">
-            <button class="pw-toggle" type="button" aria-label="Show password">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-          <div class="error-msg" id="login-pw-error">
-            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Invalid email or password.
-          </div>
-        </div>
-
-        <div style="display:flex;justify-content:flex-end;margin-top:-10px;margin-bottom:20px">
-          <a href="#" style="font-size:13px;color:var(--blue);font-weight:500;" onclick="return false">Forgot password?</a>
-        </div>
-
-        <button class="btn-submit" id="login-btn" onclick="doLogin()">
-          <span class="btn-text">Log in</span>
-          <span class="btn-spinner"><span class="spin-ring"></span></span>
-        </button>
-
-        <div class="divider">or continue with</div>
-
-        <button class="btn-sso" onclick="demoLogin()">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-          Demo Account
-        </button>
-      </div>
-
-      <div class="success-screen" id="login-success">
-        <div class="success-icon green">
-          <svg width="28" height="28" fill="none" stroke="#16A34A" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-        <h3>You're logged in!</h3>
-        <p>Redirecting to your dashboard…</p>
-      </div>
-    </div>
-
-    <div class="auth-footer" id="login-footer">
-      <p>Don't have an account? <a href="#" onclick="goTo('screen-register');return false;" style="color:var(--blue);text-decoration:underline;font-weight:500;">Create Account</a></p>
-    </div>
-    <div class="demo-note">🛡️ Use "Demo Account" button to try the app</div>
-  </div>
-</div>
-
-
-<!-- ============================================================
-     SCREEN 3: REGISTER
-     ============================================================ -->
-<div id="screen-register" class="screen">
-  <div class="auth-bg" style="flex:1">
-    <a class="auth-logo logo" href="#" onclick="goTo('screen-landing');return false;">
-      <div class="logo-icon">D</div>
-      <span class="logo-name">DataRex</span>
-    </a>
-
-    <div class="auth-card">
-      <div id="register-form">
-        <h1 class="auth-title">Create your account</h1>
-        <p class="auth-sub">Tell us about your company to get started</p>
-
-        <div class="form-group">
-          <label for="register-name">Full Name</label>
-          <div class="input-wrap">
-            <span class="icon">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
-            </span>
-            <input class="form-input" type="text" id="register-name" placeholder="Your full name" autocomplete="name">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="register-company">Company Name</label>
-          <div class="input-wrap">
-            <span class="icon">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/></svg>
-            </span>
-            <input class="form-input" type="text" id="register-company" placeholder="Your company name" autocomplete="organization">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="register-reg-no">Company Registration No. (SSM/ROC)</label>
-          <div class="input-wrap">
-            <span class="icon">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 10h16"/><path d="M10 4v16"/></svg>
-            </span>
-            <input class="form-input" type="text" id="register-reg-no" placeholder="e.g. 202001000001 (A)" autocomplete="off">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="register-industry">Industry</label>
-          <div class="input-wrap">
-            <select class="form-input" id="register-industry" style="padding-left:36px;">
-              <option value="">Select your industry</option>
-              <option value="Healthcare">🏥 Healthcare</option>
-              <option value="Finance">💰 Finance & Banking</option>
-              <option value="Ecommerce">🛒 E-Commerce</option>
-              <option value="Education">🎓 Education</option>
-              <option value="Retail">🏪 Retail</option>
-              <option value="Technology">💻 Technology</option>
-              <option value="Consulting">💼 Consulting</option>
-              <option value="Manufacturing">🏭 Manufacturing</option>
-              <option value="Other">⚙️ Other</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="register-size">Company Size</label>
-          <div class="input-wrap">
-            <select class="form-input" id="register-size" style="padding-left:36px;">
-              <option value="">Select company size</option>
-              <option value="1-10">1-10 employees</option>
-              <option value="11-50">11-50 employees</option>
-              <option value="51-200">51-200 employees</option>
-              <option value="201-500">201-500 employees</option>
-              <option value="500+">500+ employees</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="register-email">Work Email</label>
-          <div class="input-wrap">
-            <span class="icon">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg>
-            </span>
-            <input class="form-input" type="email" id="register-email" placeholder="you@company.com" autocomplete="email">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="register-password">Password</label>
-          <div class="input-wrap">
-            <span class="icon">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            </span>
-            <input class="form-input" type="password" id="register-password" placeholder="Create a password" autocomplete="new-password">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="register-confirm">Confirm Password</label>
-          <div class="input-wrap">
-            <span class="icon">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            </span>
-            <input class="form-input" type="password" id="register-confirm" placeholder="Confirm your password" autocomplete="new-password">
-          </div>
-        </div>
-
-        <button class="btn-submit" id="register-btn" onclick="doRegister()">
-          <span class="btn-text">Continue →</span>
-        </button>
-
-        <div class="register-link">
-          Already have an account? <a href="#" onclick="goTo('screen-login');return false;">Log in</a>
-        </div>
-      </div>
-    </div>
-
-    <div class="auth-footer" id="register-footer">
-      <p>By creating an account, you agree to our Terms of Service</p>
-    </div>
-  </div>
-</div>
-
-
-<!-- ============================================================
-     SCREEN 4: ONBOARDING
-     ============================================================ -->
-<div id="screen-onboarding" class="screen">
-
-  <!-- Step 1: Data Sources (Single step) -->
-  <div id="onboard-step-1">
-    <nav class="onboard-nav">
-      <div class="logo" onclick="goTo('screen-landing')" style="cursor:pointer"><div class="logo-icon">D</div><span class="logo-name">DataRex</span></div>
-    </nav>
-    <div class="onboard-body">
-      <div class="onboard-content">
-        <h2>Where do you collect data from?</h2>
-        <p>Select all that apply. You can update these anytime.</p>
-        <div class="option-grid" id="src-options">
-          <div class="option-card" onclick="toggleSrc(this)"><div class="option-icon">💬</div><div class="option-text"><h4>WhatsApp</h4><p>Chat &amp; messaging</p></div></div>
-          <div class="option-card" onclick="toggleSrc(this)"><div class="option-icon">📋</div><div class="option-text"><h4>Online Forms</h4><p>Web forms &amp; surveys</p></div></div>
-          <div class="option-card" onclick="toggleSrc(this)"><div class="option-icon">🖥️</div><div class="option-text"><h4>Internal System</h4><p>ERP, databases</p></div></div>
-          <div class="option-card" onclick="toggleSrc(this)"><div class="option-icon">👥</div><div class="option-text"><h4>CRM</h4><p>Customer platforms</p></div></div>
-          <div class="option-card" onclick="toggleSrc(this)"><div class="option-icon">📱</div><div class="option-text"><h4>Mobile App</h4><p>iOS &amp; Android apps</p></div></div>
-          <div class="option-card" onclick="toggleSrc(this)"><div class="option-icon">☎️</div><div class="option-text"><h4>Phone Calls</h4><p>Call center, telemarketing</p></div></div>
-        </div>
-        <div class="onboard-hint">💡 These help us customize your compliance checklist. You can change anytime.</div>
-        <div class="onboard-actions">
-          <button class="btn btn-primary" onclick="finishOnboard()">Finish setup →</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-
-<!-- ============================================================
-     SCREEN 5: APP DASHBOARD
-     ============================================================ -->
-<div id="screen-app" class="screen app-layout">
-
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="sidebar-top">
-      <div class="logo" onclick="goTo('screen-landing')" style="cursor:pointer"><div class="logo-icon">D</div><span class="logo-name">DataRex</span></div>
-      <div class="sidebar-tagline">PDPA Compliance Suite</div>
-      <select class="company-select" id="company-select" onchange="switchOrg(this.value)">
-        <option value="Acme Pte Ltd">🏢 Acme Pte Ltd</option>
-        <option value="Tech Solutions" disabled>🏢 Tech Solutions</option>
-      </select>
-    </div>
-
-    <nav class="sidebar-nav">
-      <div class="nav-section-label">Overview</div>
-      <div class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        Dashboard
-      </div>
-      <div class="nav-item" id="nav-checklist" onclick="showPage('checklist',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-        Checklist
-      </div>
-      <div class="nav-item" id="nav-companies" onclick="showPage('companies',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/></svg>
-        Companies
-      </div>
-
-      <div class="nav-section-label">Foundation</div>
-      <div class="nav-item" id="nav-datasources" onclick="showPage('datasources',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-        Data Sources
-      </div>
-      <div class="nav-item" id="nav-dataregister" onclick="showPage('dataregister',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-        Data Register
-      </div>
-      <div class="nav-item" id="nav-consent" onclick="showPage('consent',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-        Consent
-      </div>
-      <div class="nav-item" id="nav-access" onclick="showPage('access',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Access Control
-      </div>
-      <div class="nav-item" id="nav-retention" onclick="showPage('retention',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        Retention
-      </div>
-
-      <div class="nav-section-label">Operations</div>
-      <div class="nav-item" id="nav-datarequests" onclick="showPage('datarequests',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-        Data Requests
-      </div>
-      <div class="nav-item" id="nav-breachlog" onclick="showPage('breachlog',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        Breach Log
-      </div>
-      <div class="nav-item" id="nav-dpiapage" onclick="showPage('dpiapage',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        DPIA
-      </div>
-      <div class="nav-item" id="nav-crossborder" onclick="showPage('crossborder',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-        Cross-border
-      </div>
-      <div class="nav-item" id="nav-vendors" onclick="showPage('vendors',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Vendors
-      </div>
-      <div class="nav-item" id="nav-training" onclick="showPage('training',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-        Training
-      </div>
-
-      <div class="nav-section-label">Records</div>
-      <div class="nav-item" id="nav-documents" onclick="showPage('documents',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-        Documents
-      </div>
-      <div class="nav-item" id="nav-audit" onclick="showPage('audit',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
-        Audit Report
-      </div>
-
-      <div class="nav-section-label">Monitoring</div>
-      <div class="nav-item" id="nav-alerts" onclick="showPage('alerts',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        Alerts
-        <span class="alert-badge" id="alert-badge" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" id="nav-cases" onclick="showPage('cases',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        Cases
-      </div>
-      <div class="nav-item" id="nav-monitoring" onclick="showPage('monitoring',this)">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-        Monitoring
-      </div>
-    </nav>
-
-    <div class="sidebar-footer">
-      <div class="user-row">
-        <div class="user-avatar" id="sidebar-avatar">D</div>
-        <div>
-          <div class="user-name" id="sidebar-name">Demo DPO</div>
-          <div class="user-org"  id="sidebar-org">Acme Pte Ltd</div>
-        </div>
-      </div>
-      <button class="logout-btn" onclick="doLogout()">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        Log out
-      </button>
-    </div>
-  </aside>
-
-  <!-- MAIN CONTENT -->
-  <main class="main-area">
-
-    <!-- Dashboard -->
-    <div id="page-dashboard" class="page-shell active">
-      <div class="dash-greeting">Hi, <span id="dash-name">Demo</span> 👋</div>
-      <div class="dash-date" id="dash-date">Here's where your compliance stands today.</div>
-      <div class="dash-top-grid">
-        <div class="card score-card">
-          <div class="score-label">Compliance score</div>
-          <div class="score-number" id="score-display">0%</div>
-          <div class="score-bar-bg"><div class="score-bar" id="score-bar" style="width:0%"></div></div>
-          <div class="score-footer">
-            <span id="tasks-done-label">0 of 12 tasks done</span>
-            <span class="badge badge-red" id="risk-badge">High risk</span>
-          </div>
-        </div>
-        <div class="card quick-card">
-          <h3>Quick actions</h3>
-          <div class="qa-item" onclick="showPage('checklist',document.getElementById('nav-checklist'))">Continue checklist <span class="qa-arrow">→</span></div>
-          <div class="qa-item" onclick="openModal('modal-record')">Add data record <span class="qa-arrow">→</span></div>
-          <div class="qa-item" onclick="showPage('audit',document.getElementById('nav-audit'))">Generate report <span class="qa-arrow">→</span></div>
-        </div>
-      </div>
-      <div class="stats-row">
-        <div class="card stat-card"><div class="stat-icon green">✅</div><div><div class="stat-number" id="stat-completed">0</div><div class="stat-label">Completed</div></div></div>
-        <div class="card stat-card"><div class="stat-icon amber">⏳</div><div><div class="stat-number" id="stat-pending">12</div><div class="stat-label">Pending</div></div></div>
-        <div class="card stat-card"><div class="stat-icon red">⚠️</div><div><div class="stat-number">2</div><div class="stat-label">Overdue</div></div></div>
-      </div>
-      <div class="dash-bottom-grid">
-        <div class="card" style="padding:22px">
-          <div class="card-head"><h3>Alerts</h3><span class="count-badge">2</span></div>
-          <div class="alert-item warn">⚠️ Upload your Privacy Policy document</div>
-          <div class="alert-item error">🔴 2 overdue compliance tasks</div>
-        </div>
-        <div class="card" style="padding:22px">
-          <div class="card-head"><h3>At a glance</h3></div>
-          <div class="glance-row"><span>Data records</span><span class="glance-val" onclick="showPage('dataregister',document.getElementById('nav-dataregister'))" id="glance-records">0 →</span></div>
-          <div class="glance-row"><span>Documents stored</span><span class="glance-val" onclick="showPage('documents',document.getElementById('nav-documents'))">0 →</span></div>
-          <div class="glance-row"><span>Checklist progress</span><span class="glance-val" onclick="showPage('checklist',document.getElementById('nav-checklist'))" id="glance-progress">0/12 →</span></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Checklist -->
-    <div id="page-checklist" class="page-shell">
-      <div class="page-top-bar" style="margin-bottom:24px">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">Compliance checklist</div>
-          <div class="page-sub">Tick items as you complete them. Progress is saved automatically.</div>
-        </div>
-        <div style="display:flex; gap:10px; flex-shrink:0; margin-top:8px">
-          <button class="btn btn-outline" onclick="toggleAllChecklist(true)">Select all</button>
-          <button class="btn btn-outline" onclick="toggleAllChecklist(false)">Unselect</button>
-        </div>
-      </div>
-      <div class="card prog-wrap">
-        <div class="prog-top"><span id="prog-label">0 of 12 done</span><span id="prog-pct">0%</span></div>
-        <div class="prog-bg"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
-      </div>
-      <div id="checklist-body"></div>
-    </div>
-
-    <!-- Companies -->
-    <div id="page-companies" class="page-shell access-page">
-      <div class="data-register-header">
-        <div class="page-header">
-          <div class="page-title">Companies</div>
-          <div class="page-sub">Manage your organizations and their PDPA compliance.</div>
-        </div>
-        <button class="btn btn-primary admin-only" onclick="openModal('modal-company')" style="flex-shrink:0;margin-top:8px">+ Add company</button>
-      </div>
-      <div class="data-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th class="sortable" onclick="sortCompanies('name')">Company <span class="sort-icon">↕</span></th>
-              <th class="sortable" onclick="sortCompanies('reg_no')">Reg. No. <span class="sort-icon">↕</span></th>
-              <th class="sortable" onclick="sortCompanies('industry')">Industry <span class="sort-icon">↕</span></th>
-              <th class="sortable" onclick="sortCompanies('country')">Country <span class="sort-icon">↕</span></th>
-              <th class="sortable" onclick="sortCompanies('dpo_name')">DPO <span class="sort-icon">↕</span></th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="companies-body"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Data Sources -->
-    <div id="page-datasources" class="page-shell">
-      <div class="page-header">
-        <div class="page-title">Data sources</div>
-        <div class="page-sub">The channels where you collect personal data — and what you need to do for each.</div>
-      </div>
-      <div class="option-grid" style="margin-bottom:0">
-        <div class="option-card" style="flex-direction:column;align-items:flex-start;gap:14px">
-          <div style="display:flex;align-items:center;gap:12px"><div class="option-icon">💬</div><div><strong>WhatsApp</strong><br><small style="color:var(--muted)">Chat messaging</small></div></div>
-          <ul style="list-style:none;font-size:13.5px;color:var(--muted);line-height:2.1"><li>✓ Get explicit consent before adding contacts</li><li>✓ Don't share chats publicly</li><li>✓ Use WhatsApp Business for customer data</li></ul>
-        </div>
-        <div class="option-card" style="flex-direction:column;align-items:flex-start;gap:14px">
-          <div style="display:flex;align-items:center;gap:12px"><div class="option-icon">📋</div><div><strong>Online Forms</strong><br><small style="color:var(--muted)">Web forms &amp; surveys</small></div></div>
-          <ul style="list-style:none;font-size:13.5px;color:var(--muted);line-height:2.1"><li>✓ Add a consent checkbox</li><li>✓ Show a clear privacy notice</li><li>✓ Limit fields to what you actually need</li></ul>
-        </div>
-        <div class="option-card" style="flex-direction:column;align-items:flex-start;gap:14px">
-          <div style="display:flex;align-items:center;gap:12px"><div class="option-icon">🖥️</div><div><strong>Internal System</strong><br><small style="color:var(--muted)">ERP, databases</small></div></div>
-          <ul style="list-style:none;font-size:13.5px;color:var(--muted);line-height:2.1"><li>✓ Restrict access by role</li><li>✓ Enable audit logs</li><li>✓ Encrypt sensitive fields</li></ul>
-        </div>
-        <div class="option-card" style="flex-direction:column;align-items:flex-start;gap:14px">
-          <div style="display:flex;align-items:center;gap:12px"><div class="option-icon">👥</div><div><strong>CRM</strong><br><small style="color:var(--muted)">Customer platforms</small></div></div>
-          <ul style="list-style:none;font-size:13.5px;color:var(--muted);line-height:2.1"><li>✓ Track consent per contact</li><li>✓ Enable opt-out / unsubscribe</li><li>✓ Set data retention rules</li></ul>
-        </div>
-      </div>
-    </div>
-
-    <!-- Data Register -->
-    <div id="page-dataregister" class="page-shell">
-      <div class="data-register-header">
-        <div class="page-header">
-          <div class="page-title">Personal data register</div>
-          <div class="page-sub">A log of all personal data you collect, why, and where it lives.</div>
-        </div>
-        <div class="org-selector">
-          <label>Company</label>
-          <select class="form-input" id="org-select" onchange="switchOrg(this.value)">
-            <option value="Acme Pte Ltd">🏢 Acme Pte Ltd</option>
-            <option value="Company B">🏢 Company B</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn btn-primary" onclick="openModal('modal-record')" style="flex-shrink:0;margin-top:8px">+ Add record</button>
-      <div class="data-table-wrap">
-        <table><thead><tr><th>Type</th><th>Purpose</th><th>Storage</th><th>Access</th><th>Retention</th><th>Consent</th><th></th></tr></thead>
-        <tbody id="register-body"></tbody></table>
-      </div>
-    </div>
-
-    <!-- Consent -->
-    <div id="page-consent" class="page-shell">
-      <div class="page-header">
-        <div class="page-title">Purpose &amp; consent</div>
-        <div class="page-sub">Track consent status for every type of data you collect.</div>
-      </div>
-      <div id="consent-body"></div>
-    </div>
-
-    <!-- Access Control -->
-    <div id="page-access" class="page-shell access-page">
-      <div class="page-top-bar">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">Access control</div>
-          <div class="page-sub">Manage user roles and navigation permissions.</div>
-        </div>
-      </div>
-      
-      <!-- Team Members Section -->
-      <div class="access-section">
-        <div class="access-section-title">👥 Team Members</div>
-        <p class="access-section-desc">Add and manage team members who can access this portal.</p>
-        <div id="access-body"></div>
-        <button class="btn btn-primary" style="margin-top:16px;" onclick="openModal('modal-person')">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Team Member
-        </button>
-      </div>
-      
-      <!-- Navigation Permissions Section -->
-      <div class="access-section">
-        <div class="access-section-title">⚙️ Navigation Permissions</div>
-        <p class="access-section-desc">Control which menu items each role can access.</p>
-        
-        <div class="role-selector">
-          <div class="role-select-wrap">
-            <span class="role-select-label">Role:</span>
-            <select id="nav-role-select" class="form-input" style="width:180px;" onchange="loadNavPermissions()">
-              <option value="Accountadmin">Accountadmin</option>
-              <option value="security_user">Security User</option>
-              <option value="useradmin">Useradmin</option>
-              <option value="user">User</option>
-            </select>
-          </div>
-          <button class="btn btn-outline" onclick="openAddRoleModal()">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add Role
-          </button>
         </div>
         
-        <div id="nav-permissions-matrix"></div>
-        <button class="btn btn-primary" onclick="saveNavConfig()" style="margin-top:20px;">
-          💾 Save Permissions
-        </button>
-      </div>
-    </div>
-
-    <!-- Retention -->
-    <div id="page-retention" class="page-shell">
-      <div class="page-header">
-        <div class="page-title">Data retention</div>
-        <div class="page-sub">Set how long you'll keep each type of data, then get reminders.</div>
-      </div>
-      <div id="retention-body"></div>
-    </div>
-
-    <!-- Documents -->
-    <div id="page-documents" class="page-shell access-page">
-      <div class="data-register-header">
-        <div class="page-header">
-          <div class="page-title">📁 Document Storage</div>
-          <div class="page-sub">Keep your privacy policies, consent forms, and agreements in one place.</div>
-        </div>
-        <div class="org-selector">
-          <label>Company</label>
-          <select class="form-input" id="doc-org-select" onchange="switchOrg(this.value)">
-            <option value="Acme Pte Ltd">🏢 Acme Pte Ltd</option>
-            <option value="Company B">🏢 Company B</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Upload Section -->
-      <div class="access-section">
-        <div class="access-section-title">📤 Upload Document</div>
-        <p class="access-section-desc">Upload compliance documents for secure storage.</p>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
-          <div style="flex:1;min-width:180px;">
-            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;font-weight:500;">Category</label>
-            <select class="form-input" id="doc-category" style="padding:10px 14px;">
-              <option value="Privacy Policy">📕 Privacy Policy</option>
-              <option value="Consent Form">📋 Consent Form</option>
-              <option value="Data Processing Agreement">📑 Data Processing Agreement</option>
-              <option value="Security Policy">🔒 Security Policy</option>
-              <option value="Breach Policy">⚠️ Breach Policy</option>
-              <option value="Other">📄 Other</option>
-            </select>
+        <div class="org-context">
+          <div class="context-label">Active Company</div>
+          <div class="context-selector" id="sidebar-org-selector" onclick="toggleOrgDropdown()">
+            <div class="org-icon">🏢</div>
+            <span id="active-company-name">Select Company</span>
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-left:auto"><path d="M6 9l6 6 6-6"/></svg>
           </div>
-          <div style="flex:2;min-width:220px;">
-            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;font-weight:500;">Choose File</label>
-            <div style="position:relative;">
-              <input type="text" id="file-name-display" readonly placeholder="No file chosen" style="width:100%;padding:10px 14px;font-size:13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;color:var(--text);">
-              <input type="file" id="file-input" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;" onchange="updateFileName(this)">
+          
+          <div class="org-dropdown" id="org-dropdown">
+            <div class="org-dropdown-list" id="org-dropdown-list">
+              <!-- Rendered via JS -->
+            </div>
+            <div class="org-dropdown-footer" onclick="showPage('companies'); document.getElementById('org-dropdown').classList.remove('open');">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              Manage companies
             </div>
           </div>
-          <button class="btn btn-primary" onclick="handleFileUpload()" style="padding:10px 20px;">
-            Upload
-          </button>
         </div>
-      </div>
 
-      <!-- Documents List -->
-      <div class="access-section">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
-          <div class="access-section-title" style="margin-bottom:0;">📋 Your Documents</div>
-          <div style="display:flex;gap:12px;align-items:center;">
-            <select class="form-input" id="doc-filter" onchange="renderDocuments()" style="width:auto;padding:8px 14px;font-size:13px;">
-              <option value="">All Categories</option>
-              <option value="Privacy Policy">Privacy Policy</option>
-              <option value="Consent Form">Consent Form</option>
-              <option value="Data Processing Agreement">DPA</option>
-              <option value="Security Policy">Security Policy</option>
-              <option value="Breach Policy">Breach Policy</option>
-              <option value="Other">Other</option>
-            </select>
-            <span style="font-size:13px;color:var(--muted);font-weight:500;" id="doc-count">0 documents</span>
+        <nav class="sidebar-nav" style="flex: 1; overflow-y: auto; padding: 0.5rem;">
+          <!-- GOVERNANCE -->
+          <div class="nav-section-label">GOVERNANCE</div>
+          <div class="nav-item" id="nav-dashboard" onclick="showPage('dashboard',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            Dashboard
+          </div>
+          <div class="nav-item" id="nav-dpo" onclick="showPage('dpo',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            DPO & Governance
+          </div>
+
+          <!-- DATA FOUNDATION -->
+          <div class="nav-section-label">DATA FOUNDATION</div>
+          <div class="nav-item" id="nav-dataregister" onclick="showPage('dataregister',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Data Register
+          </div>
+          <div class="nav-item" id="nav-processing_activities" onclick="showPage('processing_activities',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            Processing Activities
+          </div>
+
+          <!-- DPIA & RISK -->
+          <div class="nav-section-label">DPIA & RISK</div>
+          <div class="nav-item" id="nav-dpiapage" onclick="showPage('dpiapage',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            DPIA Screening
+          </div>
+          <div class="nav-item" id="nav-dpia-workflow">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+            </svg>
+            DPIA Workflow (DEICA)
+          </div>
+
+          <!-- OPERATIONS -->
+          <div class="nav-section-label">OPERATIONS</div>
+          <div class="nav-item" id="nav-datarequests" onclick="showPage('datarequests',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            Data Subject Requests
+          </div>
+          <div class="nav-item" id="nav-breachlog" onclick="showPage('breachlog',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            Breach Management
+          </div>
+
+          <!-- CONTROLS -->
+          <div class="nav-section-label">CONTROLS</div>
+          <div class="nav-item" id="nav-vendors" onclick="showPage('vendors',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            Vendors
+          </div>
+          <div class="nav-item" id="nav-crossborder" onclick="showPage('crossborder',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            Cross-Border
+          </div>
+          <div class="nav-item" id="nav-retention" onclick="showPage('retention',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Retention
+          </div>
+          <div class="nav-item" id="nav-access" onclick="showPage('access',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            Access Control
+          </div>
+          <div class="nav-item" id="nav-checklist" onclick="showPage('checklist',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+            Checklist
+          </div>
+
+          <!-- MONITORING -->
+          <div class="nav-section-label">MONITORING</div>
+          <div class="nav-item" id="nav-monitoring" onclick="showPage('monitoring',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+            Risk Monitoring
+          </div>
+          <div class="nav-item" id="nav-dpia-expiry">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            DPIA Expiry Tracker
+          </div>
+          <div class="nav-item" id="nav-alerts" onclick="showPage('alerts',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            Alerts
+            <span class="alert-badge" id="alert-badge" style="display:none;">0</span>
+          </div>
+          <div class="nav-item" id="nav-audit" onclick="showPage('audit',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Audit Report
+          </div>
+
+          <!-- SUPPORT -->
+          <div class="nav-section-label">SUPPORT</div>
+          <div class="nav-item" id="nav-training" onclick="showPage('training',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+            </svg>
+            Training
+          </div>
+          <div class="nav-item" id="nav-documents" onclick="showPage('documents',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            Documents
+          </div>
+
+          <!-- BILLING -->
+          <div class="nav-section-label">BILLING</div>
+          <div class="nav-item" id="nav-billing">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+            </svg>
+            Subscription
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="nav-section-label" style="margin-top: 0;">Tools</div>
+          <div class="nav-item" id="nav-load-sample" onclick="loadAllSampleData()" style="background: #f0fdf4; border-color: #bbf7d0;">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color: #166534;">
+              <path d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+            </svg>
+            Load Sample Data
           </div>
         </div>
 
-        <div id="documents-list"></div>
-        <div class="empty-state" id="documents-empty" style="padding:60px 20px;">
-          <div class="empty-icon" style="font-size:64px;margin-bottom:16px;">📂</div>
-          <div class="empty-title" style="font-size:16px;font-weight:600;">No documents yet</div>
-          <div class="empty-sub" style="margin-top:8px;">Upload your first compliance document above to get started.</div>
+        <div class="sidebar-footer">
+          <div class="user-row">
+            <div class="user-avatar" id="sidebar-avatar">D</div>
+            <div>
+              <div class="user-name" id="sidebar-name">Demo DPO</div>
+              <div class="user-org" id="sidebar-org">Acme Pte Ltd</div>
+            </div>
+          </div>
+          <button class="logout-btn" onclick="doLogout()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Log out
+          </button>
         </div>
-      </div>
-    </div>
+      </aside>
 
-    <!-- Audit Report -->
-    <div id="page-audit" class="page-shell">
-      <div class="page-top-bar">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">Audit Report</div>
-          <div class="page-sub">Compliance snapshot for your records.</div>
-        </div>
-        <button class="btn btn-primary" onclick="window.print()" style="margin-top:8px">Print</button>
-      </div>
-      <div class="report-card" id="report-content"></div>
-    </div>
-
-  </main>
-</div>
-
-
-<!-- ============================================================
-     MODAL: Add Record
-     ============================================================ -->
-<div class="modal-overlay" id="modal-record">
-  <div class="modal">
-    <div class="modal-head"><h3>Add data record</h3><button class="modal-close" onclick="closeModal('modal-record')">✕</button></div>
-    <div class="modal-body">
-    <div class="form-group"><label>Type of data</label><input class="form-input no-icon" id="rec-type" placeholder="e.g. Customer email"></div>
-    <div class="form-group"><label>Purpose</label><input class="form-input no-icon" id="rec-purpose" placeholder="e.g. Order updates"></div>
-    <div class="form-group"><label>Where is it stored?</label><input class="form-input no-icon" id="rec-storage" placeholder="e.g. Google Sheets, CRM"></div>
-    <div class="form-group"><label>Who has access?</label><input class="form-input no-icon" id="rec-access" placeholder="e.g. Marketing team"></div>
-    <div class="form-group"><label>Retention (months)</label><input class="form-input no-icon" id="rec-retention" type="number" value="12"></div>
-    <div class="toggle-field">
-      <div class="toggle-field-text"><label>Consent obtained</label><small>Did the person agree to this?</small></div>
-      <label class="toggle-wrap"><input type="checkbox" id="rec-consent"><span class="toggle-slider"></span></label>
-    </div>
-    <div class="form-group"><label>Note (optional)</label><textarea class="form-input no-icon" id="rec-note" rows="3" placeholder="Anything to remember…" style="resize:none;height:80px"></textarea></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-cancel" onclick="closeModal('modal-record')">Cancel</button>
-      <button class="btn-save" onclick="saveRecord()">Save record</button>
+      <!-- MAIN CONTENT -->
+      <main class="main-area" id="main-content-area">
+        <!-- Pages will be dynamically loaded here -->
+      </main>
     </div>
   </div>
-</div>
 
-<div class="modal-overlay" id="modal-company">
-  <div class="modal">
-    <div class="modal-head"><h3>Add company</h3><button class="modal-close" onclick="closeModal('modal-company')">✕</button></div>
-    <div class="modal-body">
-    <div class="form-group"><label>Company Name</label><input class="form-input no-icon" id="company-name" placeholder="e.g. Acme Pte Ltd"></div>
-    <div class="form-group"><label>Company Reg. No. (SSM/ROC)</label><input class="form-input no-icon" id="company-reg-no" placeholder="e.g. 202001000001 (A)"></div>
-    <div class="form-group"><label>Country</label>
-      <select class="form-input no-icon" id="company-country">
-        <option value="Singapore">🇸🇬 Singapore</option>
-        <option value="Thailand">🇹🇭 Thailand</option>
-        <option value="Malaysia">🇲🇾 Malaysia</option>
-        <option value="Indonesia">🇮🇩 Indonesia</option>
-        <option value="Philippines">🇵🇭 Philippines</option>
-      </select>
-    </div>
-    <div class="form-group"><label>DPO Name</label><input class="form-input no-icon" id="company-dpo" placeholder="Data Protection Officer name"></div>
-    <div class="form-group"><label>Industry</label>
-      <select class="form-input no-icon" id="company-industry">
-        <option value="General">General Business</option>
-        <option value="Healthcare">🏥 Healthcare</option>
-        <option value="Finance">💰 Finance</option>
-        <option value="Ecommerce">🛒 E-Commerce</option>
-        <option value="Education">🎓 Education</option>
-      </select>
-    </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-cancel" onclick="closeModal('modal-company')">Cancel</button>
-      <button class="btn-save" onclick="saveCompany()">Add Company</button>
-    </div>
-  </div>
-</div>
+  <!-- Modal Container -->
+  <div id="modal-container"></div>
 
-    <!-- ============================================================
-         PAGE: Data Requests
-         ============================================================ -->
-    <div id="page-datarequests" class="page-shell">
-      <div class="page-top-bar">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">📧 Data Requests</div>
-          <div class="page-sub">Track requests from data subjects (access, correction, deletion).</div>
-        </div>
-        <button class="btn btn-primary" onclick="openModal('modal-record')" style="margin-top:8px;">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Request
-        </button>
-      </div>
-      <div id="datarequests-body">
-        <div class="empty-state" style="padding:60px 20px;">
-          <div class="empty-icon" style="font-size:64px;margin-bottom:16px;">📧</div>
-          <div class="empty-title" style="font-size:16px;font-weight:600;">No data requests yet</div>
-          <div class="empty-sub" style="margin-top:8px;">Track requests from individuals to access, correct, or delete their data.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ============================================================
-         PAGE: Breach Log
-         ============================================================ -->
-    <div id="page-breachlog" class="page-shell">
-      <div class="page-top-bar">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">⚠️ Breach Log</div>
-          <div class="page-sub">Record and manage data breaches for compliance reporting.</div>
-        </div>
-        <button class="btn btn-primary" onclick="showToast('Breach report feature coming soon')" style="margin-top:8px;">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Report Breach
-        </button>
-      </div>
-      <div id="breachlog-body">
-        <div class="empty-state" style="padding:60px 20px;">
-          <div class="empty-icon" style="font-size:64px;margin-bottom:16px;">✅</div>
-          <div class="empty-title" style="font-size:16px;font-weight:600;">No breaches recorded</div>
-          <div class="empty-sub" style="margin-top:8px;">If a breach occurs, log it here immediately for proper documentation.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ============================================================
-         PAGE: DPIA
-         ============================================================ -->
-    <div id="page-dpiapage" class="page-shell">
-      <div class="page-top-bar">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">🔍 DPIA</div>
-          <div class="page-sub">Data Protection Impact Assessment for high-risk processing activities.</div>
-        </div>
-      </div>
-      <div id="dpiapage-body">
-        <div class="empty-state" style="padding:60px 20px;">
-          <div class="empty-icon" style="font-size:64px;margin-bottom:16px;">📋</div>
-          <div class="empty-title" style="font-size:16px;font-weight:600;">DPIA Not Started</div>
-          <div class="empty-sub" style="margin-top:8px;">Conduct a DPIA when processing involves high-risk activities like large-scale profiling or sensitive data.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ============================================================
-         PAGE: Cross-border
-         ============================================================ -->
-    <div id="page-crossborder" class="page-shell">
-      <div class="page-top-bar">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">🌍 Cross-border Transfers</div>
-          <div class="page-sub">Track and manage personal data transferred outside Malaysia.</div>
-        </div>
-      </div>
-      <div id="crossborder-body">
-        <div class="empty-state" style="padding:60px 20px;">
-          <div class="empty-icon" style="font-size:64px;margin-bottom:16px;">🌐</div>
-          <div class="empty-title" style="font-size:16px;font-weight:600;">No cross-border transfers</div>
-          <div class="empty-sub" style="margin-top:8px;">Document any transfers of personal data to servers or organizations outside Malaysia.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ============================================================
-         PAGE: Vendors
-         ============================================================ -->
-    <div id="page-vendors" class="page-shell">
-      <div class="page-top-bar">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">🤝 Vendors & Third Parties</div>
-          <div class="page-sub">Manage vendors who process personal data on your behalf.</div>
-        </div>
-      </div>
-      <div id="vendors-body">
-        <div class="empty-state" style="padding:60px 20px;">
-          <div class="empty-icon" style="font-size:64px;margin-bottom:16px;">🏢</div>
-          <div class="empty-title" style="font-size:16px;font-weight:600;">No vendors added</div>
-          <div class="empty-sub" style="margin-top:8px;">Add vendors who have access to personal data to track their compliance.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ============================================================
-         PAGE: Training
-         ============================================================ -->
-    <div id="page-training" class="page-shell">
-      <div class="page-top-bar">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">📚 Training & Awareness</div>
-          <div class="page-sub">Track staff training on data protection.</div>
-        </div>
-      </div>
-      <div id="training-body">
-        <div class="empty-state" style="padding:60px 20px;">
-          <div class="empty-icon" style="font-size:64px;margin-bottom:16px;">🎓</div>
-          <div class="empty-title" style="font-size:16px;font-weight:600;">Training not started</div>
-          <div class="empty-sub" style="margin-top:8px;">Schedule training sessions for staff on PDPA compliance requirements.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ============================================================
-         PAGE: Alerts
-         ============================================================ -->
-    <div id="page-alerts" class="page-shell">
-      <div class="page-top-bar">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">🔔 Alerts & Notifications</div>
-          <div class="page-sub">Stay informed about compliance deadlines and reminders.</div>
-        </div>
-      </div>
-      <div id="alerts-body"></div>
-    </div>
-
-    <!-- ============================================================
-         PAGE: Cases
-         ============================================================ -->
-    <div id="page-cases" class="page-shell">
-      <div class="page-top-bar">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">📁 Cases</div>
-          <div class="page-sub">Manage compliance cases and investigations.</div>
-        </div>
-      </div>
-      <div id="cases-body">
-        <div class="empty-state" style="padding:60px 20px;">
-          <div class="empty-icon" style="font-size:64px;margin-bottom:16px;">📂</div>
-          <div class="empty-title" style="font-size:16px;font-weight:600;">No active cases</div>
-          <div class="empty-sub" style="margin-top:8px;">Cases will appear here when investigations or requests need tracking.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ============================================================
-         PAGE: Monitoring
-         ============================================================ -->
-    <div id="page-monitoring" class="page-shell">
-      <div class="page-top-bar">
-        <div class="page-header" style="margin-bottom:0">
-          <div class="page-title">📊 Monitoring Dashboard</div>
-          <div class="page-sub">Activity monitoring and system integration status.</div>
-        </div>
-      </div>
-      <div id="monitoring-body">
-        <div class="empty-state" style="padding:60px 20px;">
-          <div class="empty-icon" style="font-size:64px;margin-bottom:16px;">📈</div>
-          <div class="empty-title" style="font-size:16px;font-weight:600;">Monitoring Dashboard</div>
-          <div class="empty-sub" style="margin-top:8px;">Activity logs and system integrations will appear here.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ============================================================
-         MODAL: Add Person
-         ============================================================ -->
-<div class="modal-overlay" id="modal-person">
-  <div class="modal">
-    <div class="modal-head"><h3>Add team member</h3><button class="modal-close" onclick="closeModal('modal-person')">✕</button></div>
-    <div class="form-group"><label>Name</label><input class="form-input no-icon" id="person-name" placeholder="Full name"></div>
-    <div class="form-group"><label>Role / Department</label><input class="form-input no-icon" id="person-role" placeholder="e.g. Marketing Lead"></div>
-    <div class="form-group"><label>Access level</label>
-      <select class="form-input no-icon" id="person-access">
-        <option value="Accountadmin">Accountadmin</option>
-        <option value="security_user">Security User</option>
-        <option value="useradmin">Useradmin</option>
-        <option value="user" selected>User</option>
-      </select>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-cancel" onclick="closeModal('modal-person')">Cancel</button>
-      <button class="btn-save" onclick="savePerson()">Add Member</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============================================================
-     MODAL: Add New Role
-     ============================================================ -->
-<div class="modal-overlay" id="modal-add-role">
-  <div class="modal">
-    <div class="modal-head"><h3>Add New Role</h3><button class="modal-close" onclick="closeModal('modal-add-role')">✕</button></div>
-    <div class="form-group"><label>Role Name</label><input class="form-input no-icon" id="new-role-name" placeholder="e.g. Editor, Viewer"></div>
-    <div class="form-group"><label>Base Permissions</label>
-      <select class="form-input no-icon" id="new-role-base">
-        <option value="user">User (Standard)</option>
-        <option value="useradmin">Useradmin</option>
-      </select>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-cancel" onclick="closeModal('modal-add-role')">Cancel</button>
-      <button class="btn-save" onclick="addNewRole()">Create Role</button>
-    </div>
-  </div>
-</div>
-
-<!-- Load Supabase SDK -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<!-- Load env config first -->
-<script src="js/env.js"></script>
-<!-- Load app logic last so DOM is ready -->
-<script src="js/app.js"></script>
+  <!-- Load Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/env.js?v=10"></script>
+  <!-- Modular Logic Modules -->
+  <script src="js/vendor_logic.js?v=10"></script>
+  <script src="js/training_logic.js?v=10"></script>
+  <script src="js/activities_logic.js?v=10"></script>
+  <script src="js/dpo_logic.js?v=10"></script>
+  
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>

@@ -1,0 +1,67 @@
+<div id="page-dashboard" class="page-shell active">
+  <div class="dash-greeting">Hi, <span id="dash-name">Demo</span> 👋</div>
+  <div class="dash-date" id="dash-date">Here's where your compliance stands today.</div>
+  <div class="dash-top-grid">
+    <div class="card score-card">
+      <div class="score-label">Compliance score</div>
+      <div class="score-number" id="score-display">0%</div>
+      <div class="score-bar-bg">
+        <div class="score-bar" id="score-bar"></div>
+      </div>
+      <div class="score-footer">
+        <span id="tasks-done-label">0 of 12 tasks done</span>
+        <span class="badge badge-red" id="risk-badge">High risk</span>
+      </div>
+    </div>
+    <div class="card quick-card">
+      <h3>Quick actions</h3>
+      <div class="qa-item" onclick="showPage('checklist',document.getElementById('nav-checklist'))">Continue
+        checklist <span class="qa-arrow">→</span></div>
+      <div class="qa-item" onclick="openModal('modal-record')">Add data record <span class="qa-arrow">→</span>
+      </div>
+      <div class="qa-item" onclick="showPage('audit',document.getElementById('nav-audit'))">Generate report <span
+          class="qa-arrow">→</span></div>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="card stat-card">
+      <div class="stat-icon green">✅</div>
+      <div>
+        <div class="stat-number" id="stat-completed">0</div>
+        <div class="stat-label">Completed</div>
+      </div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-icon amber">⏳</div>
+      <div>
+        <div class="stat-number" id="stat-pending">12</div>
+        <div class="stat-label">Pending</div>
+      </div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-icon red">⚠️</div>
+      <div>
+        <div class="stat-number">2</div>
+        <div class="stat-label">Overdue</div>
+      </div>
+    </div>
+  </div>
+  <div class="dash-bottom-grid">
+    <div class="card p-22">
+      <div class="card-head">
+        <h3>Alerts</h3><span class="count-badge">2</span>
+      </div>
+      <div class="alert-item warn">⚠️ Upload your Privacy Policy document</div>
+      <div class="alert-item error">🔴 2 overdue compliance tasks</div>
+    </div>
+    <div class="card p-22">
+      <div class="card-head">
+        <h3>At a glance</h3>
+      </div>
+      <div class="text-sm text-muted lh-16">
+        <p>Your data register has <strong id="dash-records-count">0</strong> records.</p>
+        <p>Active DPO: <strong id="dash-dpo-name">Demo DPO</strong></p>
+      </div>
+    </div>
+  </div>
+</div>
