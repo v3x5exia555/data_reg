@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DataRex — PDPA Compliance Portal</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=16">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,6 +16,11 @@
 
     <!-- APP LAYOUT -->
     <div id="screen-app" class="screen app-layout">
+      <button class="mobile-nav-toggle" type="button" onclick="toggleSidebar()" aria-label="Open navigation">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>
+
       <!-- Sidebar -->
       <aside class="sidebar">
         <div class="sidebar-header" style="padding: 1.25rem 1rem; display: flex; align-items: center; gap: 0.75rem;">
@@ -84,7 +89,7 @@
             </svg>
             DPIA Screening
           </div>
-          <div class="nav-item" id="nav-dpia-workflow">
+          <div class="nav-item" id="nav-dpia-workflow" onclick="showPage('dpiapage',this)">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
             </svg>
@@ -147,7 +152,7 @@
             </svg>
             Risk Monitoring
           </div>
-          <div class="nav-item" id="nav-dpia-expiry">
+          <div class="nav-item" id="nav-dpia-expiry" onclick="showPage('monitoring',this)">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
@@ -159,6 +164,12 @@
             </svg>
             Alerts
             <span class="alert-badge" id="alert-badge" style="display:none;">0</span>
+          </div>
+          <div class="nav-item" id="nav-cases" onclick="showPage('cases',this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            Cases
           </div>
           <div class="nav-item" id="nav-audit" onclick="showPage('audit',this)">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -184,7 +195,7 @@
 
           <!-- BILLING -->
           <div class="nav-section-label">BILLING</div>
-          <div class="nav-item" id="nav-billing">
+          <div class="nav-item" id="nav-billing" onclick="showToast('Subscription settings are not available in this build yet', 'info')">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
             </svg>
@@ -233,11 +244,12 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/env.js?v=10"></script>
   <!-- Modular Logic Modules -->
-  <script src="js/vendor_logic.js?v=10"></script>
-  <script src="js/training_logic.js?v=10"></script>
-  <script src="js/activities_logic.js?v=10"></script>
-  <script src="js/dpo_logic.js?v=10"></script>
-  
-  <script src="js/app.js?v=10"></script>
+  <script src="js/vendor_logic.js?v=13"></script>
+  <script src="js/training_logic.js?v=12"></script>
+  <script src="js/activities_logic.js?v=13"></script>
+  <script src="js/dpo_logic.js?v=14"></script>
+  <script src="js/sample_data.js?v=1"></script>
+
+  <script src="js/app.js?v=17"></script>
 </body>
 </html>

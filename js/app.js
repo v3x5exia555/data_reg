@@ -3896,22 +3896,39 @@ async function loadAllSampleData() {
   if (!state.isLoggedIn) { showToast('Please login first', 'error'); return; }
   if (!confirm('Load sample data?')) return;
 
-  const companyId = state.user.company;
+  const companyId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.company;
   showToast('Loading sample data...', 'info');
 
-  await seedProcessingActivitiesToSupabase(companyId);
-  await seedDataRecordsToSupabase(companyId);
-  await seedDataRequestsToSupabase(companyId);
-  await seedBreachLogToSupabase(companyId);
-  await seedDPIAToSupabase(companyId);
-  await seedCrossBorderToSupabase(companyId);
-  await seedVendorsToSupabase(companyId);
-  await seedTrainingToSupabase(companyId);
-  await seedAlertsToSupabase(companyId);
-  await seedCasesToSupabase(companyId);
-  await seedTeamMembersToSupabase(companyId);
+  const seeders = [
+    ['data_records',           seedDataRecordsToSupabase],
+    ['processing_activities',  seedProcessingActivitiesToSupabase],
+    ['data_requests',          seedDataRequestsToSupabase],
+    ['breach_log',             seedBreachLogToSupabase],
+    ['dpia_assessments',       seedDPIAToSupabase],
+    ['cross_border_transfers', seedCrossBorderToSupabase],
+    ['vendors',                seedVendorsToSupabase],
+    ['training_records',       seedTrainingToSupabase],
+    ['alerts',                 seedAlertsToSupabase],
+    ['cases',                  seedCasesToSupabase],
+    ['team_members',           seedTeamMembersToSupabase],
+    ['dpo',                    seedDPOToSupabase],
+    ['documents',              seedDocumentsToSupabase]
+  ];
 
-  showToast('Sample data loaded!', 'success');
+  const counts = {};
+  let totalInserted = 0;
+  for (const [table, fn] of seeders) {
+    try {
+      const inserted = await fn(companyId);
+      counts[table] = inserted || 0;
+      totalInserted += counts[table];
+    } catch (err) {
+      console.error(`[sample_data] ${table} seeder threw:`, err);
+      counts[table] = 0;
+    }
+  }
+  console.table(counts);
+  showToast(`Sample data loaded (${totalInserted} new rows across ${seeders.length} tables)`, 'success');
 }
 window.loadAllSampleData = loadAllSampleData;
 
