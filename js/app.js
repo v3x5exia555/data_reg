@@ -8,10 +8,10 @@
    ─────────────────────────────────────────────── */
 const JARVIS_LOG = {
   enabled: true,
-  
+
   log(action, component, data = {}, response = null, error = null) {
     if (!this.enabled) return;
-    
+
     const timestamp = new Date().toISOString();
     const logEntry = {
       timestamp,
@@ -23,7 +23,7 @@ const JARVIS_LOG = {
       user_id: state.user?.id || 'anonymous',
       user_email: state.user?.email || 'anonymous'
     };
-    
+
     // Console output
     console.log(
       `%c[JARVIS] ${timestamp.split('T')[1].split('.')[0]} | ${component} | ${action}`,
@@ -32,17 +32,17 @@ const JARVIS_LOG = {
       response ? `✓ ${JSON.stringify(response)}` : '',
       error ? `✗ ${error.message}` : ''
     );
-    
+
     // Save to Supabase (async, non-blocking)
     this.saveToSupabase(logEntry);
-    
+
     return logEntry;
   },
-  
+
   async saveToSupabase(entry) {
     const supabase = getSupabaseClient();
     if (!supabase || !isSupabaseConfigured()) return;
-    
+
     try {
       await supabase.from('system_logs').insert([{
         action: entry.action,
@@ -58,24 +58,24 @@ const JARVIS_LOG = {
       console.error('JARVIS Log Save Error:', e);
     }
   },
-  
+
   // Convenience methods
   click(component, element, data = {}) {
     return this.log('CLICK', component, { element, ...data });
   },
-  
+
   submit(component, formName, data = {}) {
     return this.log('SUBMIT', component, { form: formName, ...data });
   },
-  
+
   success(component, action, data = {}) {
     return this.log('SUCCESS', component, { action, ...data });
   },
-  
+
   error(component, action, err, data = {}) {
     return this.log('ERROR', component, { action, ...data }, null, err);
   },
-  
+
   pageView(page) {
     return this.log('PAGE_VIEW', page, { url: window.location.hash });
   }
@@ -132,25 +132,31 @@ const state = {
   vendors: [],
   trainingRecords: [],
   dpoRecords: [],
-  processingActivities: []
+  processingActivities: [],
+  dpiaItems: [],
+  breachLog: [],
+  crossBorderTransfers: [],
+  cases: [],
+  optouts: []
 };
 
 const PAGES_TO_LOAD = [
   'auth__landing', 'auth__login', 'auth__register', 'auth__onboarding',
-  '00__dashboard', '01__checklist', '02__companies', '03__datasources', 
-  '04__dataregister', '05__consent', '06__access', '07__retention', 
-  '07__vendors', '08__dpo', '08__training', '09__datarequests', '10__breachlog', 
-  '04__dpia', '06__crossborder', '15__documents', 
+  '00__dashboard', '01__checklist', '02__companies', '03__datasources',
+  '04__dataregister', '05__consent', '06__access', '07__retention',
+  '07__vendors', '08__dpo', '08__training', '09__datarequests', '10__breachlog',
+  '04__dpia', '06__crossborder', '15__documents',
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing'
 ];
+const PAGE_ASSET_VERSION = '17';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
   const modalContainer = document.getElementById('modal-container');
-  
+
   // Load Modals
   try {
-    const modalRes = await fetch('modals.html');
+    const modalRes = await fetch(`modals.html?v=${PAGE_ASSET_VERSION}`);
     if (modalRes.ok) modalContainer.innerHTML = await modalRes.text();
     if (typeof initActivityMatrices === 'function') initActivityMatrices();
   } catch (e) { console.error('Failed to load modals:', e); }
@@ -158,21 +164,19 @@ async function loadAllPages() {
   // Load Pages
   const loadPromises = PAGES_TO_LOAD.map(async (pageId) => {
     try {
-      const res = await fetch(`pages/${pageId}.html`);
+      const res = await fetch(`pages/${pageId}.html?v=${PAGE_ASSET_VERSION}`);
       console.log(`Loading page ${pageId}: ${res.status}`);
       if (res.ok) {
         const html = await res.text();
         const temp = document.createElement('div');
         temp.innerHTML = html;
-        
-        // Extract and execute scripts before appending
-        const scripts = temp.querySelectorAll('script');
-        const scriptCodes = [];
-        scripts.forEach(script => {
-          scriptCodes.push(script.textContent);
-          script.remove();
-        });
-        
+
+        // Strip any inline <script> tags from fetched fragments. Page-specific
+        // logic must live in dedicated module files (see js/app.js, js/*_logic.js)
+        // and expose initializers on `window`. Executing fetched scripts is
+        // disallowed because it opens an XSS-to-RCE channel.
+        temp.querySelectorAll('script').forEach(script => script.remove());
+
         const pageEl = temp.firstElementChild;
         if (pageEl) {
           console.log(`Page ${pageId} loaded, element ID: ${pageEl.id}`);
@@ -181,15 +185,13 @@ async function loadAllPages() {
           } else {
             mainArea.appendChild(pageEl);
           }
-          // Execute page-specific scripts
-          scriptCodes.forEach(code => {
-            try {
-              eval(code);
-              console.log(`Page ${pageId} script executed`);
-            } catch (e) {
-              console.error(`Script error in ${pageId}:`, e);
-            }
-          });
+
+          // Optional named init hook: window.initPage_<pageId>()
+          const initFn = window['initPage_' + pageId];
+          if (typeof initFn === 'function') {
+            try { initFn(); }
+            catch (e) { console.error(`initPage_${pageId} failed:`, e); }
+          }
         }
       }
     } catch (e) { console.error(`Failed to load page ${pageId}:`, e); }
@@ -236,22 +238,28 @@ function switchOrg(company) {
   state.user.company = company;
   state.company = company;
   saveState();
-  
+
   // Update UI immediately
   const activeCompanyName = document.getElementById('active-company-name');
   if (activeCompanyName) activeCompanyName.textContent = company;
-  
+
   const dropdown = document.getElementById('org-dropdown');
   if (dropdown) dropdown.classList.remove('open');
-  
+
   renderCompanies();
   renderRegister();
   renderDocuments();
-  loadDPOFromSupabase();
-  
+
+  // Reload all org-scoped modules so they don't show stale data from the
+  // previously-selected company. Each loader is feature-flagged on availability.
+  if (typeof loadDPOFromSupabase === 'function') loadDPOFromSupabase();
+  if (typeof loadVendorsFromSupabase === 'function') loadVendorsFromSupabase();
+  if (typeof loadTrainingFromSupabase === 'function') loadTrainingFromSupabase();
+  if (typeof loadActivitiesFromSupabase === 'function') loadActivitiesFromSupabase();
+
   const selectEl = document.getElementById('company-select');
   if (selectEl) selectEl.value = company;
-  
+
   showToast(`Switched to ${company}`, 'success');
 }
 
@@ -268,15 +276,15 @@ function toggleOrgDropdown() {
 function renderOrgDropdown() {
   const list = document.getElementById('org-dropdown-list');
   if (!list) return;
-  
+
   const companies = state.companies || [];
   const current = state.user?.company;
-  
+
   if (companies.length === 0) {
     list.innerHTML = '<div class="org-dropdown-item" style="color:#9ca3af;cursor:default;justify-content:center;">No other companies</div>';
     return;
   }
-  
+
   list.innerHTML = companies.map(c => `
     <div class="org-dropdown-item ${c.name === current ? 'active' : ''}" onclick="switchOrg('${c.name}')">
       <div class="item-icon">🏢</div>
@@ -286,9 +294,11 @@ function renderOrgDropdown() {
   `).join('');
 }
 // Pre-populate demo user if not exists
+// SHA-256 hash of 'Admin123!@#'
+const DEMO_PASSWORD_HASH = 'a8d51fc6a058bfeacb77818d42d420ac1bf31529393a784ec60f7c2443047462';
 if (!localStorage.getItem('datarex_users')) {
   localStorage.setItem('datarex_users', JSON.stringify([
-    { name: 'Demo DPO', company: 'Acme Pte Ltd', email: 'admin@datarex.com', password: 'Admin123!@#', industry: 'Technology', size: '11-50', regNo: '202001000001 (A)' }
+    { name: 'Demo DPO', company: 'Acme Pte Ltd', email: 'admin@datarex.com', password_hash: DEMO_PASSWORD_HASH, industry: 'Technology', size: '11-50', regNo: '202001000001 (A)' }
   ]));
 }
 loadState(); // Load immediately on script run
@@ -309,7 +319,7 @@ function initAuthListener() {
         company: session.user.user_metadata?.company || ''
       };
       saveState();
-      
+
       if (document.getElementById('screen-app')) {
         launchApp(session.user);
       }
@@ -351,6 +361,66 @@ function showToast(message, type = 'info') {
 function showSuccess(msg) { showToast(msg, 'success'); }
 function showError(msg) { showToast(msg, 'error'); }
 function showWarning(msg) { showToast(msg, 'warning'); }
+
+// ─── PASSWORD STRENGTH METER ─────────────────────────────────
+function updatePasswordStrength(password) {
+  const bars = [
+    document.getElementById('strength-bar-1'),
+    document.getElementById('strength-bar-2'),
+    document.getElementById('strength-bar-3'),
+    document.getElementById('strength-bar-4')
+  ];
+  const text = document.getElementById('strength-text');
+  if (!text || bars.some(b => !b)) return;
+
+  bars.forEach(bar => {
+    bar.classList.remove('active-weak', 'active-fair', 'active-good', 'active-strong');
+  });
+
+  if (!password) {
+    text.textContent = 'Enter a password';
+    text.className = 'strength-text';
+    return;
+  }
+
+  let strength = 0;
+  if (password.length >= 8) strength++;
+  if (password.length >= 12) strength++;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+  if (/[0-9]/.test(password)) strength++;
+  if (/[^a-zA-Z0-9]/.test(password)) strength++;
+  strength = Math.min(strength, 4);
+
+  const labels = ['Weak', 'Fair', 'Good', 'Strong'];
+  const classes = ['weak', 'fair', 'good', 'strong'];
+  const activeClasses = ['active-weak', 'active-fair', 'active-good', 'active-strong'];
+
+  for (let i = 0; i < strength; i++) {
+    bars[i].classList.add(activeClasses[strength - 1]);
+  }
+
+  if (strength > 0) {
+    text.textContent = labels[strength - 1];
+    text.className = 'strength-text ' + classes[strength - 1];
+  } else {
+    text.textContent = 'Too short';
+    text.className = 'strength-text weak';
+  }
+}
+window.updatePasswordStrength = updatePasswordStrength;
+
+// ─── PASSWORD HASHING ────────────────────────────────────────
+// SHA-256 hash for at-rest storage of passwords in localStorage.
+// Note: this is not a substitute for proper auth (Supabase Auth),
+// but it prevents trivial credential theft via DevTools.
+async function hashPasswordForStorage(pw) {
+  const enc = new TextEncoder().encode(String(pw || ''));
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+window.hashPasswordForStorage = hashPasswordForStorage;
 
 // ─── SUPABASE INTEGRATION ────────────────────────────────────
 // Credentials are now loaded securely via js/env.js
@@ -481,23 +551,24 @@ const CONSENT_DATA = [
 ];
 
 async function loadConsentFromSupabase() {
+  loadOptOuts();
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) {
     renderConsent(); // Fallback to static data
     return;
   }
-  
+
   const { data, error } = await supabase
     .from('consent_settings')
     .select('*')
     .order('category');
-  
+
   if (error) {
     console.error('Failed to load consent:', error);
     renderConsent(); // Fallback if no data
     return;
   }
-  
+
   if (data && data.length > 0) {
     renderConsentFromDB(data);
   } else {
@@ -508,7 +579,7 @@ async function loadConsentFromSupabase() {
 function renderConsentFromDB(data) {
   const body = document.getElementById('consent-body');
   if (!body) return;
-  
+
   const categories = {};
   data.forEach(item => {
     if (!categories[item.category]) {
@@ -516,16 +587,16 @@ function renderConsentFromDB(data) {
     }
     categories[item.category].push(item);
   });
-  
+
   const icons = {'Customer contact data': '📧', 'Employee personal data': '👥', 'Website analytics': '📊'};
   const colors = {'Customer contact data': '#e3f2fd', 'Employee personal data': '#f3e5f5', 'Website analytics': '#e8f5e9'};
-  
+
   let html = '';
   Object.entries(categories).forEach(([category, items]) => {
     const icon = icons[category] || '📋';
     const bg = colors[category] || '#f5f5f5';
     const enabled = items.filter(i => i.is_enabled).length;
-    
+
     html += `
       <div class="consent-item">
         <div class="consent-header-row">
@@ -555,9 +626,10 @@ function renderConsentFromDB(data) {
       </div>
     `;
   });
-  
+
   body.innerHTML = html;
   updateConsentStats();
+  renderOptOutLog();
 }
 
 function updateConsentStats() {
@@ -568,18 +640,18 @@ function updateConsentStats() {
   if (!marketingRecordsCount) return;
 
   // Filter records that involve marketing/newsletters
-  const marketingRecords = (state.records || []).filter(r => 
-    r.purpose.toLowerCase().includes('marketing') || 
+  const marketingRecords = (state.records || []).filter(r =>
+    r.purpose.toLowerCase().includes('marketing') ||
     r.purpose.toLowerCase().includes('newsletter') ||
     r.purpose.toLowerCase().includes('promotions')
   );
 
   marketingRecordsCount.textContent = marketingRecords.length;
-  
+
   // Check for records that might be missing opt-out info (demo logic)
   const missing = marketingRecords.filter(r => !r.consent).length;
   missingOptoutCount.textContent = missing;
-  
+
   // Opt-outs logged (could be from a separate state.optouts array if implemented)
   optoutsLoggedCount.textContent = state.optouts?.length || 0;
 }
@@ -587,18 +659,96 @@ function updateConsentStats() {
 async function updateConsentDb(id, checked) {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
-  
+
   const { error } = await supabase
     .from('consent_settings')
     .update({ is_enabled: checked })
     .eq('id', id);
-  
+
   if (error) {
     console.error('Update failed:', error);
     showToast('Failed to update consent', 'error');
   } else {
     showToast('Consent updated', 'success');
   }
+}
+
+function loadOptOuts() {
+  state.optouts = readLocalList('optout_data');
+  renderOptOutLog();
+}
+
+function renderOptOutLog() {
+  const body = document.getElementById('optout-log-body');
+  if (!body) return;
+
+  const list = state.optouts || [];
+  if (list.length === 0) {
+    body.className = 'optout-empty';
+    body.innerHTML = 'No opt-outs logged yet.';
+    return;
+  }
+
+  body.className = '';
+  body.innerHTML = `
+    <div class="data-table-wrap">
+      <table class="styled-table">
+        <thead>
+          <tr><th>Name</th><th>Email</th><th>Channel</th><th>Date</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          ${list.map(item => `
+            <tr>
+              <td>${item.name || '—'}</td>
+              <td>${item.email || '—'}</td>
+              <td>${item.channel || '—'}</td>
+              <td>${item.request_date || '—'}</td>
+              <td>${item.notes || '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function resetOptOutForm() {
+  const values = {
+    'optout-name': '',
+    'optout-email': '',
+    'optout-channel': 'Email',
+    'optout-date': new Date().toISOString().slice(0, 10),
+    'optout-notes': ''
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
+}
+
+function saveOptOut() {
+  const optOut = {
+    id: 'local-' + Date.now(),
+    name: document.getElementById('optout-name')?.value.trim() || '',
+    email: document.getElementById('optout-email')?.value.trim() || '',
+    channel: document.getElementById('optout-channel')?.value || 'Email',
+    request_date: document.getElementById('optout-date')?.value || new Date().toISOString().slice(0, 10),
+    notes: document.getElementById('optout-notes')?.value.trim() || '',
+    created_at: new Date().toISOString()
+  };
+
+  if (!optOut.name) {
+    showToast('Person name is required', 'error');
+    return;
+  }
+
+  state.optouts = state.optouts || [];
+  state.optouts.unshift(optOut);
+  saveLocalList('optout_data', state.optouts);
+  renderOptOutLog();
+  updateConsentStats();
+  closeModal('modal-log-optout');
+  showToast('Opt-out logged locally', 'success');
 }
 
 const RETENTION_DATA = [
@@ -616,36 +766,60 @@ function goTo(screenId, noPush) {
   const target = document.getElementById(screenId);
   if (target) target.classList.add('active');
   window.scrollTo(0, 0);
-  
+
   if (!noPush) {
     const slug = screenId.replace('screen-', '');
     history.pushState(null, '', '#/' + slug);
   }
 }
 
+function toggleSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (!sidebar) return;
+  const isOpen = sidebar.classList.toggle('open');
+  if (backdrop) backdrop.classList.toggle('open', isOpen);
+}
+
+function closeSidebar() {
+  document.querySelector('.sidebar')?.classList.remove('open');
+  document.getElementById('sidebar-backdrop')?.classList.remove('open');
+}
+
 function showPage(pageId, navEl, noPush) {
+  const pageAliases = { dpia: 'dpiapage' };
+  pageId = pageAliases[pageId] || pageId;
   console.log('showPage called:', pageId);
-  
-  // Hide all pages
-  document.querySelectorAll('.page-shell').forEach(p => p.classList.remove('active'));
-  
-  // Deactivate all nav items
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  
-  // Find and activate target page
+
   const page = document.getElementById('page-' + pageId);
   console.log('Page element found:', !!page);
-  
-  if (page) {
-    page.classList.add('active');
-  } else {
-    console.log('ERROR: Page not found - page-' + pageId);
+  if (!page) {
+    console.warn(`[JARVIS] Page not found: page-${pageId}`);
+    if (typeof showToast === 'function') showToast(`Page is not available yet: ${pageId}`, 'warning');
+    return;
   }
-  
+
+  // Hide all pages
+  document.querySelectorAll('.page-shell').forEach(p => p.classList.remove('active'));
+
+  // Deactivate all nav items
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  // Find and activate target page
+  page.classList.add('active');
+
   // Activate nav item
   if (!navEl) navEl = document.getElementById('nav-' + pageId);
   if (navEl) navEl.classList.add('active');
-  
+  closeSidebar();
+
+  console.log(`[JARVIS] Current Local Storage State (Navigating to ${pageId}):`, {
+    dpo_data: JSON.parse(localStorage.getItem('dpo_data') || '[]'),
+    vendor_data: JSON.parse(localStorage.getItem('vendor_data') || '[]'),
+    activity_data: JSON.parse(localStorage.getItem('activity_data') || '[]'),
+    training_data: JSON.parse(localStorage.getItem('training_data') || '[]')
+  });
+
   // Page-specific actions
   if (pageId === 'vendors' && typeof loadVendorsFromSupabase === 'function') loadVendorsFromSupabase();
   if (pageId === 'training' && typeof loadTrainingFromSupabase === 'function') loadTrainingFromSupabase();
@@ -667,13 +841,13 @@ function showPage(pageId, navEl, noPush) {
     loadNavPermissions();
   }
   if (pageId === 'retention') renderRetention();
-  
+
   // Admin-only elements
   const isAdmin = state.currentUserLevel === 'Accountadmin';
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = isAdmin ? '' : 'none';
   });
-  
+
   // Update URL
   if (!noPush) {
     const newUrl = '#/' + pageId;
@@ -832,36 +1006,34 @@ async function doLogin() {
   try {
     let data = null;
 
-    // 1. Try Supabase first
-    try {
-      const SUPABASE_URL = 'https://xvjfosmzmfitrcivsgpu.supabase.co';
-      const SUPABASE_ANON_KEY = 'sb_publishable_faN2IaAJ6HGApHqzmbvVFQ_vdMleyGH';
-      const url = `${SUPABASE_URL}/rest/v1/app_credentials?email=eq.${encodeURIComponent(email)}&password=eq.${encodeURIComponent(pw)}&is_active=eq.true&limit=1`;
-      
-      console.log('Calling API:', url);
-      const response = await fetch(url, {
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json'
+    // 1. Try Supabase Auth first (requires env.js to have populated window.ENV)
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email,
+            password: pw
+          });
+          if (!authError && authData?.user) {
+            data = {
+              email: authData.user.email,
+              name: authData.user.user_metadata?.name || authData.user.email,
+              company: authData.user.user_metadata?.company || ''
+            };
+            console.log('Login SUCCESS (Supabase Auth):', data.email);
+          }
         }
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        if (result && result.length > 0) {
-          data = result[0];
-          console.log('Login SUCCESS (Supabase):', data.email);
-        }
+      } catch (apiError) {
+        console.warn('Supabase auth failed, trying local fallback...', apiError);
       }
-    } catch (apiError) {
-      console.warn('Supabase login failed, trying fallback...', apiError);
     }
 
     // 2. Try LocalStorage fallback if Supabase failed
     if (!data) {
       const localUsers = JSON.parse(localStorage.getItem('datarex_users') || '[]');
-      const localUser = localUsers.find(u => u.email === email && u.password === pw);
+      const pwHash = await hashPasswordForStorage(pw);
+      const localUser = localUsers.find(u => u.email === email && u.password_hash === pwHash);
       if (localUser) {
         data = localUser;
         console.log('Login SUCCESS (local):', data.email);
@@ -884,7 +1056,7 @@ async function doLogin() {
 
     console.log('Creating session...');
     createSession(email);
-    
+
     if (data) {
       state.user = {
         name: data.name || data.company || 'User',
@@ -897,15 +1069,15 @@ async function doLogin() {
       };
       saveState();
     }
-    
+
     const loginForm = document.getElementById('login-form');
     const loginFooter = document.getElementById('login-footer');
     const loginSuccess = document.getElementById('login-success');
-    
+
     if (loginForm) loginForm.style.display = 'none';
     if (loginFooter) loginFooter.style.display = 'none';
     if (loginSuccess) loginSuccess.classList.add('show');
-    
+
     console.log('Launching app...');
     setTimeout(() => launchApp(), 1200);
     console.log('=== LOGIN DEBUG END (SUCCESS) ===');
@@ -957,7 +1129,7 @@ function finishOnboard() {
   state.dataSources = Array.from(selected).map(el => el.querySelector('h4').textContent);
   state.isLoggedIn = true;
   saveState();
-  
+
   // Switch to app screen first so summary is visible
   goTo('screen-app', true);
   showSummary();
@@ -966,25 +1138,25 @@ function finishOnboard() {
 function showSummary() {
   const u = state.user || {};
   const industryIcons = {
-    'Healthcare': '🏥', 'Finance': '💰', 'Ecommerce': '🛒', 
+    'Healthcare': '🏥', 'Finance': '💰', 'Ecommerce': '🛒',
     'Education': '🎓', 'Retail': '🏪', 'Technology': '💻',
     'Consulting': '💼', 'Manufacturing': '🏭', 'Other': '⚙️'
   };
-  
+
   const html = `
     <div class="summary-screen">
       <div class="summary-card">
         <div class="summary-icon">✅</div>
         <h2>You're all set!</h2>
         <p class="summary-sub">Here's a summary of your setup</p>
-        
+
         <div class="summary-sections">
           <div class="summary-section">
             <h3>👤 Account</h3>
             <div class="summary-item"><span>Name</span><span>${u.name || '-'}</span></div>
             <div class="summary-item"><span>Email</span><span>${u.email || '-'}</span></div>
           </div>
-          
+
           <div class="summary-section">
             <h3>🏢 Company</h3>
             <div class="summary-item"><span>Company</span><span>${u.company || '-'}</span></div>
@@ -992,12 +1164,12 @@ function showSummary() {
             <div class="summary-item"><span>Industry</span><span>${industryIcons[u.industry] || ''} ${u.industry || '-'}</span></div>
             <div class="summary-item"><span>Size</span><span>${u.companySize || '-'}</span></div>
           </div>
-          
+
           <div class="summary-section">
             <h3>📊 Business Type</h3>
             <div class="summary-item"><span>Type</span><span>${state.bizType || 'Not selected'}</span></div>
           </div>
-          
+
           <div class="summary-section">
             <h3>📥 Data Sources</h3>
             <div class="summary-tags">
@@ -1005,7 +1177,7 @@ function showSummary() {
             </div>
           </div>
         </div>
-        
+
         <div class="summary-actions">
           <button class="btn btn-ghost" onclick="goTo('screen-register')">← Edit</button>
           <button class="btn btn-primary" onclick="goToDashboard()">Go to Dashboard →</button>
@@ -1013,7 +1185,7 @@ function showSummary() {
       </div>
     </div>
   `;
-  
+
   document.getElementById('page-dashboard').innerHTML = html;
 }
 
@@ -1025,7 +1197,7 @@ function goToDashboard() {
 /* ───────────────────────────────────────────────
    AUTH: REGISTER
    ─────────────────────────────────────────────── */
-function doRegister() {
+async function doRegister() {
   const name = document.getElementById('register-name').value.trim();
   const company = document.getElementById('register-company').value.trim();
   const email = document.getElementById('register-email').value.trim();
@@ -1034,7 +1206,7 @@ function doRegister() {
   const industry = document.getElementById('register-industry').value;
   const size = document.getElementById('register-size').value;
   const regNo = document.getElementById('register-reg-no').value.trim();
-  
+
   if (!name) { showToast('Please enter your name', 'error'); return; }
   if (!company) { showToast('Please enter company name', 'error'); return; }
   if (!industry) { showToast('Please select your industry', 'error'); return; }
@@ -1042,15 +1214,16 @@ function doRegister() {
   if (!isValidEmail(email)) { showToast('Please enter a valid email', 'error'); return; }
   if (!pw || pw.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
   if (pw !== pwConfirm) { showToast('Passwords do not match', 'error'); return; }
-  
+
   // Save user data to localStorage for login validation
   const users = JSON.parse(localStorage.getItem('datarex_users') || '[]');
   const exists = users.find(u => u.email === email);
   if (exists) { showToast('Email already registered', 'error'); return; }
-  
-  users.push({ name, company, email, password: pw, industry, size, regNo });
+
+  const pwHash = await hashPasswordForStorage(pw);
+  users.push({ name, company, email, password_hash: pwHash, industry, size, regNo });
   localStorage.setItem('datarex_users', JSON.stringify(users));
-  
+
   // Set current user
   state.user = {
     name: name,
@@ -1063,15 +1236,15 @@ function doRegister() {
   };
   state.isLoggedIn = true;
   saveState();
-  
+
   showToast('Account created!', 'success');
   goTo('screen-onboarding');
 }
 
-function demoLogin()     { 
+function demoLogin()     {
   console.log('Demo Login triggered');
   createSession('admin@datarex.com');
-  
+
   // Check for existing demo DPO data
   const savedDpo = localStorage.getItem('datarex_dpo');
   if (savedDpo) {
@@ -1083,7 +1256,7 @@ function demoLogin()     {
       state.dpoHistory = [];
     }
   }
-  
+
   // Set demo user state with regNo
   state.user = {
     name: 'Demo DPO',
@@ -1095,15 +1268,16 @@ function demoLogin()     {
     id: '00000000-0000-0000-0000-000000000001'
   };
   saveState();
-  launchApp(); 
+  launchApp();
 }
 
 window.demoLogin = demoLogin;
 window.doLogin = doLogin;
 window.toggleOrgDropdown = toggleOrgDropdown;
 window.switchOrg = switchOrg;
-window.saveDPOToSupabase = saveDPOToSupabase;
-window.loadDPOFromSupabase = loadDPOFromSupabase;
+if (typeof saveDPOToSupabase !== 'undefined') window.saveDPOToSupabase = saveDPOToSupabase;
+if (typeof saveDPO !== 'undefined' && !window.saveDPOToSupabase) window.saveDPOToSupabase = saveDPO;
+if (typeof loadDPOFromSupabase !== 'undefined') window.loadDPOFromSupabase = loadDPOFromSupabase;
 
 /* ───────────────────────────────────────────────
    LAUNCH APP
@@ -1122,19 +1296,19 @@ function launchApp(user) {
   const firstName = state.user.name ? state.user.name.split(' ')[0] : 'Demo';
   const sidebarName = document.getElementById('sidebar-name');
   if (sidebarName) sidebarName.textContent = state.user.name;
-  
+
   const sidebarOrg = document.getElementById('sidebar-org');
   if (sidebarOrg) sidebarOrg.textContent = state.user.company;
 
   const activeCompanyName = document.getElementById('active-company-name');
   if (activeCompanyName) activeCompanyName.textContent = state.user.company || 'Select Company';
-  
+
   const sidebarAvatar = document.getElementById('sidebar-avatar');
   if (sidebarAvatar) sidebarAvatar.textContent = firstName[0] ? firstName[0].toUpperCase() : 'D';
-  
+
   const dashName = document.getElementById('dash-name');
   if (dashName) dashName.textContent = firstName;
-  
+
   const dashDate = document.getElementById('dash-date');
   if (dashDate) {
     dashDate.textContent = 'Today is ' + new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) + '.';
@@ -1152,7 +1326,7 @@ function launchApp(user) {
   updateAlertBadge();
   applyNavPermissions();
   goTo('screen-app', true);
-  
+
   const hash = window.location.hash.replace('#/', '');
   if (hash && !['login', 'onboarding', 'app', 'landing'].includes(hash)) {
     showPage(hash, null, true);
@@ -1172,28 +1346,28 @@ function updateScore() {
 
   const scoreDisplay = document.getElementById('score-display');
   if (scoreDisplay) scoreDisplay.textContent = pct + '%';
-  
+
   const scoreBar = document.getElementById('score-bar');
   if (scoreBar) scoreBar.style.width = pct + '%';
-  
+
   const tasksDoneLabel = document.getElementById('tasks-done-label');
   if (tasksDoneLabel) tasksDoneLabel.textContent = `${done} of ${total} tasks done`;
-  
+
   const statCompleted = document.getElementById('stat-completed');
   if (statCompleted) statCompleted.textContent = done;
-  
+
   const statPending = document.getElementById('stat-pending');
   if (statPending) statPending.textContent = total - done;
-  
+
   const progLabel = document.getElementById('prog-label');
   if (progLabel) progLabel.textContent = `${done} of ${total} done`;
-  
+
   const progPct = document.getElementById('prog-pct');
   if (progPct) progPct.textContent = pct + '%';
-  
+
   const progFill = document.getElementById('prog-fill');
   if (progFill) progFill.style.width = pct + '%';
-  
+
   const glanceProgress = document.getElementById('glance-progress');
   if (glanceProgress) glanceProgress.textContent = `${done}/${total} →`;
 
@@ -1223,21 +1397,21 @@ async function renderChecklist() {
   const body = document.getElementById('checklist-body');
   if (!body) return;
   body.innerHTML = '';
-  
+
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured() && state.user.id) {
     const { data, error } = await supabase
       .from('checklist_items')
       .select('*')
       .eq('user_id', state.user.id);
-    
+
     if (!error && data) {
       data.forEach(item => {
         state.checks[item.item_id] = item.completed;
       });
     }
   }
-  
+
   CHECKLIST.forEach(section => {
     const done  = section.items.filter(i => state.checks[i.id]).length;
     const total = section.items.length;
@@ -1254,12 +1428,12 @@ async function renderChecklist() {
           ${checked ? '<svg width="13" height="13" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
         </div>
         <div class="check-text"><h4>${item.q}</h4><p>${item.hint}</p></div>`;
-      el.addEventListener('click', async () => { 
-        state.checks[item.id] = !state.checks[item.id]; 
-        saveState(); 
-        renderChecklist(); 
+      el.addEventListener('click', async () => {
+        state.checks[item.id] = !state.checks[item.id];
+        saveState();
+        renderChecklist();
         updateScore();
-        
+
         if (supabase && isSupabaseConfigured() && state.user.id) {
           await supabase.from('checklist_items').upsert({
             user_id: state.user.id,
@@ -1281,18 +1455,18 @@ async function renderChecklist() {
 async function renderRegister() {
   const body = document.getElementById('register-body-wrap');
   if (!body) return;
-  
+
   const supabase = getSupabaseClient();
-  const demoUserId = '00000000-0000-0000-0000-000000000001';
-  
+  const userId = state.user?.id;
+
   console.log('[JARVIS] Fetching from data_records...');
-  if (supabase && isSupabaseConfigured()) {
+  if (supabase && isSupabaseConfigured() && userId) {
     const { data, error } = await supabase
       .from('data_records')
       .select('*')
-      .eq('user_id', demoUserId)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    
+
     if (!error && data) {
       console.log(`[JARVIS] Fetching from data_records... Success: ${data.length} records found.`);
       state.records = data.map(r => ({
@@ -1323,8 +1497,8 @@ async function renderRegister() {
 
   // Search
   const q = (document.getElementById('register-search')?.value || '').toLowerCase();
-  const filtered = q ? list.filter(r => 
-    (r.type||'').toLowerCase().includes(q) || 
+  const filtered = q ? list.filter(r =>
+    (r.type||'').toLowerCase().includes(q) ||
     (r.purpose||'').toLowerCase().includes(q) ||
     (r.storage||'').toLowerCase().includes(q)
   ) : list;
@@ -1333,7 +1507,7 @@ async function renderRegister() {
     body.innerHTML = `<div class="empty-state"><p>${q ? 'No results for "' + q + '"' : 'No data records yet'}</p><small>Click "+ Add record" to start building your data inventory.</small></div>`;
     return;
   }
-  
+
   body.innerHTML = `<div class="data-table-wrap"><table class="styled-table"><thead style="background:#f8fafc;"><tr style="background:#f8fafc;">
     <th class="th-narrow" style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">ID</th>
     <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Data Type</th>
@@ -1382,21 +1556,61 @@ async function deleteRecord(i) {
 /* ───────────────────────────────────────────────
    MODALS
    ─────────────────────────────────────────────── */
-function openModal(id)  { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { 
-  document.getElementById(id).classList.remove('open'); 
+function openModal(id) {
+  const modal = document.getElementById(id);
+  if (!modal) {
+    console.warn(`[JARVIS] Modal not found: ${id}`);
+    if (typeof showToast === 'function') showToast(`Form is not available yet: ${id}`, 'warning');
+    return;
+  }
+
+  modal.style.display = 'flex';
+  modal.style.alignItems = 'center';
+  modal.style.justifyContent = 'center';
+  modal.classList.add('open');
+}
+
+function closeModal(id) {
+  const modal = document.getElementById(id);
+  if (!modal) return;
+
+  modal.classList.remove('open');
+  modal.style.display = 'none';
+
   if (id === 'modal-record') {
     resetRecordForm();
   }
   if (id === 'modal-data-request') {
     resetDataRequestForm();
   }
+  if (id === 'modal-log-optout') resetOptOutForm();
+  if (id === 'modal-crossborder') resetCrossBorderForm();
+  if (id === 'modal-breach') resetBreachForm();
+  if (id === 'modal-case') resetCaseForm();
+}
+
+function getCurrentOrgId() {
+  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
+  return currentCompany ? currentCompany.id : state.user?.id;
+}
+
+function readLocalList(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || '[]');
+  } catch (err) {
+    console.error(`[JARVIS] Failed to parse ${key}`, err);
+    return [];
+  }
+}
+
+function saveLocalList(key, list) {
+  localStorage.setItem(key, JSON.stringify(list || []));
 }
 
 function editRecord(index) {
   const record = state.records[index];
   if (!record) return;
-  
+
   document.getElementById('rec-index').value = index;
   document.getElementById('rec-type').value = record.type || '';
   document.getElementById('rec-purpose').value = record.purpose || '';
@@ -1405,10 +1619,10 @@ function editRecord(index) {
   document.getElementById('rec-retention').value = record.retention || 12;
   document.getElementById('rec-consent').checked = record.consent || false;
   document.getElementById('rec-note').value = record.note || '';
-  
+
   document.getElementById('modal-record-title').textContent = 'Edit data record';
   document.getElementById('rec-save-btn').textContent = 'Update record';
-  
+
   openModal('modal-record');
 }
 
@@ -1430,12 +1644,12 @@ async function saveRecord() {
 
   const recordData = { type, purpose, storage, access, retention, consent, note };
   const supabase = getSupabaseClient();
-  const demoUserId = '00000000-0000-0000-0000-000000000001';
-  
-  JARVIS_LOG.submit('DataRegister', editIndex >= 0 ? 'Update' : 'Insert', { 
-    form_data: recordData, 
+  const userId = state.user?.id;
+
+  JARVIS_LOG.submit('DataRegister', editIndex >= 0 ? 'Update' : 'Insert', {
+    form_data: recordData,
     editIndex,
-    timestamp: new Date().toISOString() 
+    timestamp: new Date().toISOString()
   });
 
   if (editIndex >= 0) {
@@ -1443,7 +1657,7 @@ async function saveRecord() {
     Object.assign(state.records[editIndex], recordData);
     state.records[editIndex].id = existingRecord.id;
     state.records[editIndex].updated_at = new Date().toISOString();
-    
+
     if (supabase && isSupabaseConfigured() && existingRecord.id && !String(existingRecord.id).startsWith('local-')) {
       const { error } = await supabase.from('data_records').update({
         data_type: type,
@@ -1471,7 +1685,7 @@ async function saveRecord() {
         JARVIS_LOG.success('DataRegister', 'Update to Supabase', { id: existingRecord.id });
       }
     }
-    
+
     localStorage.setItem('datarex_records', JSON.stringify(state.records));
     saveState();
     renderRegister();
@@ -1485,10 +1699,10 @@ async function saveRecord() {
 
   state.records.unshift(recordData);
   localStorage.setItem('datarex_records', JSON.stringify(state.records));
-  
-  if (supabase && isSupabaseConfigured()) {
+
+  if (supabase && isSupabaseConfigured() && userId) {
     const { data, error } = await supabase.from('data_records').insert([{
-      user_id: demoUserId,
+      user_id: userId,
       data_type: type,
       purpose: purpose,
       storage: storage,
@@ -1520,7 +1734,7 @@ async function saveRecord() {
     recordData.id = 'local-' + Date.now();
     showToast('Record saved locally', 'success');
   }
-  
+
   saveState();
   renderRegister();
   renderConsent();
@@ -1550,17 +1764,17 @@ async function saveCompany() {
   const industry = document.getElementById('company-industry').value;
   const regNo = document.getElementById('company-reg-no').value.trim();
 
-  
+
   if (!name) {
     showToast('Please enter a company name.', 'error');
     return;
   }
-  
+
   if (state.currentUserLevel !== 'Accountadmin') {
     showToast('Only Accountadmin can add companies.', 'error');
     return;
   }
-  
+
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured()) {
     try {
@@ -1573,7 +1787,7 @@ async function saveCompany() {
         reg_no: regNo,
         updated_at: new Date().toISOString()
       };
-      
+
       let res;
       if (id) {
         // Update existing
@@ -1582,9 +1796,9 @@ async function saveCompany() {
         // Insert new
         res = await query.insert([companyData]).select().single();
       }
-      
+
       const { data, error } = res;
-      
+
       if (error) {
         console.error('Save error:', error);
         // Fallback to localStorage
@@ -1629,12 +1843,12 @@ async function saveCompany() {
     renderCompanies();
     showToast(`${name} added!`, 'success');
   }
-  
+
   closeModal('modal-company');
   document.getElementById('company-name').value = '';
   document.getElementById('company-dpo').value = '';
   document.getElementById('company-reg-no').value = '';
-  
+
   renderCompanies();
 }
 
@@ -1648,9 +1862,9 @@ function sortCompanies(column) {
     companiesSortCol = column;
     companiesSortAsc = true;
   }
-  
+
   if (!state.companies) return;
-  
+
   state.companies.sort((a, b) => {
     const aVal = (a[column] || '').toString().toLowerCase();
     const bVal = (b[column] || '').toString().toLowerCase();
@@ -1658,7 +1872,7 @@ function sortCompanies(column) {
     if (aVal > bVal) return companiesSortAsc ? 1 : -1;
     return 0;
   });
-  
+
   renderCompanies();
 }
 
@@ -1756,14 +1970,14 @@ function editCompany(cJsonStr) {
     const c = JSON.parse(decodeURIComponent(cJsonStr));
     const titleEl = document.getElementById('modal-company-title');
     if (titleEl) titleEl.textContent = 'Update company';
-    
+
     document.getElementById('company-id').value = c.id || '';
     document.getElementById('company-name').value = c.name || '';
     document.getElementById('company-country').value = c.country || 'Singapore';
     document.getElementById('company-dpo').value = c.dpo_name || '';
     document.getElementById('company-industry').value = c.industry || 'General';
     document.getElementById('company-reg-no').value = c.regNo || c.reg_no || '';
-    
+
     openModal('modal-company');
   } catch(e) {
     console.error('Failed to parse company data', e);
@@ -1773,35 +1987,35 @@ function editCompany(cJsonStr) {
 async function loadCompaniesFromSupabase() {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
-  
+
   const { data, error } = await supabase
     .from('companies')
     .select('*')
     .order('name');
-  
+
   if (error) {
     console.error('Failed to load companies:', error);
     return;
   }
-  
+
   state.companies = data;
-  
+
   const selectEl = document.getElementById('company-select');
   if (selectEl && data) {
-    selectEl.innerHTML = data.map(c => 
+    selectEl.innerHTML = data.map(c =>
       `<option value="${c.name}">🏢 ${c.name}</option>`
     ).join('');
     if (state.user.company) {
       selectEl.value = state.user.company;
     }
   }
-  
+
   renderCompanies();
 }
 
 async function loadDataRequestsFromSupabase() {
   const supabase = getSupabaseClient();
-  
+
   // Load from localStorage first
   const saved = localStorage.getItem('datarex_dataRequests');
   if (saved) {
@@ -1809,26 +2023,26 @@ async function loadDataRequestsFromSupabase() {
       state.dataRequests = JSON.parse(saved);
     } catch (e) {}
   }
-  
+
   if (!supabase || !isSupabaseConfigured()) {
     renderDataRequests(state.dataRequests);
     return;
   }
-  
+
   let query = supabase.from('data_requests').select('*');
   const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
   const orgId = currentCompany ? currentCompany.id : state.user?.id;
-  
+
   if (orgId) query = query.eq('org_id', orgId);
   const { data, error } = await query
     .order('created_at', { ascending: false });
-  
+
   if (error) {
     console.error('Failed to load data requests:', error);
     renderDataRequests(state.dataRequests);
     return;
   }
-  
+
   if (data && data.length > 0) {
     state.dataRequests = data;
   }
@@ -1838,24 +2052,24 @@ async function loadDataRequestsFromSupabase() {
 function editDataRequest(index) {
   const request = state.dataRequests[index];
   if (!request) return;
-  
+
   document.getElementById('req-index').value = index;
   document.getElementById('req-name').value = request.requester_name || '';
   document.getElementById('req-email').value = request.requester_email || '';
   document.getElementById('req-type').value = request.request_type || 'Access';
   document.getElementById('req-description').value = request.description || '';
   document.getElementById('req-assigned').value = request.assigned_to || '';
-  
+
   document.querySelector('.modal-dsr-title').textContent = 'Edit data subject request';
   document.getElementById('req-save-btn').textContent = 'Update Request';
-  
+
   openModal('modal-data-request');
 }
 
 async function deleteDataRequest(index) {
   const request = state.dataRequests[index];
   if (!request) return;
-  
+
   if (confirm(`Delete request from "${request.requester_name}"?`)) {
     // Delete from Supabase if it has a real ID
     if (supabase && isSupabaseConfigured() && request.id && !String(request.id).startsWith('local-')) {
@@ -1864,7 +2078,7 @@ async function deleteDataRequest(index) {
         console.error('Error deleting data request from Supabase:', error);
       }
     }
-    
+
     state.dataRequests.splice(index, 1);
     localStorage.setItem('datarex_dataRequests', JSON.stringify(state.dataRequests));
     renderDataRequests(state.dataRequests);
@@ -1905,22 +2119,22 @@ async function saveDataRequest() {
     assigned_to: assigned_to,
     status: 'Open'
   };
-  
+
   const supabase = getSupabaseClient();
   const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
   const orgId = currentCompany ? currentCompany.id : state.user?.id;
-  
+
   JARVIS_LOG.submit('DataRequests', editIndex >= 0 ? 'Update' : 'Insert', { requestData, editIndex });
-  
+
   if (editIndex >= 0) {
     const existingRequest = state.dataRequests[editIndex];
-    
+
     if (supabase && isSupabaseConfigured() && existingRequest.id && !String(existingRequest.id).startsWith('local-')) {
       const { error } = await supabase.from('data_requests').update({
         ...requestData,
         updated_at: new Date().toISOString()
       }).eq('id', existingRequest.id);
-      
+
       if (error) {
         JARVIS_LOG.error('DataRequests', 'Update', error);
         console.error('Error updating data request:', error);
@@ -1928,7 +2142,7 @@ async function saveDataRequest() {
         JARVIS_LOG.success('DataRequests', 'Update', { id: existingRequest.id });
       }
     }
-    
+
     Object.assign(state.dataRequests[editIndex], requestData, { id: existingRequest.id });
     localStorage.setItem('datarex_dataRequests', JSON.stringify(state.dataRequests));
     renderDataRequests(state.dataRequests);
@@ -1984,10 +2198,10 @@ function renderDataRequests(requests) {
   const totalCount = document.getElementById('dsr-total-count');
   const overdueCount = document.getElementById('dsr-overdue-count');
   const fulfilledCount = document.getElementById('dsr-fulfilled-count');
-  
+
   const openOrPending = list.filter(r => r.status === 'Open' || r.status === 'Pending').length;
   const fulfilled = list.filter(r => r.status === 'Completed' || r.status === 'Fulfilled').length;
-  
+
   let overdue = 0;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1998,14 +2212,14 @@ function renderDataRequests(requests) {
       if (deadline < today) overdue++;
     }
   });
-  
+
   if (totalCount) totalCount.textContent = list.length;
   if (overdueCount) overdueCount.textContent = overdue;
   if (fulfilledCount) fulfilledCount.textContent = fulfilled;
 
   const q = (document.getElementById('datarequests-search')?.value || '').toLowerCase();
-  const filtered = q ? list.filter(r => 
-    (r.requester_name||'').toLowerCase().includes(q) || 
+  const filtered = q ? list.filter(r =>
+    (r.requester_name||'').toLowerCase().includes(q) ||
     (r.request_type||'').toLowerCase().includes(q) ||
     (r.description||'').toLowerCase().includes(q)
   ) : list;
@@ -2026,7 +2240,7 @@ function renderDataRequests(requests) {
     const deadline = new Date(createdAt);
     deadline.setDate(deadline.getDate() + 21);
     const diff = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
-    
+
     if (diff < 0) return { text: 'Overdue', class: 'dsr-deadline-overdue' };
     if (diff <= 3) return { text: diff + ' days', class: 'dsr-deadline-soon' };
     if (diff <= 7) return { text: diff + ' days', class: 'dsr-deadline-soon' };
@@ -2079,22 +2293,26 @@ function renderDataRequests(requests) {
 
 async function loadBreachLogFromSupabase() {
   const supabase = getSupabaseClient();
+  const localData = readLocalList('breach_log_data');
+  state.breachLog = localData;
+  renderBreachLog(localData);
+
   if (!supabase || !isSupabaseConfigured()) return;
-  
+
   let query = supabase.from('breach_log').select('*');
-  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
-  const orgId = currentCompany ? currentCompany.id : state.user?.id;
-  
+  const orgId = getCurrentOrgId();
+
   if (orgId) query = query.eq('org_id', orgId);
-  
+
   const { data, error } = await query
     .order('created_at', { ascending: false });
-  
+
   if (error) {
     console.error('Failed to load breach log:', error);
     return;
   }
-  
+
+  state.breachLog = data || [];
   renderBreachLog(data);
 }
 
@@ -2107,7 +2325,7 @@ function renderBreachLog(breaches) {
   const totalCount = document.getElementById('breach-total-count');
   const pendingCount = document.getElementById('breach-pending-count');
   const resolvedCount = document.getElementById('breach-resolved-count');
-  
+
   if (totalCount) totalCount.textContent = list.length;
   if (pendingCount) pendingCount.textContent = list.filter(b => b.resolution_status === 'Pending' || b.resolution_status === 'Under Investigation').length;
   if (resolvedCount) resolvedCount.textContent = list.filter(b => b.resolution_status === 'Resolved').length;
@@ -2154,6 +2372,86 @@ function renderBreachLog(breaches) {
   </table>`;
 }
 
+function resetBreachForm() {
+  const values = {
+    'breach-index': '-1',
+    'breach-type': '',
+    'breach-description': '',
+    'breach-affected-count': '',
+    'breach-incident-date': '',
+    'breach-status': 'Pending'
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
+  const title = document.getElementById('breach-modal-title');
+  if (title) title.textContent = 'Record breach';
+  const btn = document.getElementById('breach-save-btn');
+  if (btn) btn.textContent = 'Save breach';
+}
+
+function editBreach(index) {
+  const breach = state.breachLog?.[index];
+  if (!breach) return;
+  const values = {
+    'breach-index': String(index),
+    'breach-type': breach.breach_type || '',
+    'breach-description': breach.description || '',
+    'breach-affected-count': breach.affected_count || '',
+    'breach-incident-date': breach.incident_date || '',
+    'breach-status': breach.resolution_status || 'Pending'
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
+  const title = document.getElementById('breach-modal-title');
+  if (title) title.textContent = 'Edit breach';
+  const btn = document.getElementById('breach-save-btn');
+  if (btn) btn.textContent = 'Update breach';
+  openModal('modal-breach');
+}
+
+async function saveBreach() {
+  const index = parseInt(document.getElementById('breach-index')?.value || '-1', 10);
+  const breachData = {
+    org_id: getCurrentOrgId(),
+    breach_type: document.getElementById('breach-type')?.value.trim() || '',
+    description: document.getElementById('breach-description')?.value.trim() || '',
+    affected_count: Number(document.getElementById('breach-affected-count')?.value || 0),
+    incident_date: document.getElementById('breach-incident-date')?.value || new Date().toISOString().slice(0, 10),
+    resolution_status: document.getElementById('breach-status')?.value || 'Pending',
+    created_at: new Date().toISOString()
+  };
+
+  if (!breachData.breach_type || !breachData.description) {
+    showToast('Breach type and description are required', 'error');
+    return;
+  }
+
+  state.breachLog = state.breachLog || [];
+  if (index > -1) {
+    state.breachLog[index] = { ...state.breachLog[index], ...breachData };
+  } else {
+    state.breachLog.unshift({ ...breachData, id: 'local-' + Date.now() });
+  }
+
+  saveLocalList('breach_log_data', state.breachLog);
+  renderBreachLog(state.breachLog);
+  closeModal('modal-breach');
+  showToast('Breach saved locally', 'success');
+}
+
+function deleteBreach(index) {
+  if (!confirm('Delete this breach record?')) return;
+  state.breachLog = state.breachLog || [];
+  state.breachLog.splice(index, 1);
+  saveLocalList('breach_log_data', state.breachLog);
+  renderBreachLog(state.breachLog);
+  showToast('Breach deleted', 'success');
+}
+
 async function saveDPIA() {
   const name = document.getElementById('dpia-name').value;
   const description = document.getElementById('dpia-description').value;
@@ -2178,6 +2476,7 @@ async function saveDPIA() {
   const orgId = currentCompany ? currentCompany.id : state.user?.id;
 
   const dpiaData = {
+    id: 'local-' + Date.now(),
     org_id: orgId,
     activity_name: name,
     description: description,
@@ -2185,26 +2484,33 @@ async function saveDPIA() {
     is_necessary: true,
     risk_level: sensitive ? 'High' : monitoring ? 'Medium' : 'Low',
     mitigation_measures: mitigation,
-    status: 'Draft'
+    status: 'Draft',
+    created_at: new Date().toISOString()
   };
 
   JARVIS_LOG.submit('DPIA', 'Insert', { dpiaData });
 
+  state.dpiaItems = readLocalList('dpia_data');
+  state.dpiaItems.unshift(dpiaData);
+  saveLocalList('dpia_data', state.dpiaItems);
+  renderDPIA(state.dpiaItems);
+
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured()) {
-    const { error } = await supabase.from('dpia_assessments').insert([dpiaData]);
+    const { id, ...dbDpiaData } = dpiaData;
+    const { error } = await supabase.from('dpia_assessments').insert([dbDpiaData]);
     if (error) {
       JARVIS_LOG.error('DPIA', 'Insert', error);
       console.error('Save DPIA error:', error);
-      showToast('Error saving DPIA', 'error');
-      return;
+      showToast('DPIA saved locally; Supabase save failed', 'warning');
+    } else {
+      JARVIS_LOG.success('DPIA', 'Insert', { activity_name: name });
     }
-    JARVIS_LOG.success('DPIA', 'Insert', { activity_name: name });
   }
 
   showSuccess('DPIA Assessment saved');
   closeModal('modal-dpia');
-  
+
   // Clear form
   document.getElementById('dpia-name').value = '';
   document.getElementById('dpia-description').value = '';
@@ -2218,23 +2524,28 @@ async function saveDPIA() {
 
 async function loadDPIAFromSupabase() {
   const supabase = getSupabaseClient();
+  const localData = readLocalList('dpia_data');
+  state.dpiaItems = localData;
+  renderDPIA(localData);
+
   if (!supabase || !isSupabaseConfigured()) return;
-  
+
   console.log('[JARVIS] Fetching DPIAs...');
   try {
     const { data, error } = await supabase
       .from('dpia_assessments')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     if (error) {
       console.error('[JARVIS] DPIA Fetch Error:', error.message);
       renderDPIA([]);
       return;
     }
-    
+
     if (data) {
       console.log(`[JARVIS] Fetching DPIAs... Success: ${data.length} records retrieved.`);
+      state.dpiaItems = data;
       renderDPIA(data);
     }
   } catch (err) {
@@ -2258,8 +2569,8 @@ function renderDPIA(dpiaItems) {
   }
 
   const q = (document.getElementById('dpia-search')?.value || '').toLowerCase();
-  const filtered = q ? list.filter(item => 
-    (item.activity_name||'').toLowerCase().includes(q) || 
+  const filtered = q ? list.filter(item =>
+    (item.activity_name||'').toLowerCase().includes(q) ||
     (item.description||'').toLowerCase().includes(q)
   ) : list;
 
@@ -2289,25 +2600,44 @@ function renderDPIA(dpiaItems) {
     </tr>`).join('')}</tbody></table></div>`;
 }
 
+function viewDPIADetails(id) {
+  const item = (state.dpiaItems || []).find(d => String(d.id) === String(id));
+  if (!item) {
+    showToast('DPIA details not found', 'warning');
+    return;
+  }
+  alert([
+    `Activity: ${item.activity_name || '-'}`,
+    `Risk: ${item.risk_level || '-'}`,
+    `Description: ${item.description || '-'}`,
+    `Mitigation: ${item.mitigation_measures || '-'}`
+  ].join('\n'));
+}
+
 async function loadCrossBorderFromSupabase() {
   const supabase = getSupabaseClient();
+  const localData = readLocalList('cross_border_data');
+  state.crossBorderTransfers = localData;
+  renderCrossBorder(localData);
+
   if (!supabase || !isSupabaseConfigured()) return;
-  
+
   console.log('[JARVIS] Fetching Cross-Border Transfers...');
   try {
     const { data, error } = await supabase
       .from('cross_border_transfers')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     if (error) {
       console.error('[JARVIS] Cross-Border Fetch Error:', error.message);
       renderCrossBorder([]);
       return;
     }
-    
+
     if (data) {
       console.log(`[JARVIS] Fetching Cross-Border... Success: ${data.length} records retrieved.`);
+      state.crossBorderTransfers = data;
       renderCrossBorder(data);
     }
   } catch (err) {
@@ -2321,6 +2651,13 @@ function renderCrossBorder(transfers) {
   if (!body) return;
   const list = transfers || [];
 
+  const totalCount = document.getElementById('crossborder-total-count');
+  const countryCount = document.getElementById('crossborder-countries-count');
+  if (totalCount) totalCount.textContent = list.length;
+  if (countryCount) {
+    countryCount.textContent = new Set(list.map(t => t.destination_country).filter(Boolean)).size;
+  }
+
   const summaryEl = document.getElementById('crossborder-summary');
   if (summaryEl) {
     summaryEl.innerHTML = `
@@ -2329,8 +2666,8 @@ function renderCrossBorder(transfers) {
   }
 
   const q = (document.getElementById('crossborder-search')?.value || '').toLowerCase();
-  const filtered = q ? list.filter(t => 
-    (t.destination_country||'').toLowerCase().includes(q) || 
+  const filtered = q ? list.filter(t =>
+    (t.destination_country||'').toLowerCase().includes(q) ||
     (t.recipient_name||'').toLowerCase().includes(q)
   ) : list;
 
@@ -2357,7 +2694,78 @@ function renderCrossBorder(transfers) {
       <td class="td-muted">${t.data_categories || '—'}</td>
       <td><span class="status-badge ${statusClass[t.status] || 'status-inactive'}">${t.status || '—'}</span></td>
       <td><button class="btn-edit" onclick="editCrossBorder(${i})">Edit</button></td>
-    </tr>`).join('')}</tbody></table></div>`;
+	    </tr>`).join('')}</tbody></table></div>`;
+}
+
+function resetCrossBorderForm() {
+  const values = {
+    'crossborder-index': '-1',
+    'crossborder-country': '',
+    'crossborder-recipient': '',
+    'crossborder-data': '',
+    'crossborder-safeguards': '',
+    'crossborder-status': 'Active'
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
+  const title = document.getElementById('crossborder-modal-title');
+  if (title) title.textContent = 'Log transfer';
+  const btn = document.getElementById('crossborder-save-btn');
+  if (btn) btn.textContent = 'Save transfer';
+}
+
+function editCrossBorder(index) {
+  const transfer = state.crossBorderTransfers?.[index];
+  if (!transfer) return;
+  const values = {
+    'crossborder-index': String(index),
+    'crossborder-country': transfer.destination_country || '',
+    'crossborder-recipient': transfer.recipient_name || '',
+    'crossborder-data': transfer.data_categories || '',
+    'crossborder-safeguards': transfer.safeguards || '',
+    'crossborder-status': transfer.status || 'Active'
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
+  const title = document.getElementById('crossborder-modal-title');
+  if (title) title.textContent = 'Edit transfer';
+  const btn = document.getElementById('crossborder-save-btn');
+  if (btn) btn.textContent = 'Update transfer';
+  openModal('modal-crossborder');
+}
+
+async function saveCrossBorder() {
+  const index = parseInt(document.getElementById('crossborder-index')?.value || '-1', 10);
+  const transferData = {
+    org_id: getCurrentOrgId(),
+    destination_country: document.getElementById('crossborder-country')?.value.trim() || '',
+    recipient_name: document.getElementById('crossborder-recipient')?.value.trim() || '',
+    data_categories: document.getElementById('crossborder-data')?.value.trim() || '',
+    safeguards: document.getElementById('crossborder-safeguards')?.value.trim() || '',
+    status: document.getElementById('crossborder-status')?.value || 'Active',
+    created_at: new Date().toISOString()
+  };
+
+  if (!transferData.destination_country || !transferData.recipient_name) {
+    showToast('Destination country and recipient are required', 'error');
+    return;
+  }
+
+  state.crossBorderTransfers = state.crossBorderTransfers || [];
+  if (index > -1) {
+    state.crossBorderTransfers[index] = { ...state.crossBorderTransfers[index], ...transferData };
+  } else {
+    state.crossBorderTransfers.unshift({ ...transferData, id: 'local-' + Date.now() });
+  }
+
+  saveLocalList('cross_border_data', state.crossBorderTransfers);
+  renderCrossBorder(state.crossBorderTransfers);
+  closeModal('modal-crossborder');
+  showToast('Transfer saved locally', 'success');
 }
 
 // JARVIS_LOG consolidated at top of file
@@ -2365,41 +2773,45 @@ function renderCrossBorder(transfers) {
 async function loadAlertsFromSupabase() {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
-  
+
   let query = supabase.from('alerts').select('*');
   if (state.user?.id) query = query.eq('org_id', state.user.id);
   if (state.user?.company) query = query.eq('company_id', state.user.company);
 
   const { data, error } = await query
     .order('created_at', { ascending: false });
-  
+
   if (error) {
     console.error('Failed to load alerts:', error);
     return;
   }
-  
+
   state.alerts = data;
   renderAlerts();
 }
 
 async function loadCasesFromSupabase() {
   const supabase = getSupabaseClient();
+  const localData = readLocalList('cases_data');
+  state.cases = localData;
+  renderCases(localData);
+
   if (!supabase || !isSupabaseConfigured()) return;
-  
+
   let query = supabase.from('cases').select('*');
-  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
-  const orgId = currentCompany ? currentCompany.id : state.user?.id;
-  
+  const orgId = getCurrentOrgId();
+
   if (orgId) query = query.eq('org_id', orgId);
 
   const { data, error } = await query
     .order('created_at', { ascending: false });
-  
+
   if (error) {
     console.error('Failed to load cases:', error);
     return;
   }
-  
+
+  state.cases = data || [];
   renderCases(data);
 }
 
@@ -2421,8 +2833,8 @@ function renderCases(cases) {
 
   // Search
   const q = (document.getElementById('cases-search')?.value || '').toLowerCase();
-  const filtered = q ? list.filter(c => 
-    (c.case_number||'').toLowerCase().includes(q) || 
+  const filtered = q ? list.filter(c =>
+    (c.case_number||'').toLowerCase().includes(q) ||
     (c.description||'').toLowerCase().includes(q)
   ) : list;
 
@@ -2442,7 +2854,46 @@ function renderCases(cases) {
       <td class="td-muted">${c.assigned_to || '—'}</td>
       <td><span class="status-badge ${priorityClass[c.priority] || 'status-inactive'}">${c.priority}</span></td>
       <td><span class="status-badge status-inactive">${c.status}</span></td>
-    </tr>`).join('')}</tbody></table></div>`;
+	    </tr>`).join('')}</tbody></table></div>`;
+}
+
+function resetCaseForm() {
+  const values = {
+    'case-type': '',
+    'case-description': '',
+    'case-assigned': '',
+    'case-priority': 'Medium',
+    'case-status': 'Open'
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
+}
+
+async function saveCase() {
+  const caseData = {
+    org_id: getCurrentOrgId(),
+    case_number: `CASE-${new Date().getFullYear()}-${String((state.cases?.length || 0) + 1).padStart(4, '0')}`,
+    case_type: document.getElementById('case-type')?.value.trim() || '',
+    description: document.getElementById('case-description')?.value.trim() || '',
+    assigned_to: document.getElementById('case-assigned')?.value.trim() || '',
+    priority: document.getElementById('case-priority')?.value || 'Medium',
+    status: document.getElementById('case-status')?.value || 'Open',
+    created_at: new Date().toISOString()
+  };
+
+  if (!caseData.case_type || !caseData.description) {
+    showToast('Case type and description are required', 'error');
+    return;
+  }
+
+  state.cases = state.cases || [];
+  state.cases.unshift({ ...caseData, id: 'local-' + Date.now() });
+  saveLocalList('cases_data', state.cases);
+  renderCases(state.cases);
+  closeModal('modal-case');
+  showToast('Case created locally', 'success');
 }
 
 /* ───────────────────────────────────────────────
@@ -2451,16 +2902,16 @@ function renderCases(cases) {
 function renderConsent() {
   const body = document.getElementById('consent-body');
   body.innerHTML = '';
-  
+
   const icons = ['📧', '👥', '📊'];
-  
+
   CONSENT_DATA.forEach((item, index) => {
     const div = document.createElement('div');
     div.className = 'consent-item';
-    
+
     const iconColors = ['#e3f2fd', '#f3e5f5', '#e8f5e9'];
     const iconBg = iconColors[index % iconColors.length];
-    
+
     div.innerHTML = `
       <div class="consent-header-row">
         <div class="consent-icon" style="background:${iconBg}">${icons[index % icons.length]}</div>
@@ -2495,6 +2946,7 @@ function renderConsent() {
     body.appendChild(div);
   });
   updateConsentStats();
+  renderOptOutLog();
 }
 
 function updateConsentToggle(categoryIndex, toggleIndex, checked) {
@@ -2518,7 +2970,7 @@ function renderRetention() {
   const body = document.getElementById('retention-body');
   if (!body) return;
   body.innerHTML = '';
-  
+
   const html = `
     <div class="data-table-wrap">
       <table class="styled-table">
@@ -2572,12 +3024,12 @@ async function jarvisDPODiagnostics() {
   console.log('Supabase client:', !!supabase);
   console.log('User ID:', state.user?.id);
   console.log('User Email:', state.user?.email);
-  
+
   if (!supabase || !isSupabaseConfigured()) {
     console.log('Result: Using localStorage fallback');
     return;
   }
-  
+
   try {
     const { data, error } = await supabase.from('dpo').select('*').limit(5);
     if (error) {
@@ -2596,226 +3048,6 @@ async function jarvisDPODiagnostics() {
   }
 }
 
-async function loadDPOFromSupabase() {
-  const supabase = getSupabaseClient();
-  const timestamp = new Date().toISOString();
-  const userId = state.user?.id || '00000000-0000-0000-0000-000000000001';
-  
-  console.table({
-    timestamp,
-    operation: 'LOAD_DPO',
-    table: 'dpo',
-    user_id: userId,
-    supabase_configured: isSupabaseConfigured()
-  });
-  
-  if (!supabase || !isSupabaseConfigured()) {
-    console.table({
-      timestamp,
-      operation: 'LOAD_LOCAL',
-      table: 'dpo',
-      supabase_response: 'USING_LOCALSTORAGE'
-    });
-    const savedDpo = localStorage.getItem('datarex_dpo');
-    if (savedDpo) {
-      state.dpo = JSON.parse(savedDpo);
-      state.dpoHistory = [];
-    } else {
-      state.dpo = null;
-      state.dpoHistory = [];
-    }
-    renderDPO();
-    return;
-  }
-  
-  if (!userId) {
-    state.dpo = null;
-    state.dpoHistory = [];
-    renderDPO();
-    return;
-  }
-  
-  console.log('[JARVIS] Fetching from dpo...');
-  try {
-    const { data, error } = await supabase
-      .from('dpo')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-    
-    if (error) {
-      console.error('JARVIS [DPO] Load Error:', error);
-      showToast('Database error: ' + error.message, 'error');
-    }
-    
-    if (data) {
-      console.table({
-        timestamp,
-        operation: 'LOAD_SUCCESS',
-        table: 'dpo',
-        dpo_name: data.name,
-        dpo_email: data.email,
-        supabase_response: 'FOUND'
-      });
-      state.dpo = {
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        nationality: data.nationality,
-        appointment_date: data.appointment_date,
-        appointment_letter_url: data.appointment_letter_url,
-        training_status: data.training_status || 'pending',
-        updated_at: data.updated_at
-      };
-      state.dpoHistory = [];
-      localStorage.setItem('datarex_dpo', JSON.stringify(state.dpo));
-    } else {
-      console.table({
-        timestamp,
-        operation: 'LOAD_EMPTY',
-        table: 'dpo',
-        supabase_response: 'NO_DATA'
-      });
-      state.dpo = null;
-      state.dpoHistory = [];
-    }
-  } catch (e) {
-    console.error('JARVIS [DPO] Unexpected Error:', e);
-    console.table({
-      timestamp,
-      operation: 'LOAD_EXCEPTION',
-      table: 'dpo',
-      supabase_response: 'EXCEPTION',
-      error_message: e.message
-    });
-    state.dpo = null;
-    state.dpoHistory = [];
-  }
-  
-  renderDPO();
-}
-
-async function saveDPOToSupabase() {
-  const supabase = getSupabaseClient();
-  const timestamp = new Date().toISOString();
-  
-  JARVIS_LOG.submit('DPO', 'saveDPOToSupabase', { dpoData: state.dpo, timestamp });
-  
-  if (!supabase || !isSupabaseConfigured()) {
-    console.table({
-      timestamp,
-      operation: 'SAVE',
-      table: 'dpo',
-      supabase_response: 'NOT_CONFIGURED',
-      error_message: 'Supabase not configured'
-    });
-    JARVIS_LOG.warn('DPO', 'Supabase not configured, using localStorage only');
-    showToast('DPO saved locally', 'success');
-    return;
-  }
-  if (!state.dpo) return;
-  
-  const userId = state.user?.id || '00000000-0000-0000-0000-000000000001';
-  
-  try {
-    const { data: existing, error: fetchError } = await supabase
-      .from('dpo')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle();
-    
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.table({
-        timestamp,
-        operation: 'FETCH_ERROR',
-        table: 'dpo',
-        supabase_response: `ERROR: ${fetchError.code}`,
-        error_message: fetchError.message
-      });
-      JARVIS_LOG.error('DPO', 'Fetch existing DPO', fetchError);
-    }
-    
-    if (existing?.id) {
-      const { data: updateData, error } = await supabase
-        .from('dpo')
-        .update({
-          name: state.dpo.name,
-          email: state.dpo.email,
-          phone: state.dpo.phone,
-          nationality: state.dpo.nationality,
-          appointment_date: state.dpo.appointment_date,
-          appointment_letter_url: state.dpo.appointment_letter_url,
-          training_status: state.dpo.training_status,
-          updated_at: timestamp
-        })
-        .eq('id', existing.id)
-        .select()
-        .single();
-      
-      console.table({
-        timestamp,
-        operation: error ? 'UPDATE_FAILED' : 'UPDATE_SUCCESS',
-        table: 'dpo',
-        record_id: existing.id,
-        form_data: JSON.stringify({ name: state.dpo.name, email: state.dpo.email }),
-        supabase_response: error ? `ERROR: ${error.code}` : 'SUCCESS',
-        error_message: error?.message || 'N/A'
-      });
-      
-      if (error) {
-        JARVIS_LOG.error('DPO', 'Update DPO', error);
-        showToast('Cloud update failed: ' + error.message, 'error');
-      } else {
-        JARVIS_LOG.success('DPO', 'Update DPO', { id: existing.id });
-        showToast('DPO updated in cloud!', 'success');
-      }
-    } else {
-      const { data: insertData, error } = await supabase
-        .from('dpo')
-        .insert([{
-          user_id: userId,
-          name: state.dpo.name,
-          email: state.dpo.email,
-          phone: state.dpo.phone,
-          nationality: state.dpo.nationality,
-          appointment_date: state.dpo.appointment_date,
-          appointment_letter_url: state.dpo.appointment_letter_url,
-          training_status: state.dpo.training_status || 'pending',
-          company_id: state.user?.company || ''
-        }])
-        .select()
-        .single();
-      
-      console.table({
-        timestamp,
-        operation: error ? 'INSERT_FAILED' : 'INSERT_SUCCESS',
-        table: 'dpo',
-        user_id: userId,
-        form_data: JSON.stringify({ name: state.dpo.name, email: state.dpo.email }),
-        supabase_response: error ? `ERROR: ${error.code}` : 'SUCCESS',
-        error_message: error?.message || 'N/A'
-      });
-      
-      if (error) {
-        JARVIS_LOG.error('DPO', 'Insert DPO', error);
-        showToast('Cloud save failed: ' + error.message, 'error');
-      } else {
-        JARVIS_LOG.success('DPO', 'Insert DPO', { id: insertData?.id });
-        showToast('DPO saved to cloud!', 'success');
-      }
-    }
-  } catch (e) {
-    console.table({
-      timestamp,
-      operation: 'SAVE_EXCEPTION',
-      table: 'dpo',
-      supabase_response: 'EXCEPTION',
-      error_message: e.message
-    });
-    JARVIS_LOG.error('DPO', 'Save DPO', e);
-    showToast('Save failed: ' + e.message, 'error');
-  }
-}
 
 /* ───────────────────────────────────────────────
    DOCUMENTS
@@ -2861,8 +3093,8 @@ async function renderDocuments() {
 
   // Search
   const q = (document.getElementById('doc-search')?.value || '').toLowerCase();
-  const filtered = q ? docs.filter(d => 
-    (d.name||'').toLowerCase().includes(q) || 
+  const filtered = q ? docs.filter(d =>
+    (d.name||'').toLowerCase().includes(q) ||
     (d.category||'').toLowerCase().includes(q)
   ) : docs;
 
@@ -2945,7 +3177,7 @@ async function handleFileUpload() {
   const fileInput = document.getElementById('file-input');
   const categorySelect = document.getElementById('doc-category');
   const files = fileInput.files;
-  
+
   if (!files.length) {
     showToast('Please select a file to upload', 'warning');
     return;
@@ -3035,12 +3267,12 @@ function addNewRole() {
     showToast('Please enter a role name', 'error');
     return;
   }
-  
+
   if (!state.customRoles) state.customRoles = [];
   if (!state.customRoles.includes(name)) {
     state.customRoles.push(name);
     saveState();
-    
+
     const select = document.getElementById('nav-role-select');
     if (select) {
       const opt = document.createElement('option');
@@ -3049,10 +3281,10 @@ function addNewRole() {
       select.appendChild(opt);
       select.value = name;
     }
-    
+
     showSuccess(`Role "${name}" created!`);
   }
-  
+
   closeModal('modal-add-role');
   loadNavPermissions();
 }
@@ -3060,7 +3292,7 @@ function addNewRole() {
 function loadNavPermissionsFromDB(role) {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured() || !state.user.id) return Promise.resolve();
-  
+
   return supabase
     .from('nav_permissions')
     .select('nav_item, is_visible')
@@ -3080,17 +3312,17 @@ function loadNavPermissionsFromDB(role) {
 function loadNavPermissions() {
   const select = document.getElementById('nav-role-select');
   const currentRole = select?.value || 'Accountadmin';
-  
+
   const matrix = document.getElementById('nav-permissions-matrix');
   if (!matrix) return;
-  
+
   // Try to load from DB first
   if (state.user.id && state.navPermissions && !state.navPermissions[currentRole]) {
     loadNavPermissionsFromDB(currentRole);
   }
-  
+
   const savedConfig = state.navPermissions?.[currentRole] || {};
-  
+
   const sections = [...new Set(NAV_ITEMS.map(i => i.section))];
   const sectionIcons = {
     'Overview': '📊',
@@ -3106,18 +3338,18 @@ function loadNavPermissions() {
     'Records': 'blue',
     'Monitoring': 'red'
   };
-  
+
   let html = '';
-  
+
   sections.forEach(section => {
     const items = NAV_ITEMS.filter(i => i.section === section);
     const enabledCount = items.filter(i => savedConfig[i.id] !== false).length;
-    
+
     html += `
       <div class="perm-section">
         <div class="perm-section-header">${sectionIcons[section] || '📁'} ${section} <span style="font-weight:400;margin-left:8px;">(${enabledCount}/${items.length} enabled)</span></div>
         <div class="perm-grid">`;
-    
+
     items.forEach(item => {
       const isVisible = savedConfig[item.id] !== false;
       const color = sectionColors[section] || 'blue';
@@ -3133,30 +3365,30 @@ function loadNavPermissions() {
           </label>
         </div>`;
     });
-    
+
     html += '</div></div>';
   });
-  
+
   matrix.innerHTML = html;
 }
 
 async function saveNavConfig() {
   const select = document.getElementById('nav-role-select');
   const currentRole = select?.value || 'Accountadmin';
-  
+
   const btn = event.target;
   btn.disabled = true;
   btn.innerHTML = '⏳ Saving...';
-  
+
   const config = {};
   document.querySelectorAll('.nav-perm-toggle').forEach(toggle => {
     config[toggle.dataset.nav] = toggle.checked;
   });
-  
+
   if (!state.navPermissions) state.navPermissions = {};
   state.navPermissions[currentRole] = config;
   saveState();
-  
+
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured() && state.user.id) {
     try {
@@ -3166,11 +3398,11 @@ async function saveNavConfig() {
         nav_item: item.id,
         is_visible: config[item.id] !== false
       }));
-      
+
       const { error } = await supabase
         .from('nav_permissions')
         .upsert(records, { onConflict: 'org_id,access_level,nav_item' });
-      
+
       if (error) {
         console.error('Failed to save permissions:', error);
       }
@@ -3178,7 +3410,7 @@ async function saveNavConfig() {
       console.error('Save error:', err);
     }
   }
-  
+
   btn.disabled = false;
   btn.innerHTML = '💾 Save Permissions';
   showSuccess('Permissions saved to database!');
@@ -3187,7 +3419,7 @@ async function saveNavConfig() {
 function applyNavPermissions() {
   const userLevel = state.currentUserLevel || 'Accountadmin';
   const savedConfig = state.navPermissions?.[userLevel];
-  
+
   NAV_ITEMS.forEach(item => {
     const navEl = document.getElementById('nav-' + item.id);
     if (navEl) {
@@ -3230,13 +3462,14 @@ async function savePerson() {
     return;
   }
 
+  const isChecked = (id) => document.getElementById(id)?.checked || false;
   const permissions = {
-    Dashboard: document.getElementById('perm-dashboard').checked,
-    Checklist: document.getElementById('perm-checklist').checked,
-    DataRegister: document.getElementById('perm-dataregister').checked,
-    DataSources: document.getElementById('perm-datasources').checked,
-    Consent: document.getElementById('perm-consent').checked,
-    Retention: document.getElementById('perm-retention').checked
+    Dashboard: isChecked('perm-dashboard'),
+    Checklist: isChecked('perm-checklist'),
+    DataRegister: isChecked('perm-dataregister'),
+    DataSources: isChecked('perm-datasources'),
+    Consent: isChecked('perm-consent'),
+    Retention: isChecked('perm-retention')
   };
 
   const supabase = getSupabaseClient();
@@ -3260,10 +3493,10 @@ async function savePerson() {
       showToast('Team member added!', 'success');
     }
   } else {
-    state.team.push({ name, role: role || 'Team member', level: access, permissions });
+    state.team.push({ id: 'local-' + Date.now(), name, role: role || 'Team member', level: access, permissions });
     showToast('Team member added', 'success');
   }
-  
+
   saveState();
   renderTeam();
   closeModal('modal-person');
@@ -3275,7 +3508,7 @@ async function renderTeam() {
   const body = document.getElementById('access-body');
   if (!body) return;
   body.innerHTML = '';
-  
+
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured() && state.user.id) {
     const { data, error } = await supabase
@@ -3283,7 +3516,7 @@ async function renderTeam() {
       .select('*')
       .eq('org_id', state.user.id)
       .order('created_at', { ascending: false });
-    
+
     if (!error && data) {
       state.team = data.map(t => ({
         id: t.id,
@@ -3294,11 +3527,13 @@ async function renderTeam() {
       }));
     }
   }
-  
+
+  state.team = (state.team || []).map((t, i) => ({ ...t, id: t.id || `local-team-${i}` }));
+
   state.team.forEach(t => {
     const div = document.createElement('div');
     div.className = 'access-item';
-    
+
     let permsHtml = '';
     if (t.permissions) {
       const activePerms = Object.entries(t.permissions).filter(([k, v]) => v).map(([k, v]) => k);
@@ -3319,10 +3554,29 @@ async function renderTeam() {
       <button class="btn btn-ghost" style="padding:8px 12px;font-size:13px;" onclick="removeTeamMember('${t.id}')">✕ Remove</button>`;
     body.appendChild(div);
   });
-  
+
   if (state.team.length === 0) {
     body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><div style="font-size:48px;margin-bottom:12px;">👥</div><div style="font-size:14px;font-weight:500;">No team members yet</div><div style="font-size:13px;margin-top:4px;">Add your first team member to get started.</div></div>';
   }
+}
+
+async function removeTeamMember(id) {
+  if (!confirm('Remove this team member?')) return;
+
+  const supabase = getSupabaseClient();
+  if (supabase && isSupabaseConfigured() && id && !String(id).startsWith('local-')) {
+    const { error } = await supabase.from('team_members').delete().eq('id', id);
+    if (error) {
+      console.error('Delete team member failed:', error);
+      showToast('Failed to remove team member', 'error');
+      return;
+    }
+  }
+
+  state.team = (state.team || []).filter(t => String(t.id) !== String(id));
+  saveState();
+  renderTeam();
+  showToast('Team member removed', 'success');
 }
 
 /* ───────────────────────────────────────────────
@@ -3331,7 +3585,7 @@ async function renderTeam() {
 function renderAlerts() {
   const body = document.getElementById('alerts-body');
   if (!body) return;
-  
+
   const badge = document.getElementById('alert-badge');
   if (badge) {
     const count = state.alerts.length;
@@ -3342,7 +3596,7 @@ function renderAlerts() {
       badge.style.display = 'none';
     }
   }
-  
+
   if (state.alerts.length === 0) {
     body.innerHTML = `
       <div class="empty-state" style="padding:60px 20px;">
@@ -3352,7 +3606,7 @@ function renderAlerts() {
       </div>`;
     return;
   }
-  
+
   body.innerHTML = state.alerts.map(alert => `
     <div class="alert-item ${alert.type}">
       <div class="alert-icon">${alert.type === 'error' ? '🔴' : alert.type === 'warning' ? '⚠️' : 'ℹ️'}</div>
@@ -3396,7 +3650,7 @@ function renderAudit() {
   const risk = pct >= 80 ? 'Low' : pct >= 50 ? 'Medium' : 'High';
   const riskClass = pct >= 80 ? 'low' : pct >= 50 ? 'medium' : 'high';
   const riskColor = pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
-  
+
   const today = new Date();
   const dateStr = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -3441,7 +3695,7 @@ function renderAudit() {
     const doneCnt = section.items.filter(i => state.checks[i.id]).length;
     const sectionPct = Math.round((doneCnt / section.items.length) * 100);
     const sectionColor = sectionPct >= 80 ? '#22c55e' : sectionPct >= 50 ? '#f59e0b' : '#ef4444';
-    
+
     html += `
       <div class="audit-section">
         <div class="audit-section-header">
@@ -3452,7 +3706,7 @@ function renderAudit() {
           </div>
         </div>
         <ul class="audit-checklist">`;
-    
+
     section.items.forEach(item => {
       const isDone = state.checks[item.id];
       html += `
@@ -3462,7 +3716,7 @@ function renderAudit() {
           ${item.hint ? `<span class="check-hint">${item.hint}</span>` : ''}
         </li>`;
     });
-    
+
     html += `</ul></div>`;
   });
 
@@ -3496,7 +3750,17 @@ document.addEventListener('keydown', e => {
     if (active && active.id === 'screen-login') doLogin();
   }
   if (e.key === 'Escape') {
-    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+    document.querySelectorAll('.modal-overlay.open').forEach(m => {
+      if (m.id) closeModal(m.id);
+      else m.classList.remove('open');
+    });
+  }
+});
+
+document.addEventListener('click', e => {
+  if (e.target.classList?.contains('modal-overlay')) {
+    const modalId = e.target.id;
+    if (modalId) closeModal(modalId);
   }
 });
 
@@ -3553,16 +3817,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     updateDebug('Loading state...', 10);
     loadState();
-    
+
     updateDebug('Loading core components...', 25);
     await loadAllPages();
-    
+
     updateDebug('Initializing Auth...', 60);
     initAuthListener();
-    
+
     updateDebug('Checking credentials...', 80);
-    checkAuth();
-    
+    if (typeof checkAuth === 'function') checkAuth();
+
     updateDebug('System Ready.', 100);
     setTimeout(() => {
       document.getElementById('jarvis-status')?.remove();
@@ -3576,7 +3840,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 1. Restore Hash Routing Logic
   window.addEventListener('hashchange', handleHashRoute);
   window.addEventListener('popstate', handleHashRoute);
-  
+
   if (loadSession()) {
     launchApp();
   } else {
@@ -3631,10 +3895,10 @@ function fillCredentials() {
 async function loadAllSampleData() {
   if (!state.isLoggedIn) { showToast('Please login first', 'error'); return; }
   if (!confirm('Load sample data?')) return;
-  
+
   const companyId = state.user.company;
   showToast('Loading sample data...', 'info');
-  
+
   await seedProcessingActivitiesToSupabase(companyId);
   await seedDataRecordsToSupabase(companyId);
   await seedDataRequestsToSupabase(companyId);
@@ -3646,7 +3910,7 @@ async function loadAllSampleData() {
   await seedAlertsToSupabase(companyId);
   await seedCasesToSupabase(companyId);
   await seedTeamMembersToSupabase(companyId);
-  
+
   showToast('Sample data loaded!', 'success');
 }
 window.loadAllSampleData = loadAllSampleData;

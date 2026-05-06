@@ -205,6 +205,135 @@
   </div>
 </div>
 
+<!-- MODAL: Log Opt-out -->
+<div class="modal-overlay" id="modal-log-optout">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Log marketing opt-out</h3><button class="modal-close" onclick="closeModal('modal-log-optout')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Person name *</label><input class="form-input no-icon" id="optout-name" placeholder="e.g. Tan Boon Hock"></div>
+      <div class="form-group"><label>Email</label><input class="form-input no-icon" id="optout-email" type="email" placeholder="e.g. tan@example.com"></div>
+      <div class="form-group"><label>Channel</label>
+        <select class="form-input no-icon" id="optout-channel">
+          <option value="Email">Email</option>
+          <option value="SMS">SMS</option>
+          <option value="Phone">Phone</option>
+          <option value="WhatsApp">WhatsApp</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Request date</label><input class="form-input no-icon" id="optout-date" type="date"></div>
+      <div class="form-group"><label>Notes</label><textarea class="form-input no-icon" id="optout-notes" rows="3" placeholder="How was the request received?"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-log-optout')">Cancel</button>
+      <button class="btn-save" onclick="saveOptOut()">Save opt-out</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Cross-Border Transfer -->
+<div class="modal-overlay" id="modal-crossborder">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="crossborder-modal-title">Log transfer</h3><button class="modal-close" onclick="closeModal('modal-crossborder')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="crossborder-index" value="-1">
+      <div class="form-group"><label>Destination country *</label><input class="form-input no-icon" id="crossborder-country" placeholder="e.g. Singapore"></div>
+      <div class="form-group"><label>Recipient name *</label><input class="form-input no-icon" id="crossborder-recipient" placeholder="e.g. Regional CRM provider"></div>
+      <div class="form-group"><label>Data categories</label><input class="form-input no-icon" id="crossborder-data" placeholder="e.g. Customer email, phone"></div>
+      <div class="form-group"><label>Safeguards</label><textarea class="form-input no-icon" id="crossborder-safeguards" rows="3" placeholder="e.g. SCCs, DPA, encryption"></textarea></div>
+      <div class="form-group"><label>Status</label>
+        <select class="form-input no-icon" id="crossborder-status">
+          <option value="Active">Active</option>
+          <option value="Pending">Pending</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-crossborder')">Cancel</button>
+      <button class="btn-save" id="crossborder-save-btn" onclick="saveCrossBorder()">Save transfer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Breach -->
+<div class="modal-overlay" id="modal-breach" style="display: none; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999;">
+  <div class="modal" style="background: white; width: 100%; max-width: 540px; max-height: 90vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; margin: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+    <div class="modal-head" style="padding: 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
+      <h3 id="breach-modal-title" style="margin: 0;">Record breach</h3>
+      <button class="modal-close" onclick="closeModal('modal-breach')" style="background:none; border:none; font-size:20px; cursor:pointer; color:#64748b;">✕</button>
+    </div>
+    <div class="modal-body" style="padding: 20px; overflow-y: auto;">
+      <input type="hidden" id="breach-index" value="-1">
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Breach type *</label>
+        <input type="text" id="breach-type" class="form-input" placeholder="e.g. Unauthorized access" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+      </div>
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Description *</label>
+        <textarea id="breach-description" class="form-input" rows="3" placeholder="What happened?" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px; font-family: inherit;"></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Affected people</label>
+        <input type="number" id="breach-affected-count" class="form-input" min="0" placeholder="e.g. 25" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+      </div>
+      <div class="form-row" style="display:flex; gap:12px; margin-bottom:16px;">
+        <div class="form-group" style="flex:1;">
+          <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Incident date</label>
+          <input type="date" id="breach-incident-date" class="form-input" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Status</label>
+          <select id="breach-status" class="form-input" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
+            <option value="Pending">Pending</option>
+            <option value="Under Investigation">Under Investigation</option>
+            <option value="Resolved">Resolved</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="padding: 20px; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end; gap: 12px;">
+      <button class="btn-cancel" onclick="closeModal('modal-breach')" style="padding:10px 20px; border:1px solid #e2e8f0; background:white; border-radius:6px; cursor:pointer;">Cancel</button>
+      <button class="btn-save" id="breach-save-btn" onclick="saveBreach()" style="padding:10px 20px; background:#2563eb; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Save breach</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Case -->
+<div class="modal-overlay" id="modal-case">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Create case</h3><button class="modal-close" onclick="closeModal('modal-case')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Case type *</label><input class="form-input no-icon" id="case-type" placeholder="e.g. Investigation"></div>
+      <div class="form-group"><label>Description *</label><textarea class="form-input no-icon" id="case-description" rows="3" placeholder="What needs to be tracked?"></textarea></div>
+      <div class="form-group"><label>Assigned to</label><input class="form-input no-icon" id="case-assigned" placeholder="e.g. DPO"></div>
+      <div class="form-group"><label>Priority</label>
+        <select class="form-input no-icon" id="case-priority">
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+          <option value="Low">Low</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Status</label>
+        <select class="form-input no-icon" id="case-status">
+          <option value="Open">Open</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Closed">Closed</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-case')">Cancel</button>
+      <button class="btn-save" onclick="saveCase()">Create case</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Vendor -->
 <div class="modal-overlay" id="modal-vendor" style="display: none; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999;">
   <div class="modal-vendor" style="background: white; width: 100%; max-width: 550px; max-height: 90vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; margin: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
@@ -276,6 +405,7 @@
       <button class="modal-close" onclick="closeModal('modal-training')" style="background:none; border:none; font-size:20px; cursor:pointer; color:#64748b;">✕</button>
     </div>
     <div class="modal-body" style="padding: 20px; overflow-y: auto;">
+      <input type="hidden" id="train-index" value="-1">
       <div class="form-group" style="margin-bottom: 16px;">
         <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px;">Employee Name *</label>
         <input type="text" id="train-employee" class="form-input" placeholder="e.g. John Doe" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:6px;">
