@@ -1101,6 +1101,21 @@ async function doLogin() {
       }
     }
 
+    // Check account status (Accountadmin/user only — Superadmin has no account).
+    if (state.role !== 'Superadmin' && state.accountId) {
+      const { data: acct } = await supabase.from('accounts').select('status').eq('id', state.accountId).single();
+      if (acct?.status === 'suspended') {
+        await supabase.auth.signOut();
+        state.user = { name: '', company: '', email: '' };
+        state.role = null;
+        state.accountId = null;
+        showToast('Your account is suspended — contact support', 'error');
+        if (typeof navigateTo === 'function') navigateTo('login');
+        else if (typeof showPage === 'function') showPage('login');
+        return;
+      }
+    }
+
     const loginForm = document.getElementById('login-form');
     const loginFooter = document.getElementById('login-footer');
     const loginSuccess = document.getElementById('login-success');
@@ -1110,7 +1125,16 @@ async function doLogin() {
     if (loginSuccess) loginSuccess.classList.add('show');
 
     console.log('Launching app...');
-    setTimeout(() => launchApp(), 1200);
+    // Route by role after launchApp sets up the UI. launchApp() always navigates to dashboard;
+    // for Superadmin we override that immediately after it runs.
+    setTimeout(() => {
+      launchApp();
+      if (state.role === 'Superadmin') {
+        if (typeof navigateTo === 'function') navigateTo('accounts');
+        else if (typeof showPage === 'function') showPage('accounts');
+      }
+      // Accountadmin / user fall through — launchApp already lands on dashboard.
+    }, 1200);
     console.log('=== LOGIN DEBUG END (SUCCESS) ===');
   } catch (error) {
     btn.classList.remove('loading');
