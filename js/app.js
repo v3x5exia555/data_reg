@@ -239,7 +239,12 @@ function loadState() {
   }
 }
 function saveState() {
-  localStorage.setItem('dataRexState', JSON.stringify(state));
+  // `state.documents` items can carry multi-MB `dataUrl` payloads. The
+  // canonical store for those is `datarex_documents` (see writeLocalDocuments);
+  // keeping them out of `dataRexState` prevents quota errors when there are
+  // several uploads.
+  const { documents: _docs, ...rest } = state;
+  localStorage.setItem('dataRexState', JSON.stringify(rest));
 }
 function switchOrg(company) {
   state.user.company = company;
@@ -3569,12 +3574,21 @@ function readLocalDocuments() {
     const fromState = Array.isArray(savedState.documents) ? savedState.documents : [];
     const merged = [...direct, ...fromState];
     const seen = new Set();
-    return merged.filter(doc => {
+    const deduped = merged.filter(doc => {
       const key = doc.id || doc.storagePath || `${doc.name}-${doc.uploadedAt}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return Boolean(doc.name);
     });
+    // One-shot migration: if `dataRexState.documents` still holds entries
+    // (legacy store from before commit 3b23551), copy them into the canonical
+    // documents-local key so a later saveState() — which strips `documents`
+    // from `dataRexState` to avoid quota issues — can't drop them.
+    if (fromState.length && deduped.length > direct.length) {
+      try { localStorage.setItem(DOCUMENTS_LOCAL_KEY, JSON.stringify(deduped)); }
+      catch (err) { console.error('[JARVIS] Doc migration write failed', err); }
+    }
+    return deduped;
   } catch (err) {
     console.error('[JARVIS] Failed to read local documents', err);
     return [];
@@ -3583,9 +3597,21 @@ function readLocalDocuments() {
 
 function writeLocalDocuments(docs) {
   const safeDocs = (docs || []).filter(doc => doc && doc.name);
-  localStorage.setItem(DOCUMENTS_LOCAL_KEY, JSON.stringify(safeDocs));
-  state.documents = safeDocs;
-  saveState();
+  // Only the documents-local key carries the heavy `dataUrl` payload.
+  // saveState() serialises the entire `state` object into `dataRexState`,
+  // and including base64 file blobs there double-stores them and blows the
+  // localStorage quota (~5–10 MB per origin) on the second small upload.
+  try {
+    localStorage.setItem(DOCUMENTS_LOCAL_KEY, JSON.stringify(safeDocs));
+  } catch (err) {
+    // Quota exhausted — drop dataUrls (metadata only) and retry once so
+    // the doc still appears in the list rather than vanishing entirely.
+    console.error('[JARVIS] documents localStorage quota; saving metadata only', err);
+    const stripped = safeDocs.map(({ dataUrl, ...rest }) => rest);
+    try { localStorage.setItem(DOCUMENTS_LOCAL_KEY, JSON.stringify(stripped)); }
+    catch (err2) { console.error('[JARVIS] metadata write also failed', err2); }
+  }
+  state.documents = safeDocs; // in-memory mirror keeps dataUrls for download
 }
 
 function docMatchesScope(doc) {
@@ -3616,9 +3642,13 @@ function getDocType(fileName = '', mimeType = '') {
   return ext ? ext.toUpperCase() : 'File';
 }
 
+// localStorage is the source of truth for documents on this app — keep the
+// dataUrl for any file that fits. Cap at 8 MB raw (~10.7 MB base64) to leave
+// headroom under the typical 10 MB localStorage quota even with multiple docs.
+const DOC_LOCAL_MAX_BYTES = 8 * 1024 * 1024;
 function fileToDataUrl(file) {
   return new Promise(resolve => {
-    if (!file || file.size > 1500000) {
+    if (!file || file.size > DOC_LOCAL_MAX_BYTES) {
       resolve('');
       return;
     }
@@ -3666,11 +3696,14 @@ async function renderDocuments() {
         uploadStatus: 'Synced'
       }));
       docs = mergeDocuments(docs, localDocs);
-      state.documents = docs;
     } else if (error) {
       JARVIS_LOG.error('Documents', 'Load from Supabase', error);
     }
   }
+
+  // Always mirror the rendered list into state.documents so download/delete
+  // can resolve a doc by id even when Supabase is unreachable.
+  state.documents = docs;
 
   // Summary
   const countEl = document.getElementById('doc-count');
@@ -3736,8 +3769,16 @@ async function downloadDocument(docId) {
   }
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured() && doc.storagePath) {
-    const { data } = supabase.storage.from('documents').getPublicUrl(doc.storagePath);
-    window.open(data.publicUrl + '?download=', '_blank');
+    // Bucket is private (see 20260509000005_documents_storage_bucket.sql),
+    // so getPublicUrl() returns a 400. Use a short-lived signed URL instead.
+    const { data, error } = await supabase.storage
+      .from('documents')
+      .createSignedUrl(doc.storagePath, 60, { download: doc.name || true });
+    if (error || !data?.signedUrl) {
+      showToast('Could not generate download link', 'error');
+      return;
+    }
+    window.open(data.signedUrl, '_blank');
   } else {
     showToast('Only document metadata is available locally for this file', 'info');
   }
@@ -3782,7 +3823,14 @@ async function handleFileUpload() {
   const category = categorySelect.value;
   const uploaderName = state.user?.name || 'Current user';
   const { accountId, userId } = getDocumentScope();
-  let uploadedCount = 0;
+  // Best-effort cloud sync. localStorage is always written. We attempt the
+  // Supabase upload whenever there is a real session; if the user has no
+  // user_profiles row and account_id is missing, the DB insert will throw
+  // (NOT NULL) and the catch block keeps the file as a Local copy.
+  const canTrySync = Boolean(supabase && isSupabaseConfigured() && userId);
+  let syncedCount = 0;
+  let localOnlyCount = 0;
+  const failures = [];
   const nextLocalDocs = readLocalDocuments();
 
   for (const file of files) {
@@ -3806,7 +3854,7 @@ async function handleFileUpload() {
       dataUrl: await fileToDataUrl(file)
     };
 
-    if (supabase && isSupabaseConfigured() && userId) {
+    if (canTrySync) {
       try {
         const { error: uploadError } = await supabase.storage
           .from('documents')
@@ -3823,6 +3871,9 @@ async function handleFileUpload() {
           file_size: file.size,
           storage_path: storagePath
         };
+        // documents.account_id is NOT NULL in the schema, so we only attach
+        // it when we actually have one. Missing account → insert throws,
+        // catch block treats it as a local-only save.
         if (accountId) payload.account_id = accountId;
 
         const { data: inserted, error: dbError } = await supabase
@@ -3831,7 +3882,11 @@ async function handleFileUpload() {
           .select('*')
           .single();
 
-        if (dbError) throw dbError;
+        if (dbError) {
+          // Don't leave an orphan storage object when the metadata insert fails.
+          await supabase.storage.from('documents').remove([storagePath]).catch(() => {});
+          throw dbError;
+        }
 
         localDoc.id = inserted?.id || localDoc.id;
         localDoc.storagePath = inserted?.storage_path || storagePath;
@@ -3840,22 +3895,33 @@ async function handleFileUpload() {
         localDoc.uploadedAt = inserted?.created_at || createdAt;
         localDoc.source = 'supabase';
         localDoc.uploadStatus = 'Synced';
+        syncedCount++;
       } catch (err) {
         console.error('Document upload/save error:', err);
         JARVIS_LOG.error('Documents', 'Upload', err, { file: file.name, accountId });
-        showToast(`Saved locally only: ${file.name}`, 'warning');
+        failures.push({ name: file.name, message: err?.message || 'Unknown error' });
+        localOnlyCount++;
       }
     } else {
-      showToast(`Saved locally: ${file.name}`, 'info');
+      localOnlyCount++;
     }
 
     nextLocalDocs.unshift(localDoc);
-    uploadedCount++;
   }
 
   writeLocalDocuments(nextLocalDocs);
   await renderDocuments();
-  showSuccess(`${uploadedCount} file(s) uploaded!`);
+
+  if (failures.length) {
+    const head = failures[0];
+    const tail = failures.length > 1 ? ` (+${failures.length - 1} more)` : '';
+    showToast(`Cloud sync failed for ${head.name}: ${head.message}${tail}. Saved locally.`, 'error');
+  } else if (syncedCount > 0) {
+    showSuccess(`${syncedCount} file(s) uploaded`);
+  } else {
+    showToast(`${localOnlyCount} file(s) saved locally (no cloud session)`, 'info');
+  }
+
   fileInput.value = '';
   updateFileName(fileInput);
 }
