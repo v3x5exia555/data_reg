@@ -1,13 +1,20 @@
--- Follow-up cleanup for tables missed by 20260507000001:
--- alerts (5 placeholder rows from 20260428000002:179-183)
--- cases  (4 placeholder rows from 20260428000002:206-209)
--- Same root cause: rows seeded with the placeholder org_id are unreachable
--- from the UI because loaders filter by getCurrentOrgId().
+-- Follow-up cleanup for alerts/cases (migration 20260507000001 already
+-- handles these via the table arrays it iterates; this file remains as a
+-- safety net in case 20260507000001 is run on an older snapshot that
+-- skipped them). Idempotent.
 
 DO $$
 DECLARE
-  placeholder UUID := '00000000-0000-0000-0000-000000000001';
+  placeholder TEXT := '00000000-0000-0000-0000-000000000001';
+  tbl         TEXT;
+  tbls        TEXT[] := ARRAY['alerts', 'cases'];
 BEGIN
-  DELETE FROM alerts WHERE org_id = placeholder;
-  DELETE FROM cases  WHERE org_id = placeholder;
+  FOREACH tbl IN ARRAY tbls LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = tbl AND column_name = 'org_id'
+    ) THEN
+      EXECUTE format('DELETE FROM %I WHERE org_id::text = $1', tbl) USING placeholder;
+    END IF;
+  END LOOP;
 END $$;

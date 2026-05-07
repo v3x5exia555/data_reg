@@ -5,33 +5,47 @@
 -- invisible in the UI yet inflated table counts and confused debugging.
 -- Real sample data is now seeded on demand via js/sample_data.js using
 -- the live getCurrentOrgId().
+--
+-- All DELETEs are dispatched via EXECUTE format() because (a) some
+-- tables/columns may not exist on every environment and (b) org_id
+-- column types vary (UUID vs VARCHAR), so we cast to text on both sides.
 
 DO $$
 DECLARE
-  placeholder UUID := '00000000-0000-0000-0000-000000000001';
+  placeholder TEXT := '00000000-0000-0000-0000-000000000001';
+  rec         RECORD;
+  tables_org  TEXT[] := ARRAY[
+    'vendors',
+    'data_requests',
+    'breach_log',
+    'dpia_assessments',
+    'cross_border_transfers',
+    'training_records',
+    'alerts',
+    'cases'
+  ];
+  tables_user TEXT[] := ARRAY[
+    'dpo',
+    'data_records',
+    'activity_log'
+  ];
+  tbl TEXT;
 BEGIN
-  -- org_id-scoped tables
-  DELETE FROM vendors                WHERE org_id = placeholder;
-  DELETE FROM data_requests          WHERE org_id = placeholder;
-  DELETE FROM breach_log             WHERE org_id = placeholder;
-  DELETE FROM dpia_assessments       WHERE org_id = placeholder;
-  DELETE FROM cross_border_transfers WHERE org_id = placeholder;
-  DELETE FROM training_records       WHERE org_id = placeholder;
+  FOREACH tbl IN ARRAY tables_org LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = tbl AND column_name = 'org_id'
+    ) THEN
+      EXECUTE format('DELETE FROM %I WHERE org_id::text = $1', tbl) USING placeholder;
+    END IF;
+  END LOOP;
 
-  -- user_id-scoped tables
-  IF EXISTS (SELECT 1 FROM information_schema.columns
-             WHERE table_name='dpo' AND column_name='user_id') THEN
-    DELETE FROM dpo                  WHERE user_id = placeholder;
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.columns
-             WHERE table_name='data_records' AND column_name='user_id') THEN
-    DELETE FROM data_records         WHERE user_id = placeholder;
-  END IF;
-
-  -- activity log uses TEXT user_id; cast for safety
-  IF EXISTS (SELECT 1 FROM information_schema.tables
-             WHERE table_name='activity_log') THEN
-    DELETE FROM activity_log
-    WHERE user_id::text = placeholder::text;
-  END IF;
+  FOREACH tbl IN ARRAY tables_user LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = tbl AND column_name = 'user_id'
+    ) THEN
+      EXECUTE format('DELETE FROM %I WHERE user_id::text = $1', tbl) USING placeholder;
+    END IF;
+  END LOOP;
 END $$;
