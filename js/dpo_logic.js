@@ -306,7 +306,10 @@ async function saveDPO() {
     try {
       const { data, error } = await supabase
         .from('dpo')
-        .insert([payload])
+        .insert([{
+          ...payload,
+          account_id: (typeof getEffectiveAccountId === 'function') ? getEffectiveAccountId() : null
+        }])
         .select()
         .single();
       if (error) throw error;

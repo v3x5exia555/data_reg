@@ -204,7 +204,11 @@ async function saveTraining() {
         if (error) throw error;
       } else {
         const { error } = await supabase.from('training_records')
-          .insert([{ ...dbPayload, org_id: orgId }]);
+          .insert([{
+            ...dbPayload,
+            org_id: orgId,
+            account_id: (typeof getEffectiveAccountId === 'function') ? getEffectiveAccountId() : null
+          }]);
         if (error) throw error;
       }
       supabaseSucceeded = true;

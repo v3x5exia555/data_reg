@@ -241,7 +241,11 @@ async function saveVendor() {
         if (error) throw error;
       } else {
         const { error } = await supabase.from('vendors')
-          .insert([{ ...vendorData, org_id: orgId }]);
+          .insert([{
+            ...vendorData,
+            org_id: orgId,
+            account_id: (typeof getEffectiveAccountId === 'function') ? getEffectiveAccountId() : null
+          }]);
         if (error) throw error;
       }
       supabaseSucceeded = true;

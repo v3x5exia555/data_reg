@@ -173,6 +173,7 @@ function paToSupabasePayload(activity, userId) {
     actor: a.actor || PA_ACTOR
   };
   payload.user_id = String(userId || a.userId || paAppUserId() || PA_ACTOR);
+  payload.account_id = (typeof getEffectiveAccountId === 'function') ? getEffectiveAccountId() : null;
   return payload;
 }
 

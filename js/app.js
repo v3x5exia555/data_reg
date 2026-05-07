@@ -52,7 +52,8 @@ const JARVIS_LOG = {
         error_message: entry.error?.message,
         error_code: entry.error?.code,
         user_id: entry.user_id,
-        user_email: entry.user_email
+        user_email: entry.user_email,
+        account_id: getEffectiveAccountId()
       }]);
     } catch (e) {
       console.error('JARVIS Log Save Error:', e);
@@ -2215,6 +2216,7 @@ async function saveDataRequest() {
   if (supabase && isSupabaseConfigured()) {
     const { data, error } = await supabase.from('data_requests').insert([{
       org_id: orgId,
+      account_id: getEffectiveAccountId(),
       ...requestData
     }]).select().single();
 
@@ -2516,7 +2518,7 @@ async function saveBreach() {
         if (error) throw error;
       } else {
         const { error } = await supabase.from('breach_log')
-          .insert([{ ...dbPayload, org_id: orgId }]);
+          .insert([{ ...dbPayload, org_id: orgId, account_id: getEffectiveAccountId() }]);
         if (error) throw error;
       }
       supabaseSucceeded = true;
@@ -2582,6 +2584,7 @@ async function saveDPIA() {
   const dpiaData = {
     id: 'local-' + Date.now(),
     org_id: orgId,
+    account_id: getEffectiveAccountId(),
     activity_name: name,
     description: description,
     processing_purpose: description.substring(0, 50),
@@ -2876,7 +2879,7 @@ async function saveCrossBorder() {
         if (error) throw error;
       } else {
         const { error } = await supabase.from('cross_border_transfers')
-          .insert([{ ...dbPayload, org_id: orgId }]);
+          .insert([{ ...dbPayload, org_id: orgId, account_id: getEffectiveAccountId() }]);
         if (error) throw error;
       }
       supabaseSucceeded = true;
@@ -3030,7 +3033,7 @@ async function saveCase() {
   let savedRow = null;
   if (supabase && isSupabaseConfigured() && orgId) {
     const { data, error } = await supabase.from('cases')
-      .insert([{ ...caseData, org_id: orgId }])
+      .insert([{ ...caseData, org_id: orgId, account_id: getEffectiveAccountId() }])
       .select()
       .single();
     if (error) {
@@ -3603,6 +3606,7 @@ async function savePerson() {
   if (supabase && isSupabaseConfigured() && orgId) {
     const { data, error } = await supabase.from('team_members').insert([{
       org_id: orgId,
+      account_id: getEffectiveAccountId(),
       name: name,
       role_department: role || 'Team member',
       access_level: access,
