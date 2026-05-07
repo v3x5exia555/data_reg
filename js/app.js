@@ -4226,6 +4226,120 @@ async function removeTeamMember(id) {
 }
 
 /* ───────────────────────────────────────────────
+   PEOPLE MANAGEMENT (Accountadmin + Superadmin)
+   ─────────────────────────────────────────────── */
+let _allPeople = [];
+
+async function loadAllPeople() {
+  if (state.role !== 'Accountadmin' && state.role !== 'Superadmin') return;
+  const supabase = getSupabaseClient();
+  if (!supabase || !isSupabaseConfigured()) {
+    document.getElementById('people-list').innerHTML =
+      '<div style="text-align:center;padding:40px;color:var(--muted);">Supabase not configured.</div>';
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('id, email, role, status, account_id, accounts(name)')
+    .order('email');
+
+  if (error) {
+    console.error('Failed to load people:', error);
+    document.getElementById('people-list').innerHTML =
+      '<div style="text-align:center;padding:40px;color:var(--muted);">Failed to load users.</div>';
+    return;
+  }
+
+  _allPeople = data || [];
+  renderPeopleList(_allPeople);
+}
+
+function filterPeopleTable() {
+  const search = (document.getElementById('people-search')?.value || '').toLowerCase();
+  const statusFilter = document.getElementById('people-status-filter')?.value || 'all';
+  const filtered = _allPeople.filter(u => {
+    if (statusFilter !== 'all' && (u.status || 'active') !== statusFilter) return false;
+    const haystack = [u.email, u.role, u.accounts?.name].filter(Boolean).join(' ').toLowerCase();
+    return !search || haystack.includes(search);
+  });
+  renderPeopleList(filtered);
+}
+
+function renderPeopleList(people) {
+  const list = document.getElementById('people-list');
+  if (!list) return;
+
+  if (!people.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No users found.</div>';
+    return;
+  }
+
+  list.innerHTML = people.map(u => {
+    const status = u.status || 'active';
+    const accountName = u.accounts?.name || u.account_id || '—';
+    const initials = (u.email || '?')[0].toUpperCase();
+    return `
+    <article class="account-row ${status === 'suspended' ? 'is-suspended' : ''}" data-uid="${u.id}">
+      <button class="account-main" type="button" style="cursor:default;pointer-events:none;">
+        <span class="account-avatar">${initials}</span>
+        <span class="account-copy">
+          <span class="account-name">${escapeHtml(u.email || '—')}</span>
+          <span class="account-meta">${escapeHtml(accountName)} · ${escapeHtml(u.role || 'user')}</span>
+        </span>
+      </button>
+      <div class="account-status">
+        <span class="account-status-badge ${status === 'active' ? 'active' : 'suspended'}">${escapeHtml(status)}</span>
+      </div>
+      <div class="account-actions">
+        <button class="btn-secondary account-action-primary" onclick="resetUserPassword('${u.id}')">Reset PW</button>
+        ${status === 'active'
+          ? `<button class="btn-secondary" onclick="setUserStatus('${u.id}', 'deactivate')">Deactivate</button>`
+          : `<button class="btn-secondary" onclick="setUserStatus('${u.id}', 'activate')">Activate</button>`
+        }
+      </div>
+    </article>`;
+  }).join('');
+}
+
+async function resetUserPassword(userId) {
+  const newPw = window.prompt('New password for user (min 8 chars):');
+  if (!newPw || newPw.length < 8) { showToast('Password must be at least 8 characters', 'error'); return; }
+
+  const supabase = getSupabaseClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const supaUrl = (window.ENV?.SUPABASE_URL) || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+
+  const res = await fetch(`${supaUrl}/functions/v1/create-user`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'manage-user', action: 'reset-password', user_id: userId, new_password: newPw }),
+  });
+  const out = await res.json();
+  if (!res.ok) { showToast(out.error || 'Failed to reset password', 'error'); return; }
+  showToast('Password reset successfully', 'success');
+}
+
+async function setUserStatus(userId, action) {
+  const label = action === 'activate' ? 'Activate' : 'Deactivate';
+  if (!confirm(`${label} this user?`)) return;
+
+  const supabase = getSupabaseClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const supaUrl = (window.ENV?.SUPABASE_URL) || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+
+  const res = await fetch(`${supaUrl}/functions/v1/create-user`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'manage-user', action, user_id: userId }),
+  });
+  const out = await res.json();
+  if (!res.ok) { showToast(out.error || `Failed to ${action} user`, 'error'); return; }
+  showToast(`User ${action}d`, 'success');
+  await loadAllPeople();
+}
+
+/* ───────────────────────────────────────────────
    ALERTS
    ─────────────────────────────────────────────── */
 function renderAlerts() {
