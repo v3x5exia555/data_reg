@@ -674,10 +674,12 @@ async function updateConsentDb(id, checked) {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
 
-  const { error } = await supabase
-    .from('consent_settings')
-    .update({ is_enabled: checked })
-    .eq('id', id);
+  const accountId = getEffectiveAccountId();
+  if (state.role === 'Accountadmin' && !accountId) return;
+
+  let query = supabase.from('consent_settings').update({ is_enabled: checked }).eq('id', id);
+  if (accountId) query = query.eq('account_id', accountId);
+  const { error } = await query;
 
   if (error) {
     console.error('Update failed:', error);
