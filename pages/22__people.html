@@ -1,0 +1,27 @@
+<section class="page page-shell accounts-shell" id="page-people" data-page="people">
+  <div class="accounts-page-inner">
+    <header class="accounts-hero">
+      <div class="accounts-hero-text">
+        <span class="accounts-eyebrow">Admin workspace</span>
+        <h1>People</h1>
+        <p class="page-sub">View and manage users across all accounts.</p>
+      </div>
+    </header>
+
+    <div class="accounts-toolbar">
+      <div class="accounts-search-wrap">
+        <span class="accounts-search-icon">Search</span>
+        <input type="search" id="people-search" placeholder="Search by name, email or account..." oninput="filterPeopleTable()" />
+      </div>
+      <select id="people-status-filter" onchange="filterPeopleTable()">
+        <option value="all">All statuses</option>
+        <option value="active">Active</option>
+        <option value="suspended">Suspended</option>
+      </select>
+    </div>
+
+    <div id="people-list" class="accounts-list" aria-live="polite">
+      <div style="text-align:center;padding:40px;color:var(--muted);">Loading...</div>
+    </div>
+  </div>
+</section>

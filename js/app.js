@@ -152,7 +152,7 @@ const PAGES_TO_LOAD = [
   '07__vendors', '08__dpo', '08__training', '09__datarequests', '10__breachlog',
   '04__dpia', '11__deica', '06__crossborder', '15__documents',
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
-  '20__accounts'
+  '20__accounts', '22__people'
 ];
 const PAGE_ASSET_VERSION = '23';
 
