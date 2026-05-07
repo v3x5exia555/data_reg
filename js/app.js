@@ -2333,8 +2333,6 @@ async function saveDataRequest() {
   };
 
   const supabase = getSupabaseClient();
-  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
-  const orgId = currentCompany ? currentCompany.id : state.user?.id;
 
   JARVIS_LOG.submit('DataRequests', editIndex >= 0 ? 'Update' : 'Insert', { requestData, editIndex });
 
@@ -2367,7 +2365,6 @@ async function saveDataRequest() {
   // Add new request
   if (supabase && isSupabaseConfigured()) {
     const { data, error } = await supabase.from('data_requests').insert([{
-      org_id: orgId,
       account_id: getEffectiveAccountId(),
       ...requestData
     }]).select().single();
@@ -2668,7 +2665,7 @@ async function saveBreach() {
         if (error) throw error;
       } else {
         const { error } = await supabase.from('breach_log')
-          .insert([{ ...dbPayload, org_id: orgId, account_id: getEffectiveAccountId() }]);
+          .insert([{ ...dbPayload, account_id: getEffectiveAccountId() }]);
         if (error) throw error;
       }
       supabaseSucceeded = true;
@@ -2728,12 +2725,8 @@ async function saveDPIA() {
     return;
   }
 
-  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
-  const orgId = currentCompany ? currentCompany.id : state.user?.id;
-
   const dpiaData = {
     id: 'local-' + Date.now(),
-    org_id: orgId,
     account_id: getEffectiveAccountId(),
     activity_name: name,
     description: description,
@@ -3029,7 +3022,7 @@ async function saveCrossBorder() {
         if (error) throw error;
       } else {
         const { error } = await supabase.from('cross_border_transfers')
-          .insert([{ ...dbPayload, org_id: orgId, account_id: getEffectiveAccountId() }]);
+          .insert([{ ...dbPayload, account_id: getEffectiveAccountId() }]);
         if (error) throw error;
       }
       supabaseSucceeded = true;
@@ -3179,7 +3172,7 @@ async function saveCase() {
   let savedRow = null;
   if (supabase && isSupabaseConfigured() && orgId) {
     const { data, error } = await supabase.from('cases')
-      .insert([{ ...caseData, org_id: orgId, account_id: getEffectiveAccountId() }])
+      .insert([{ ...caseData, account_id: getEffectiveAccountId() }])
       .select()
       .single();
     if (error) {
@@ -3763,7 +3756,6 @@ async function savePerson() {
   const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.id;
   if (supabase && isSupabaseConfigured() && orgId) {
     const { data, error } = await supabase.from('team_members').insert([{
-      org_id: orgId,
       account_id: getEffectiveAccountId(),
       name: name,
       role_department: role || 'Team member',
