@@ -3794,7 +3794,7 @@ async function renderTeam() {
   const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.id;
   if (supabase && isSupabaseConfigured() && orgId) {
     const accountId = getEffectiveAccountId();
-    let query = supabase.from('team_members').select('*').eq('org_id', orgId);
+    let query = supabase.from('team_members').select('*');
     if (accountId) query = query.eq('account_id', accountId);
     const { data, error } = await query.order('created_at', { ascending: false });
 
