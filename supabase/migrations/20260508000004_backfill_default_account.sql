@@ -1,6 +1,12 @@
 -- 20260508000004_backfill_default_account.sql
 -- Insert "Default Account 1" and assign all existing data rows to it.
 -- Does NOT auto-promote anyone to Superadmin — operator runs manual SQL post-migrations.
+--
+-- NOTE: companies_account_id_unique constraint is dropped before backfill since
+-- multiple companies must share the same default account (1:many is the correct model).
+
+DROP INDEX IF EXISTS idx_companies_account_id;
+ALTER TABLE public.companies DROP CONSTRAINT IF EXISTS companies_account_id_unique;
 
 INSERT INTO public.accounts (id, name, seat_limit, status)
 VALUES ('00000000-0000-0000-0000-000000000001', 'Default Account 1', 99, 'active')
