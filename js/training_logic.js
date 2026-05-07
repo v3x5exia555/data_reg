@@ -41,12 +41,10 @@ async function loadTrainingFromSupabase() {
   }
 
   try {
-    // NOTE: org_id filter intentionally omitted to match the vendor module's
-    // current behavior. Re-introduce when adding multi-tenancy.
-    const { data, error } = await supabase
-      .from('training_records')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const accountId = (typeof getEffectiveAccountId === 'function') ? getEffectiveAccountId() : null;
+    let query = supabase.from('training_records').select('*');
+    if (accountId) query = query.eq('account_id', accountId);
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('[JARVIS] Training Supabase Fetch Error:', error.message);

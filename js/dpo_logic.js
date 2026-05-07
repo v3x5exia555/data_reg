@@ -138,11 +138,10 @@ async function loadDPOFromSupabase() {
   const supabase = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
   if (supabase && typeof isSupabaseConfigured === 'function' && isSupabaseConfigured()) {
     try {
-      const { data, error } = await supabase
-        .from('dpo')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
+      const accountId = (typeof getEffectiveAccountId === 'function') ? getEffectiveAccountId() : null;
+      let query = supabase.from('dpo').select('*');
+      if (accountId) query = query.eq('account_id', accountId);
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(100);
 
       if (error) throw error;
 

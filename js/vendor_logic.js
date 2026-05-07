@@ -47,10 +47,9 @@ async function loadVendorsFromSupabase() {
   }
 
   try {
-    // NOTE: org_id filter intentionally removed. Re-introduce when adding
-    // multi-tenancy — without it, every signed-in user sees all rows in
-    // the vendors table.
-    const query = supabase.from('vendors').select('*');
+    const accountId = (typeof getEffectiveAccountId === 'function') ? getEffectiveAccountId() : null;
+    let query = supabase.from('vendors').select('*');
+    if (accountId) query = query.eq('account_id', accountId);
     const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {

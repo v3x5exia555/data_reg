@@ -1375,10 +1375,13 @@ async function loadDashboardFromSupabase() {
 
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured() && state.user?.id) {
-    const [recordsRes, dpoRes] = await Promise.all([
-      supabase.from('data_records').select('id', { count: 'exact', head: true }).eq('user_id', state.user.id),
-      supabase.from('dpo').select('name').eq('user_id', state.user.id).order('created_at', { ascending: false }).limit(1)
-    ]);
+    const accountId = getEffectiveAccountId();
+    let recordsQuery = supabase.from('data_records').select('id', { count: 'exact', head: true }).eq('user_id', state.user.id);
+    if (accountId) recordsQuery = recordsQuery.eq('account_id', accountId);
+    let dpoQuery = supabase.from('dpo').select('name').eq('user_id', state.user.id);
+    if (accountId) dpoQuery = dpoQuery.eq('account_id', accountId);
+    dpoQuery = dpoQuery.order('created_at', { ascending: false }).limit(1);
+    const [recordsRes, dpoRes] = await Promise.all([recordsQuery, dpoQuery]);
     if (!recordsRes.error && typeof recordsRes.count === 'number') recordsCount = recordsRes.count;
     if (!dpoRes.error && dpoRes.data?.[0]?.name) dpoName = dpoRes.data[0].name;
   }
@@ -1513,11 +1516,10 @@ async function renderRegister() {
 
   console.log('[JARVIS] Fetching from data_records...');
   if (supabase && isSupabaseConfigured() && userId) {
-    const { data, error } = await supabase
-      .from('data_records')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    const accountId = getEffectiveAccountId();
+    let query = supabase.from('data_records').select('*').eq('user_id', userId);
+    if (accountId) query = query.eq('account_id', accountId);
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (!error && data) {
       console.log(`[JARVIS] Fetching from data_records... Success: ${data.length} records found.`);
@@ -2049,10 +2051,10 @@ async function loadCompaniesFromSupabase() {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
 
-  const { data, error } = await supabase
-    .from('companies')
-    .select('*')
-    .order('name');
+  const accountId = getEffectiveAccountId();
+  let query = supabase.from('companies').select('*');
+  if (accountId) query = query.eq('account_id', accountId);
+  const { data, error } = await query.order('name');
 
   if (error) {
     console.error('Failed to load companies:', error);
@@ -2090,12 +2092,10 @@ async function loadDataRequestsFromSupabase() {
     return;
   }
 
-  // NOTE: org_id filter intentionally omitted (matches vendor/training fix).
-  // Re-introduce when adding multi-tenancy.
-  const { data, error } = await supabase
-    .from('data_requests')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const accountId = getEffectiveAccountId();
+  let query = supabase.from('data_requests').select('*');
+  if (accountId) query = query.eq('account_id', accountId);
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
     console.error('Failed to load data requests:', error);
@@ -2361,12 +2361,10 @@ async function loadBreachLogFromSupabase() {
   if (!supabase || !isSupabaseConfigured()) return;
 
   try {
-    // NOTE: org_id filter intentionally omitted (matches vendor/training fix).
-    // Re-introduce when adding multi-tenancy.
-    const { data, error } = await supabase
-      .from('breach_log')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const accountId = getEffectiveAccountId();
+    let query = supabase.from('breach_log').select('*');
+    if (accountId) query = query.eq('account_id', accountId);
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('[JARVIS] Failed to load breach log:', error.message);
@@ -2639,10 +2637,10 @@ async function loadDPIAFromSupabase() {
 
   console.log('[JARVIS] Fetching DPIAs...');
   try {
-    const { data, error } = await supabase
-      .from('dpia_assessments')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const accountId = getEffectiveAccountId();
+    let query = supabase.from('dpia_assessments').select('*');
+    if (accountId) query = query.eq('account_id', accountId);
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('[JARVIS] DPIA Fetch Error:', error.message);
@@ -2731,10 +2729,10 @@ async function loadCrossBorderFromSupabase() {
 
   console.log('[JARVIS] Fetching Cross-Border Transfers...');
   try {
-    const { data, error } = await supabase
-      .from('cross_border_transfers')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const accountId = getEffectiveAccountId();
+    let query = supabase.from('cross_border_transfers').select('*');
+    if (accountId) query = query.eq('account_id', accountId);
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('[JARVIS] Cross-Border Fetch Error:', error.message);
@@ -2916,12 +2914,10 @@ async function loadAlertsFromSupabase() {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
 
-  // NOTE: org_id + company_id filters intentionally omitted (matches
-  // vendor/training fix). Re-introduce when adding multi-tenancy.
-  const { data, error } = await supabase
-    .from('alerts')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const accountId = getEffectiveAccountId();
+  let query = supabase.from('alerts').select('*');
+  if (accountId) query = query.eq('account_id', accountId);
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
     console.error('Failed to load alerts:', error);
@@ -2940,12 +2936,10 @@ async function loadCasesFromSupabase() {
 
   if (!supabase || !isSupabaseConfigured()) return;
 
-  // NOTE: org_id filter intentionally omitted (matches vendor/training fix).
-  // Re-introduce when adding multi-tenancy.
-  const { data, error } = await supabase
-    .from('cases')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const accountId = getEffectiveAccountId();
+  let query = supabase.from('cases').select('*');
+  if (accountId) query = query.eq('account_id', accountId);
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
     console.error('Failed to load cases:', error);
@@ -3190,11 +3184,13 @@ async function renderDocuments() {
 
   if (supabase && isSupabaseConfigured() && state.user.id) {
     const filterCat = document.getElementById('doc-filter')?.value || '';
+    const accountId = getEffectiveAccountId();
     let query = supabase
       .from('documents')
       .select('*')
-      .eq('user_id', state.user.id)
-      .order('created_at', { ascending: false });
+      .eq('user_id', state.user.id);
+    if (accountId) query = query.eq('account_id', accountId);
+    query = query.order('created_at', { ascending: false });
 
     if (filterCat) query = query.eq('category', filterCat);
 
@@ -3643,11 +3639,10 @@ async function renderTeam() {
   const supabase = getSupabaseClient();
   const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.id;
   if (supabase && isSupabaseConfigured() && orgId) {
-    const { data, error } = await supabase
-      .from('team_members')
-      .select('*')
-      .eq('org_id', orgId)
-      .order('created_at', { ascending: false });
+    const accountId = getEffectiveAccountId();
+    let query = supabase.from('team_members').select('*').eq('org_id', orgId);
+    if (accountId) query = query.eq('account_id', accountId);
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (!error && data) {
       state.team = data.map(t => ({

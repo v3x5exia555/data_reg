@@ -215,10 +215,10 @@ async function loadActivitiesFromSupabase() {
       return;
     }
 
-    const { data, error } = await supabase
-      .from(PA_TABLE)
-      .select("*")
-      .order("created_at", { ascending: false });
+    const accountId = (typeof getEffectiveAccountId === 'function') ? getEffectiveAccountId() : null;
+    let query = supabase.from(PA_TABLE).select("*");
+    if (accountId) query = query.eq('account_id', accountId);
+    const { data, error } = await query.order("created_at", { ascending: false });
 
     if (error) throw error;
 
