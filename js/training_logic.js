@@ -1,54 +1,74 @@
 /**
  * training_logic.js — DataRex Training Management Module
- * Persistence: Supabase 'training_record' table
- * Design: Elite UI with TH Blueprint
+ * STATUS: Supabase-backed with Local Storage fallback
  */
 
-async function loadTrainingFromSupabase() {
-  const supabase = getSupabaseClient();
-  if (!supabase || !isSupabaseConfigured()) return;
-  
-  console.log('[JARVIS] Fetching Training Records...');
-  try {
-    const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
-    const orgId = currentCompany ? currentCompany.id : state.user?.id;
-    
-    // Resilient fetch: Try training_record (plural/singular fallback)
-    let query = supabase.from('training_record').select('*');
-    if (orgId) query = query.eq('org_id', orgId);
+function normalizeTrainingRecord(record = {}) {
+  return {
+    id: record.id,
+    employee_name: record.employee_name || '',
+    training_type: record.training_type || '',
+    // DB column is `training_date`; UI uses `completion_date`.
+    completion_date: record.completion_date || record.training_date || '',
+    // DB column is `expires_at`; UI uses `expiry_date`.
+    expiry_date: record.expiry_date || record.expires_at || null,
+    status: record.status || 'Completed',
+    created_at: record.created_at || new Date().toISOString()
+  };
+}
 
-    let { data, error } = await query.order('completion_date', { ascending: false });
-    console.log('[JARVIS] Raw Data (Training):', data);
-    
-    if (error && error.code === '42P01') { // Table not found, try plural
-       console.warn('[JARVIS] training_record not found, falling back to training_records');
-       const pluralRes = await supabase.from('training_records').select('*').order('completion_date', { ascending: false });
-       data = pluralRes.data;
-       error = pluralRes.error;
-    }
+function readLocalTraining() {
+  try {
+    const list = JSON.parse(localStorage.getItem('training_data') || '[]');
+    return Array.isArray(list) ? list.map(normalizeTrainingRecord) : [];
+  } catch (err) {
+    console.error('[JARVIS] Local Storage Parse Error (Training)', err);
+    return [];
+  }
+}
+
+async function loadTrainingFromSupabase() {
+  console.log('[JARVIS] Fetching Training Records...');
+  const localData = readLocalTraining();
+  state.trainingRecords = localData;
+  renderTraining(localData);
+
+  const supabase = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
+  const configured = typeof isSupabaseConfigured !== 'function' || isSupabaseConfigured();
+  if (!supabase || !configured) {
+    console.log('[JARVIS] Supabase not configured; using local training data.');
+    return;
+  }
+
+  try {
+    // NOTE: org_id filter intentionally omitted to match the vendor module's
+    // current behavior. Re-introduce when adding multi-tenancy.
+    const { data, error } = await supabase
+      .from('training_records')
+      .select('*')
+      .order('created_at', { ascending: false });
 
     if (error) {
-      JARVIS_LOG.error('Training', 'Fetch Error', error);
-      renderTraining([]);
+      console.error('[JARVIS] Training Supabase Fetch Error:', error.message);
       return;
     }
-    
-    if (data) {
-      console.log(`[JARVIS] FETCH SUCCESS: ${data.length} Training records retrieved.`);
-      state.trainingRecords = data.map(t => ({
-        id: t.id,
-        employee_name: t.employee_name,
-        training_type: t.training_type,
-        completion_date: t.completion_date,
-        expiry_date: t.expiry_date || null,
-        status: t.status || 'Completed',
-        notes: t.notes || ''
-      }));
-      renderTraining(state.trainingRecords);
+
+    const remote = (data || []).map(normalizeTrainingRecord);
+    if (remote.length === 0) {
+      console.log('[JARVIS] Training: Supabase returned 0 rows; keeping local data.');
+      return;
     }
+
+    const seen = new Set(remote.map(r => r.id).filter(Boolean));
+    const localOnly = localData.filter(r => !r.id || !seen.has(r.id));
+    const merged = [...remote, ...localOnly];
+
+    console.log(`[JARVIS] Training FETCH SUCCESS: ${remote.length} from Supabase, ${localOnly.length} local-only.`);
+    state.trainingRecords = merged;
+    localStorage.setItem('training_data', JSON.stringify(merged));
+    renderTraining(merged);
   } catch (err) {
-    JARVIS_LOG.error('Training', 'Exception', err);
-    renderTraining([]);
+    console.error('[JARVIS] Training fetch exception:', err);
   }
 }
 
@@ -57,15 +77,10 @@ function renderTraining(records) {
   if (!tbody) return;
   const list = records || [];
 
-  if (list.length === 0) {
-    tbody.innerHTML = `<div class="empty-state">No training records found.</div>`;
-    return;
-  }
-
   // The TH Blueprint Implementation
   const thStyle = "background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em; padding:12px 16px; border-bottom:1px solid #e2e8f0;";
 
-  tbody.innerHTML = `
+  const headerHTML = `
     <div class="data-table-wrap" style="background:#fff; border-radius:8px; border:1px solid #e2e8f0; overflow:hidden;">
       <table class="styled-table" style="width:100%; border-collapse:collapse;">
         <thead>
@@ -77,7 +92,22 @@ function renderTraining(records) {
             <th style="${thStyle} width:100px;">Actions</th>
           </tr>
         </thead>
-        <tbody>${list.map((t, i) => `
+        <tbody>`;
+
+  if (list.length === 0) {
+    tbody.innerHTML = headerHTML + `
+          <tr>
+            <td colspan="5" style="padding:24px; text-align:center; color:#94a3b8; font-size:14px;">
+              No training records found. Click "Add Record" to begin.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+    return;
+  }
+
+  tbody.innerHTML = headerHTML + list.map((t, i) => `
           <tr style="border-bottom:1px solid #f1f5f9;">
             <td style="padding:12px 16px; font-weight:600; color:#1e293b;">${t.employee_name || '—'}</td>
             <td style="padding:12px 16px; color:#475569;">${t.training_type || '—'}</td>
@@ -88,56 +118,123 @@ function renderTraining(records) {
             <td style="padding:12px 16px;">
               <button class="btn-edit" onclick="editTraining(${i})" style="padding:4px 8px; font-size:11px;">Edit</button>
             </td>
-          </tr>`).join('')}
+          </tr>`).join('') + `
         </tbody>
       </table>
     </div>`;
 }
 
+function getTrainingField(...ids) {
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el) return el;
+  }
+  return null;
+}
+
+function setTrainingField(value, ...ids) {
+  const el = getTrainingField(...ids);
+  if (el) el.value = value;
+}
+
+function resetTrainingForm() {
+  setTrainingField('-1', 'training-index', 'train-index');
+  setTrainingField('', 'training-employee', 'train-employee');
+  setTrainingField('', 'training-type', 'train-course');
+  setTrainingField('', 'training-date', 'train-date');
+  setTrainingField('', 'training-expiry', 'train-expiry');
+  setTrainingField('Completed', 'training-status', 'train-status');
+
+  const title = document.querySelector('#modal-training h3');
+  if (title) title.textContent = 'Add Training Record';
+  const saveBtn = document.querySelector('#modal-training .btn-save');
+  if (saveBtn) saveBtn.textContent = 'Save Record';
+}
+
+function editTraining(index) {
+  const record = state.trainingRecords?.[index];
+  if (!record) return;
+
+  setTrainingField(String(index), 'training-index', 'train-index');
+  setTrainingField(record.employee_name || '', 'training-employee', 'train-employee');
+  setTrainingField(record.training_type || '', 'training-type', 'train-course');
+  setTrainingField(record.completion_date || '', 'training-date', 'train-date');
+  setTrainingField(record.expiry_date || '', 'training-expiry', 'train-expiry');
+  setTrainingField(record.status || 'Completed', 'training-status', 'train-status');
+
+  const title = document.querySelector('#modal-training h3');
+  if (title) title.textContent = 'Edit Training Record';
+  const saveBtn = document.querySelector('#modal-training .btn-save');
+  if (saveBtn) saveBtn.textContent = 'Update Record';
+  openModal('modal-training');
+}
+
 async function saveTraining() {
-  const supabase = getSupabaseClient();
-  const name = document.getElementById('training-employee').value.trim();
-  const type = document.getElementById('training-type').value.trim();
-  const date = document.getElementById('training-date').value;
-  const editIndex = parseInt(document.getElementById('training-index').value);
+  const name = (getTrainingField('training-employee', 'train-employee')?.value || '').trim();
+  const type = (getTrainingField('training-type', 'train-course')?.value || '').trim();
+  const date = getTrainingField('training-date', 'train-date')?.value || '';
+  const expiryDate = getTrainingField('training-expiry', 'train-expiry')?.value || '';
+  const status = getTrainingField('training-status', 'train-status')?.value || 'Completed';
+  const editIndex = parseInt(getTrainingField('training-index', 'train-index')?.value || '-1', 10);
 
   if (!name || !type || !date) { showToast('Please fill in all required fields', 'error'); return; }
 
-  const trainingData = {
+  state.trainingRecords = state.trainingRecords || [];
+  const existing = editIndex > -1 ? state.trainingRecords[editIndex] : null;
+  const supabase = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
+  const configured = typeof isSupabaseConfigured !== 'function' || isSupabaseConfigured();
+  const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : (state.user?.id || null);
+
+  // DB-shaped payload (column names from migration 20260428000002).
+  const dbPayload = {
     employee_name: name,
     training_type: type,
-    completion_date: date,
-    status: 'Completed'
+    training_date: date,
+    expires_at: expiryDate || null,
+    status
   };
 
-  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
-  const orgId = currentCompany ? currentCompany.id : state.user?.id;
-
-  try {
-    if (editIndex > -1) {
-      const existing = state.trainingRecords[editIndex];
-      if (supabase && isSupabaseConfigured() && existing.id && !String(existing.id).startsWith('local-')) {
-        const { error } = await supabase.from('training_record').update(trainingData).eq('id', existing.id);
+  let supabaseSucceeded = false;
+  if (supabase && configured && orgId) {
+    try {
+      if (existing && existing.id && !String(existing.id).startsWith('local-')) {
+        const { error } = await supabase.from('training_records')
+          .update(dbPayload)
+          .eq('id', existing.id);
         if (error) throw error;
-        JARVIS_LOG.success('Training', 'Update', { id: existing.id });
-      }
-      state.trainingRecords[editIndex] = { ...existing, ...trainingData };
-    } else {
-      if (supabase && isSupabaseConfigured()) {
-        const { data, error } = await supabase.from('training_record').insert([{ org_id: orgId, ...trainingData }]).select().single();
-        if (error) throw error;
-        JARVIS_LOG.success('Training', 'Insert', { id: data?.id });
-        state.trainingRecords.unshift(data);
       } else {
-        state.trainingRecords.unshift({ ...trainingData, id: 'local-' + Date.now() });
+        const { error } = await supabase.from('training_records')
+          .insert([{ ...dbPayload, org_id: orgId }]);
+        if (error) throw error;
       }
+      supabaseSucceeded = true;
+    } catch (err) {
+      console.error('[JARVIS] Training Supabase Save Error', err);
     }
-    
-    renderTraining(state.trainingRecords);
-    closeModal('modal-training');
+  }
+
+  // Local mirror in UI shape.
+  const localRecord = normalizeTrainingRecord({
+    ...dbPayload,
+    completion_date: date,
+    expiry_date: expiryDate || null,
+    id: existing?.id || ('local-' + Date.now()),
+    created_at: existing?.created_at || new Date().toISOString()
+  });
+  if (editIndex > -1) {
+    state.trainingRecords[editIndex] = { ...existing, ...localRecord };
+  } else {
+    state.trainingRecords.unshift(localRecord);
+  }
+  localStorage.setItem('training_data', JSON.stringify(state.trainingRecords));
+
+  closeModal('modal-training');
+
+  if (supabaseSucceeded) {
+    await loadTrainingFromSupabase();
     showToast('Training record saved', 'success');
-  } catch (err) {
-    JARVIS_LOG.error('Training', 'Save Error', err);
-    showToast('Failed to save record', 'error');
+  } else {
+    renderTraining(state.trainingRecords);
+    showToast(supabase && configured ? 'Saved locally; Supabase save failed' : 'Saved locally', 'warning');
   }
 }

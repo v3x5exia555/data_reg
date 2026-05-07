@@ -67,8 +67,8 @@
       <p>Click "Add DPO" to record your first Data Protection Officer appointment.</p>
     </div>
 
-    <!-- DPO Table (shown when DPO exists) -->
-    <div id="dpo-table-container" class="hidden">
+    <!-- DPO Table (shown by default for Static First) -->
+    <div id="dpo-table-container">
       <div class="data-table-wrap">
         <table class="styled-table">
           <thead>
@@ -91,7 +91,7 @@
     </div>
 
     <!-- Empty State -->
-    <div id="dpo-empty-state" class="dpo-empty-state hidden">
+    <div id="dpo-empty-state-card" class="dpo-empty-state hidden">
       <div class="dpo-empty-icon">
         <i class="fa-solid fa-user-shield"></i>
       </div>
@@ -199,6 +199,10 @@
                 <option value="Other">Other</option>
               </select>
             </div>
+            <div class="form-group">
+              <label for="dpo-appointment-date-input">Appointment Date</label>
+              <input type="date" id="dpo-appointment-date-input" class="form-input">
+            </div>
           </div>
 
           <div class="form-group">
@@ -210,7 +214,7 @@
                 <p class="upload-zone-text">Drag & drop or <button type="button" class="upload-browse-btn" onclick="document.getElementById('dpo-appointment').click()">browse files</button></p>
                 <p class="upload-zone-hint">PDF, JPG, PNG · Max 50MB</p>
               </div>
-              <div class="upload-progress" id="dpo-upload-progress">
+              <div class="upload-progress hidden" id="dpo-upload-progress">
                 <div class="upload-file-info">
                   <i class="fa-solid fa-file-pdf"></i>
                   <div class="upload-file-details">
@@ -223,11 +227,11 @@
                 </div>
                 <span class="upload-percent" id="dpo-upload-percent">0%</span>
               </div>
-              <div class="upload-complete" id="dpo-upload-complete">
+              <div class="upload-complete hidden" id="dpo-upload-complete">
                 <i class="fa-solid fa-circle-check"></i>
                 <span id="dpo-upload-complete-text">File uploaded</span>
               </div>
-              <div class="upload-error" id="dpo-upload-error">
+              <div class="upload-error hidden" id="dpo-upload-error">
                 <i class="fa-solid fa-triangle-exclamation"></i>
                 <span id="dpo-upload-error-text">File is too large</span>
               </div>
@@ -580,6 +584,20 @@
   }
 
   /* DPO table header blueprint loyalty */
+  #page-dpo .styled-table {
+    min-width: 980px;
+  }
+
+  #page-dpo .styled-table th,
+  #page-dpo .styled-table td {
+    white-space: nowrap;
+  }
+
+  #page-dpo .styled-table td:nth-child(2) {
+    white-space: normal;
+    min-width: 140px;
+  }
+
   #page-dpo .styled-table thead th {
     background: #f8fafc !important;
     font-size: 10px;
@@ -639,235 +657,3 @@
   #page-dpo .th-narrow { width: 80px; }
   #page-dpo .th-actions { width: 120px; }
 </style>
-
-<script>
-  let dpoTempFile = null;
-
-  function openDPOModal(isEdit = false) {
-    const modal = document.getElementById('modal-dpo-form');
-    const title = document.getElementById('dpo-modal-title');
-    const btnText = document.getElementById('dpo-add-btn-text');
-
-    if (isEdit && state.dpo) {
-      title.textContent = 'Edit DPO Details';
-      btnText.textContent = 'Edit DPO';
-      document.getElementById('dpo-name').value = state.dpo.name || '';
-      document.getElementById('dpo-email').value = state.dpo.email || '';
-      document.getElementById('dpo-phone').value = state.dpo.phone || '';
-      document.getElementById('dpo-nationality').value = state.dpo.nationality || '';
-    } else {
-      title.textContent = 'Appoint Data Protection Officer';
-      btnText.textContent = 'Add DPO';
-      document.getElementById('dpo-form').reset();
-    }
-
-    modal.classList.add('open');
-  }
-
-  function closeDPOModal() {
-    document.getElementById('modal-dpo-form').classList.remove('open');
-    document.getElementById('dpo-form').reset();
-    resetUploadZone();
-  }
-
-  function viewDPODetails() {
-    if (!state.dpo) return;
-
-    const d = state.dpo;
-
-    const avatar = document.getElementById('dpo-detail-avatar');
-    if (avatar) avatar.textContent = d.name ? d.name.charAt(0).toUpperCase() : '-';
-
-    document.getElementById('dpo-detail-name').textContent = d.name || '-';
-    document.getElementById('dpo-detail-email').textContent = d.email || '-';
-    document.getElementById('dpo-detail-fullname').textContent = d.name || '-';
-    document.getElementById('dpo-detail-email-val').textContent = d.email || '-';
-    document.getElementById('dpo-detail-phone').textContent = d.phone || '-';
-    document.getElementById('dpo-detail-nationality').textContent = d.nationality || '-';
-    document.getElementById('dpo-detail-date').textContent = d.appointment_date || '-';
-
-    const letterEl = document.getElementById('dpo-detail-letter-link');
-    if (letterEl) {
-      if (d.appointment_letter_url) {
-        letterEl.innerHTML = '<a href="' + d.appointment_letter_url + '" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-download"></i> Download</a>';
-      } else {
-        letterEl.textContent = 'Not uploaded';
-      }
-    }
-
-    document.getElementById('modal-dpo-detail').classList.add('open');
-  }
-
-  function closeDPODetailModal() {
-    document.getElementById('modal-dpo-detail').classList.remove('open');
-  }
-
-  function handleDPOFileUpload(input) {
-    if (!input.files || !input.files[0]) return;
-
-    const file = input.files[0];
-    const maxSize = 50 * 1024 * 1024;
-
-    const uploadZone = document.getElementById('dpo-upload-zone');
-    const uploadInner = document.getElementById('dpo-upload-inner');
-    const uploadProgress = document.getElementById('dpo-upload-progress');
-    const uploadError = document.getElementById('dpo-upload-error');
-    const uploadName = document.getElementById('dpo-upload-name');
-    const uploadSize = document.getElementById('dpo-upload-size');
-    const uploadBar = document.getElementById('dpo-upload-bar');
-    const uploadPercent = document.getElementById('dpo-upload-percent');
-    const uploadComplete = document.getElementById('dpo-upload-complete');
-
-    if (file.size > maxSize) {
-      uploadInner.classList.add('hidden');
-      uploadProgress.classList.add('hidden');
-      uploadComplete.classList.add('hidden');
-      uploadError.classList.remove('hidden');
-      uploadZone.classList.add('error');
-
-      document.getElementById('dpo-upload-error-text').textContent =
-        'File too large: ' + formatFileSize(file.size) + '. Maximum allowed is 50MB.';
-
-      input.value = '';
-      dpoTempFile = null;
-      return;
-    }
-
-    uploadError.classList.add('hidden');
-    uploadZone.classList.remove('error');
-
-    uploadInner.classList.add('hidden');
-    uploadComplete.classList.add('hidden');
-    uploadProgress.classList.remove('hidden');
-
-    uploadName.textContent = file.name;
-    uploadSize.textContent = formatFileSize(file.size);
-
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 10;
-      uploadBar.style.width = progress + '%';
-      uploadPercent.textContent = progress + '%';
-
-      if (progress >= 100) {
-        clearInterval(interval);
-        uploadProgress.classList.add('hidden');
-        uploadComplete.classList.remove('hidden');
-        document.getElementById('dpo-upload-complete-text').textContent =
-          file.name + ' uploaded successfully';
-        dpoTempFile = file;
-      }
-    }, 100);
-  }
-
-  function resetUploadZone() {
-    const uploadZone = document.getElementById('dpo-upload-zone');
-    uploadZone.classList.remove('error');
-
-    document.getElementById('dpo-upload-inner').classList.remove('hidden');
-    document.getElementById('dpo-upload-progress').classList.add('hidden');
-    document.getElementById('dpo-upload-complete').classList.add('hidden');
-    document.getElementById('dpo-upload-error').classList.add('hidden');
-    document.getElementById('dpo-upload-bar').style.width = '0%';
-    dpoTempFile = null;
-  }
-
-  function formatFileSize(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
-  async function saveDPO() {
-    const name = document.getElementById('dpo-name').value.trim();
-    const email = document.getElementById('dpo-email').value.trim();
-    const phone = document.getElementById('dpo-phone').value.trim();
-    const nationality = document.getElementById('dpo-nationality').value;
-
-    if (!name) { showToast('Please enter DPO full name', 'error'); return; }
-    if (!email) { showToast('Please enter DPO email', 'error'); return; }
-    if (!nationality) { showToast('Please select nationality', 'error'); return; }
-
-    showToast('Saving DPO...', 'info');
-
-    let letterUrl = state.dpo?.appointment_letter_url || null;
-    if (dpoTempFile) {
-      const reader = new FileReader();
-      letterUrl = await new Promise(resolve => {
-        reader.onload = e => resolve(e.target.result);
-        reader.readAsDataURL(dpoTempFile);
-      });
-    }
-
-    state.dpo = {
-      name,
-      email,
-      phone,
-      nationality,
-      appointment_date: new Date().toISOString().split('T')[0],
-      appointment_letter_url: letterUrl,
-      training_status: 'pending',
-      updated_at: new Date().toISOString()
-    };
-
-    await saveDPOToSupabase();
-
-    localStorage.setItem('datarex_dpo', JSON.stringify(state.dpo));
-    saveState();
-
-    closeDPOModal();
-    renderDPO();
-  }
-
-  function renderDPO() {
-    const dpoLoading = document.getElementById('dpo-loading');
-    const dpoTableContainer = document.getElementById('dpo-table-container');
-    const emptyState = document.getElementById('dpo-empty-state');
-    const statusBadge = document.getElementById('dpo-status-badge');
-
-    dpoLoading.classList.add('hidden');
-
-    if (!state.dpo || !state.dpo.name) {
-      dpoTableContainer.classList.add('hidden');
-      emptyState.classList.remove('hidden');
-      if (statusBadge) statusBadge.innerHTML = '<span class="badge badge-warning">Not Appointed</span>';
-      return;
-    }
-
-    dpoTableContainer.classList.remove('hidden');
-    emptyState.classList.add('hidden');
-
-    const d = state.dpo;
-
-    document.getElementById('dpo-display-name').textContent = d.name;
-    document.getElementById('dpo-display-email').textContent = d.email;
-    document.getElementById('dpo-display-phone').textContent = d.phone || '-';
-    document.getElementById('dpo-display-nationality').textContent = d.nationality || '-';
-    document.getElementById('dpo-display-date').textContent = d.appointment_date || '-';
-
-    if (statusBadge) statusBadge.innerHTML = '<span class="badge badge-success">Appointed</span>';
-
-    // Update status cell in table
-    const dpoStatusCell = document.getElementById('dpo-status');
-    if (dpoStatusCell) {
-      dpoStatusCell.className = 'status-badge status-active';
-      dpoStatusCell.textContent = 'Active';
-    }
-
-    const apptDate = document.getElementById('dpo-appointment-date');
-    if (apptDate) apptDate.textContent = d.appointment_date || '-';
-
-    const trainingStatus = document.getElementById('dpo-training-status');
-    if (trainingStatus) trainingStatus.textContent = d.training_status === 'certified' ? 'Certified' : 'Pending';
-  }
-
-  window.openDPOModal = openDPOModal;
-  window.closeDPOModal = closeDPOModal;
-  window.viewDPODetails = viewDPODetails;
-  window.closeDPODetailModal = closeDPODetailModal;
-  window.saveDPO = saveDPO;
-  window.renderDPO = renderDPO;
-  window.handleDPOFileUpload = handleDPOFileUpload;
-
-  console.log('DPO page loaded');
-</script>

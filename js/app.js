@@ -841,6 +841,9 @@ function showPage(pageId, navEl, noPush) {
     loadNavPermissions();
   }
   if (pageId === 'retention') renderRetention();
+  if (pageId === 'documents') renderDocuments();
+  if (pageId === 'dashboard') loadDashboardFromSupabase();
+  // Static pages (no data hooks): datasources, monitoring
 
   // Admin-only elements
   const isAdmin = state.currentUserLevel === 'Accountadmin';
@@ -1334,6 +1337,31 @@ function launchApp(user) {
     showPage('dashboard', null, true);
     history.replaceState(null, '', '#/dashboard');
   }
+}
+
+/* ───────────────────────────────────────────────
+   DASHBOARD
+   ─────────────────────────────────────────────── */
+async function loadDashboardFromSupabase() {
+  const recordsEl = document.getElementById('dash-records-count');
+  const dpoEl = document.getElementById('dash-dpo-name');
+
+  let recordsCount = (state.records || []).length;
+  let dpoName = 'Not assigned';
+
+  const supabase = getSupabaseClient();
+  if (supabase && isSupabaseConfigured() && state.user?.id) {
+    const [recordsRes, dpoRes] = await Promise.all([
+      supabase.from('data_records').select('id', { count: 'exact', head: true }).eq('user_id', state.user.id),
+      supabase.from('dpo').select('name').eq('user_id', state.user.id).order('created_at', { ascending: false }).limit(1)
+    ]);
+    if (!recordsRes.error && typeof recordsRes.count === 'number') recordsCount = recordsRes.count;
+    if (!dpoRes.error && dpoRes.data?.[0]?.name) dpoName = dpoRes.data[0].name;
+  }
+
+  if (recordsEl) recordsEl.textContent = recordsCount;
+  if (dpoEl) dpoEl.textContent = dpoName;
+  updateScore();
 }
 
 /* ───────────────────────────────────────────────
@@ -2029,12 +2057,11 @@ async function loadDataRequestsFromSupabase() {
     return;
   }
 
-  let query = supabase.from('data_requests').select('*');
-  const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
-  const orgId = currentCompany ? currentCompany.id : state.user?.id;
-
-  if (orgId) query = query.eq('org_id', orgId);
-  const { data, error } = await query
+  // NOTE: org_id filter intentionally omitted (matches vendor/training fix).
+  // Re-introduce when adding multi-tenancy.
+  const { data, error } = await supabase
+    .from('data_requests')
+    .select('*')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -2299,21 +2326,35 @@ async function loadBreachLogFromSupabase() {
 
   if (!supabase || !isSupabaseConfigured()) return;
 
-  let query = supabase.from('breach_log').select('*');
-  const orgId = getCurrentOrgId();
+  try {
+    // NOTE: org_id filter intentionally omitted (matches vendor/training fix).
+    // Re-introduce when adding multi-tenancy.
+    const { data, error } = await supabase
+      .from('breach_log')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (orgId) query = query.eq('org_id', orgId);
+    if (error) {
+      console.error('[JARVIS] Failed to load breach log:', error.message);
+      return;
+    }
 
-  const { data, error } = await query
-    .order('created_at', { ascending: false });
+    const remote = Array.isArray(data) ? data : [];
+    if (remote.length === 0) {
+      console.log('[JARVIS] Breach log: Supabase returned 0 rows; keeping local data.');
+      return;
+    }
 
-  if (error) {
-    console.error('Failed to load breach log:', error);
-    return;
+    const seen = new Set(remote.map(r => r.id).filter(Boolean));
+    const localOnly = (localData || []).filter(r => !r.id || !seen.has(r.id));
+    const merged = [...remote, ...localOnly];
+
+    state.breachLog = merged;
+    saveLocalList('breach_log_data', merged);
+    renderBreachLog(merged);
+  } catch (err) {
+    console.error('[JARVIS] Breach log fetch exception:', err);
   }
-
-  state.breachLog = data || [];
-  renderBreachLog(data);
 }
 
 function renderBreachLog(breaches) {
@@ -2415,32 +2456,63 @@ function editBreach(index) {
 
 async function saveBreach() {
   const index = parseInt(document.getElementById('breach-index')?.value || '-1', 10);
-  const breachData = {
-    org_id: getCurrentOrgId(),
+  const orgId = getCurrentOrgId();
+  const dbPayload = {
     breach_type: document.getElementById('breach-type')?.value.trim() || '',
     description: document.getElementById('breach-description')?.value.trim() || '',
     affected_count: Number(document.getElementById('breach-affected-count')?.value || 0),
     incident_date: document.getElementById('breach-incident-date')?.value || new Date().toISOString().slice(0, 10),
-    resolution_status: document.getElementById('breach-status')?.value || 'Pending',
-    created_at: new Date().toISOString()
+    resolution_status: document.getElementById('breach-status')?.value || 'Pending'
   };
 
-  if (!breachData.breach_type || !breachData.description) {
+  if (!dbPayload.breach_type || !dbPayload.description) {
     showToast('Breach type and description are required', 'error');
     return;
   }
 
   state.breachLog = state.breachLog || [];
-  if (index > -1) {
-    state.breachLog[index] = { ...state.breachLog[index], ...breachData };
-  } else {
-    state.breachLog.unshift({ ...breachData, id: 'local-' + Date.now() });
+  const existing = index > -1 ? state.breachLog[index] : null;
+  const supabase = getSupabaseClient();
+
+  let supabaseSucceeded = false;
+  if (supabase && isSupabaseConfigured() && orgId) {
+    try {
+      if (existing && existing.id && !String(existing.id).startsWith('local-')) {
+        const { error } = await supabase.from('breach_log')
+          .update({ ...dbPayload, updated_at: new Date().toISOString() })
+          .eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('breach_log')
+          .insert([{ ...dbPayload, org_id: orgId }]);
+        if (error) throw error;
+      }
+      supabaseSucceeded = true;
+    } catch (err) {
+      console.error('[JARVIS] Breach Supabase Save Error', err);
+    }
   }
 
+  const localRecord = {
+    ...dbPayload,
+    id: existing?.id || ('local-' + Date.now()),
+    created_at: existing?.created_at || new Date().toISOString()
+  };
+  if (index > -1) {
+    state.breachLog[index] = { ...existing, ...localRecord };
+  } else {
+    state.breachLog.unshift(localRecord);
+  }
   saveLocalList('breach_log_data', state.breachLog);
-  renderBreachLog(state.breachLog);
   closeModal('modal-breach');
-  showToast('Breach saved locally', 'success');
+
+  if (supabaseSucceeded) {
+    await loadBreachLogFromSupabase();
+    showToast('Breach saved', 'success');
+  } else {
+    renderBreachLog(state.breachLog);
+    showToast(supabase && isSupabaseConfigured() ? 'Saved locally; Supabase save failed' : 'Saved locally', 'warning');
+  }
 }
 
 function deleteBreach(index) {
@@ -2740,32 +2812,67 @@ function editCrossBorder(index) {
 
 async function saveCrossBorder() {
   const index = parseInt(document.getElementById('crossborder-index')?.value || '-1', 10);
-  const transferData = {
-    org_id: getCurrentOrgId(),
+  const orgId = getCurrentOrgId();
+  const rawCategories = document.getElementById('crossborder-data')?.value.trim() || '';
+  // DB column is TEXT[]; UI sends a comma-separated string.
+  const categoriesArr = rawCategories ? rawCategories.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const dbPayload = {
     destination_country: document.getElementById('crossborder-country')?.value.trim() || '',
     recipient_name: document.getElementById('crossborder-recipient')?.value.trim() || '',
-    data_categories: document.getElementById('crossborder-data')?.value.trim() || '',
+    data_categories: categoriesArr,
     safeguards: document.getElementById('crossborder-safeguards')?.value.trim() || '',
-    status: document.getElementById('crossborder-status')?.value || 'Active',
-    created_at: new Date().toISOString()
+    status: document.getElementById('crossborder-status')?.value || 'Active'
   };
 
-  if (!transferData.destination_country || !transferData.recipient_name) {
+  if (!dbPayload.destination_country || !dbPayload.recipient_name) {
     showToast('Destination country and recipient are required', 'error');
     return;
   }
 
   state.crossBorderTransfers = state.crossBorderTransfers || [];
-  if (index > -1) {
-    state.crossBorderTransfers[index] = { ...state.crossBorderTransfers[index], ...transferData };
-  } else {
-    state.crossBorderTransfers.unshift({ ...transferData, id: 'local-' + Date.now() });
+  const existing = index > -1 ? state.crossBorderTransfers[index] : null;
+  const supabase = getSupabaseClient();
+
+  let supabaseSucceeded = false;
+  if (supabase && isSupabaseConfigured() && orgId) {
+    try {
+      if (existing && existing.id && !String(existing.id).startsWith('local-')) {
+        const { error } = await supabase.from('cross_border_transfers')
+          .update({ ...dbPayload, updated_at: new Date().toISOString() })
+          .eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('cross_border_transfers')
+          .insert([{ ...dbPayload, org_id: orgId }]);
+        if (error) throw error;
+      }
+      supabaseSucceeded = true;
+    } catch (err) {
+      console.error('[JARVIS] CrossBorder Supabase Save Error', err);
+    }
   }
 
+  const localRecord = {
+    ...dbPayload,
+    id: existing?.id || ('local-' + Date.now()),
+    created_at: existing?.created_at || new Date().toISOString()
+  };
+  if (index > -1) {
+    state.crossBorderTransfers[index] = { ...existing, ...localRecord };
+  } else {
+    state.crossBorderTransfers.unshift(localRecord);
+  }
   saveLocalList('cross_border_data', state.crossBorderTransfers);
-  renderCrossBorder(state.crossBorderTransfers);
   closeModal('modal-crossborder');
-  showToast('Transfer saved locally', 'success');
+
+  if (supabaseSucceeded) {
+    await loadCrossBorderFromSupabase();
+    showToast('Transfer saved', 'success');
+  } else {
+    renderCrossBorder(state.crossBorderTransfers);
+    showToast(supabase && isSupabaseConfigured() ? 'Saved locally; Supabase save failed' : 'Saved locally', 'warning');
+  }
 }
 
 // JARVIS_LOG consolidated at top of file
@@ -2774,11 +2881,11 @@ async function loadAlertsFromSupabase() {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
 
-  let query = supabase.from('alerts').select('*');
-  if (state.user?.id) query = query.eq('org_id', state.user.id);
-  if (state.user?.company) query = query.eq('company_id', state.user.company);
-
-  const { data, error } = await query
+  // NOTE: org_id + company_id filters intentionally omitted (matches
+  // vendor/training fix). Re-introduce when adding multi-tenancy.
+  const { data, error } = await supabase
+    .from('alerts')
+    .select('*')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -2798,12 +2905,11 @@ async function loadCasesFromSupabase() {
 
   if (!supabase || !isSupabaseConfigured()) return;
 
-  let query = supabase.from('cases').select('*');
-  const orgId = getCurrentOrgId();
-
-  if (orgId) query = query.eq('org_id', orgId);
-
-  const { data, error } = await query
+  // NOTE: org_id filter intentionally omitted (matches vendor/training fix).
+  // Re-introduce when adding multi-tenancy.
+  const { data, error } = await supabase
+    .from('cases')
+    .select('*')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -2812,7 +2918,8 @@ async function loadCasesFromSupabase() {
   }
 
   state.cases = data || [];
-  renderCases(data);
+  saveLocalList('cases_data', state.cases);
+  renderCases(state.cases);
 }
 
 function renderCases(cases) {
@@ -2872,15 +2979,14 @@ function resetCaseForm() {
 }
 
 async function saveCase() {
+  const orgId = getCurrentOrgId();
   const caseData = {
-    org_id: getCurrentOrgId(),
     case_number: `CASE-${new Date().getFullYear()}-${String((state.cases?.length || 0) + 1).padStart(4, '0')}`,
     case_type: document.getElementById('case-type')?.value.trim() || '',
     description: document.getElementById('case-description')?.value.trim() || '',
     assigned_to: document.getElementById('case-assigned')?.value.trim() || '',
     priority: document.getElementById('case-priority')?.value || 'Medium',
-    status: document.getElementById('case-status')?.value || 'Open',
-    created_at: new Date().toISOString()
+    status: document.getElementById('case-status')?.value || 'Open'
   };
 
   if (!caseData.case_type || !caseData.description) {
@@ -2888,12 +2994,32 @@ async function saveCase() {
     return;
   }
 
+  const supabase = getSupabaseClient();
+  let savedRow = null;
+  if (supabase && isSupabaseConfigured() && orgId) {
+    const { data, error } = await supabase.from('cases')
+      .insert([{ ...caseData, org_id: orgId }])
+      .select()
+      .single();
+    if (error) {
+      console.error('Save case error:', error);
+    } else {
+      savedRow = data;
+    }
+  }
+
   state.cases = state.cases || [];
-  state.cases.unshift({ ...caseData, id: 'local-' + Date.now() });
+  state.cases.unshift(savedRow || { ...caseData, id: 'local-' + Date.now(), created_at: new Date().toISOString() });
   saveLocalList('cases_data', state.cases);
-  renderCases(state.cases);
   closeModal('modal-case');
-  showToast('Case created locally', 'success');
+
+  if (savedRow) {
+    await loadCasesFromSupabase();
+    showToast('Case created', 'success');
+  } else {
+    renderCases(state.cases);
+    showToast(supabase && isSupabaseConfigured() ? 'Saved locally; Supabase save failed' : 'Saved locally', 'warning');
+  }
 }
 
 /* ───────────────────────────────────────────────
@@ -3016,38 +3142,6 @@ function formatFileSize(bytes) {
 }
 
 // DPO logic moved to dpo_logic.js
-
-async function jarvisDPODiagnostics() {
-  const supabase = getSupabaseClient();
-  console.log('%c[JARVIS DPO Diagnostics]', 'color:#4f46e5;font-weight:bold');
-  console.log('Supabase configured:', isSupabaseConfigured());
-  console.log('Supabase client:', !!supabase);
-  console.log('User ID:', state.user?.id);
-  console.log('User Email:', state.user?.email);
-
-  if (!supabase || !isSupabaseConfigured()) {
-    console.log('Result: Using localStorage fallback');
-    return;
-  }
-
-  try {
-    const { data, error } = await supabase.from('dpo').select('*').limit(5);
-    if (error) {
-      console.error('Table query error:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      if (error.code === 'PGRST204') {
-        console.log('%c[JARVIS] ACTION REQUIRED: Run the DPO migration in Supabase SQL Editor', 'color:red;font-weight:bold');
-      }
-    } else {
-      console.log('DPO records found:', data?.length || 0);
-      console.log('Records:', data);
-    }
-  } catch (e) {
-    console.error('Unexpected error:', e);
-  }
-}
-
 
 /* ───────────────────────────────────────────────
    DOCUMENTS
@@ -3473,9 +3567,10 @@ async function savePerson() {
   };
 
   const supabase = getSupabaseClient();
-  if (supabase && isSupabaseConfigured() && state.user.id) {
+  const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.id;
+  if (supabase && isSupabaseConfigured() && orgId) {
     const { data, error } = await supabase.from('team_members').insert([{
-      org_id: state.user.id,
+      org_id: orgId,
       name: name,
       role_department: role || 'Team member',
       access_level: access,
@@ -3510,11 +3605,12 @@ async function renderTeam() {
   body.innerHTML = '';
 
   const supabase = getSupabaseClient();
-  if (supabase && isSupabaseConfigured() && state.user.id) {
+  const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.id;
+  if (supabase && isSupabaseConfigured() && orgId) {
     const { data, error } = await supabase
       .from('team_members')
       .select('*')
-      .eq('org_id', state.user.id)
+      .eq('org_id', orgId)
       .order('created_at', { ascending: false });
 
     if (!error && data) {
@@ -3643,13 +3739,23 @@ function updateAlertBadge() {
 /* ───────────────────────────────────────────────
    AUDIT REPORT
    ─────────────────────────────────────────────── */
-function renderAudit() {
+async function renderAudit() {
   const total = Object.keys(state.checks).length;
   const done = Object.values(state.checks).filter(Boolean).length;
   const pct = Math.round((done / total) * 100);
   const risk = pct >= 80 ? 'Low' : pct >= 50 ? 'Medium' : 'High';
   const riskClass = pct >= 80 ? 'low' : pct >= 50 ? 'medium' : 'high';
   const riskColor = pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
+
+  let recordsCount = (state.records || []).length;
+  const supabase = getSupabaseClient();
+  if (supabase && isSupabaseConfigured() && state.user?.id) {
+    const { count, error } = await supabase
+      .from('data_records')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', state.user.id);
+    if (!error && typeof count === 'number') recordsCount = count;
+  }
 
   const today = new Date();
   const dateStr = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -3679,7 +3785,7 @@ function renderAudit() {
             <span class="score-item-label">Items Completed</span>
           </div>
           <div class="score-item">
-            <span class="score-item-num">${state.records.length}</span>
+            <span class="score-item-num">${recordsCount}</span>
             <span class="score-item-label">Data Records</span>
           </div>
           <div class="score-item risk-item" style="--risk-color:${riskColor}">
