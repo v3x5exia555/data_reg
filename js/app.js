@@ -4670,29 +4670,32 @@ async function loadAllSampleData() {
   if (!confirm('Load sample data?')) return;
 
   const companyId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.company;
+  const accountId = getEffectiveAccountId();
   showToast('Loading sample data...', 'info');
 
+  // Each entry: [tableName, seederFn, arg]
+  // Tables that migrated from org_id → account_id receive accountId; others companyId.
   const seeders = [
-    ['data_records',           seedDataRecordsToSupabase],
-    ['processing_activities',  seedProcessingActivitiesToSupabase],
-    ['data_requests',          seedDataRequestsToSupabase],
-    ['breach_log',             seedBreachLogToSupabase],
-    ['dpia_assessments',       seedDPIAToSupabase],
-    ['cross_border_transfers', seedCrossBorderToSupabase],
-    ['vendors',                seedVendorsToSupabase],
-    ['training_records',       seedTrainingToSupabase],
-    ['alerts',                 seedAlertsToSupabase],
-    ['cases',                  seedCasesToSupabase],
-    ['team_members',           seedTeamMembersToSupabase],
-    ['dpo',                    seedDPOToSupabase],
-    ['documents',              seedDocumentsToSupabase]
+    ['data_records',           seedDataRecordsToSupabase,          companyId],
+    ['processing_activities',  seedProcessingActivitiesToSupabase, companyId],
+    ['data_requests',          seedDataRequestsToSupabase,         accountId],
+    ['breach_log',             seedBreachLogToSupabase,            accountId],
+    ['dpia_assessments',       seedDPIAToSupabase,                 accountId],
+    ['cross_border_transfers', seedCrossBorderToSupabase,          accountId],
+    ['vendors',                seedVendorsToSupabase,              accountId],
+    ['training_records',       seedTrainingToSupabase,             accountId],
+    ['alerts',                 seedAlertsToSupabase,               accountId],
+    ['cases',                  seedCasesToSupabase,                accountId],
+    ['team_members',           seedTeamMembersToSupabase,          accountId],
+    ['dpo',                    seedDPOToSupabase,                  companyId],
+    ['documents',              seedDocumentsToSupabase,            companyId]
   ];
 
   const counts = {};
   let totalInserted = 0;
-  for (const [table, fn] of seeders) {
+  for (const [table, fn, arg] of seeders) {
     try {
-      const inserted = await fn(companyId);
+      const inserted = await fn(arg);
       counts[table] = inserted || 0;
       totalInserted += counts[table];
     } catch (err) {

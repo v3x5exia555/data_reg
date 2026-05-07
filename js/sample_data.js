@@ -132,8 +132,10 @@
     return data?.length || 0;
   }
 
-  // -- Per-table seeders. Each accepts companyId (UUID for org_id, string for
-  //    company_id, or null for user-scoped tables which fall back to state.user.id).
+  // -- Per-table seeders. Scoping:
+  //    - account_id tables receive accountId (UUID) from loadAllSampleData
+  //    - company_id tables receive companyId (string/UUID)
+  //    - user-scoped tables fall back to state.user.id
   async function seedDataRecordsToSupabase(_companyId) {
     const userId = (typeof state !== 'undefined' && state.user?.id) || null;
     if (!userId) { console.warn('[sample_data] data_records needs state.user.id'); return 0; }
@@ -161,40 +163,40 @@
     return data?.length || 0;
   }
 
-  async function seedDataRequestsToSupabase(companyId) {
-    return seedTable('data_requests', SAMPLE_DATA.data_requests, 'org_id', companyId);
+  async function seedDataRequestsToSupabase(accountId) {
+    return seedTable('data_requests', SAMPLE_DATA.data_requests, 'account_id', accountId);
   }
 
-  async function seedBreachLogToSupabase(companyId) {
-    return seedTable('breach_log', SAMPLE_DATA.breach_log, 'org_id', companyId);
+  async function seedBreachLogToSupabase(accountId) {
+    return seedTable('breach_log', SAMPLE_DATA.breach_log, 'account_id', accountId);
   }
 
-  async function seedDPIAToSupabase(companyId) {
-    return seedTable('dpia_assessments', SAMPLE_DATA.dpia_assessments, 'org_id', companyId);
+  async function seedDPIAToSupabase(accountId) {
+    return seedTable('dpia_assessments', SAMPLE_DATA.dpia_assessments, 'account_id', accountId);
   }
 
-  async function seedCrossBorderToSupabase(companyId) {
-    return seedTable('cross_border_transfers', SAMPLE_DATA.cross_border_transfers, 'org_id', companyId);
+  async function seedCrossBorderToSupabase(accountId) {
+    return seedTable('cross_border_transfers', SAMPLE_DATA.cross_border_transfers, 'account_id', accountId);
   }
 
-  async function seedVendorsToSupabase(companyId) {
-    return seedTable('vendors', SAMPLE_DATA.vendors, 'org_id', companyId);
+  async function seedVendorsToSupabase(accountId) {
+    return seedTable('vendors', SAMPLE_DATA.vendors, 'account_id', accountId);
   }
 
-  async function seedTrainingToSupabase(companyId) {
-    return seedTable('training_records', SAMPLE_DATA.training_records, 'org_id', companyId);
+  async function seedTrainingToSupabase(accountId) {
+    return seedTable('training_records', SAMPLE_DATA.training_records, 'account_id', accountId);
   }
 
-  async function seedAlertsToSupabase(companyId) {
-    return seedTable('alerts', SAMPLE_DATA.alerts, 'org_id', companyId);
+  async function seedAlertsToSupabase(accountId) {
+    return seedTable('alerts', SAMPLE_DATA.alerts, 'account_id', accountId);
   }
 
-  async function seedCasesToSupabase(companyId) {
-    return seedTable('cases', SAMPLE_DATA.cases, 'org_id', companyId);
+  async function seedCasesToSupabase(accountId) {
+    return seedTable('cases', SAMPLE_DATA.cases, 'account_id', accountId);
   }
 
-  async function seedTeamMembersToSupabase(companyId) {
-    return seedTable('team_members', SAMPLE_DATA.team_members, 'org_id', companyId);
+  async function seedTeamMembersToSupabase(accountId) {
+    return seedTable('team_members', SAMPLE_DATA.team_members, 'account_id', accountId);
   }
 
   async function seedDPOToSupabase(companyId) {
