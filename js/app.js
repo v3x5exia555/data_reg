@@ -94,6 +94,10 @@ const state = {
   user: { name: 'Demo DPO', company: 'Acme Pte Ltd', email: 'dpo@acme.com' },
   bizType: null,
   currentUserLevel: 'Accountadmin',
+  // Multi-tenant state (populated on login from user_profiles).
+  role: null,           // 'Superadmin' | 'Accountadmin' | 'user'
+  accountId: null,      // null only for Superadmin
+  viewAsAccountId: null, // Superadmin override; persisted in localStorage
   navPermissions: null,
   session: {
     sessionId: null,
@@ -1022,7 +1026,8 @@ async function doLogin() {
             data = {
               email: authData.user.email,
               name: authData.user.user_metadata?.name || authData.user.email,
-              company: authData.user.user_metadata?.company || ''
+              company: authData.user.user_metadata?.company || '',
+              id: authData.user.id
             };
             console.log('Login SUCCESS (Supabase Auth):', data.email);
           }
@@ -1068,9 +1073,27 @@ async function doLogin() {
         industry: data.industry,
         companySize: data.size,
         regNo: data.regNo || '',
-        id: 'user-' + Date.now()
+        id: data.id || 'user-' + Date.now()
       };
       saveState();
+    }
+
+    // Populate multi-tenant state from user_profiles
+    const supabase = getSupabaseClient();
+    if (supabase && state.user?.id) {
+      const { data: profile, error: profileErr } = await supabase
+        .from('user_profiles')
+        .select('role, account_id')
+        .eq('id', state.user.id)
+        .single();
+      if (!profileErr && profile) {
+        state.role = profile.role;
+        state.accountId = profile.account_id;
+        state.viewAsAccountId = localStorage.getItem('viewAsAccountId') || null;
+        JARVIS_LOG.success('Auth', 'Profile loaded', { role: profile.role, accountId: profile.account_id });
+      } else {
+        JARVIS_LOG.error('Auth', 'Failed to load profile', profileErr || new Error('No profile row'));
+      }
     }
 
     const loginForm = document.getElementById('login-form');
@@ -1620,6 +1643,15 @@ function closeModal(id) {
 function getCurrentOrgId() {
   const currentCompany = (state.companies || []).find(c => c.name === (state.user?.company || ''));
   return currentCompany ? currentCompany.id : state.user?.id;
+}
+
+// Returns the account_id to scope queries to.
+// - Superadmin with no view-as: returns null (callers must handle this — only the Accounts page reads when null)
+// - Superadmin with view-as: returns the picked account_id
+// - Accountadmin / user: returns their pinned account_id
+function getEffectiveAccountId() {
+  if (state.role === 'Superadmin') return state.viewAsAccountId || null;
+  return state.accountId || null;
 }
 
 function readLocalList(key) {
