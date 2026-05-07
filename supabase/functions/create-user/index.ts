@@ -27,7 +27,13 @@ interface UserModeBody {
   temp_password: string;
   account_id: string;
 }
-type Body = AccountModeBody | UserModeBody;
+interface ManageUserBody {
+  mode: 'manage-user';
+  user_id: string;
+  action: 'reset-password' | 'activate' | 'deactivate';
+  new_password?: string;
+}
+type Body = AccountModeBody | UserModeBody | ManageUserBody;
 
 serve(async (req) => {
   if (req.method !== 'POST') {
@@ -65,6 +71,11 @@ serve(async (req) => {
     const isOwnAdmin = callerProfile.role === 'Accountadmin' && callerProfile.account_id === body.account_id;
     if (!isSuper && !isOwnAdmin) return json({ error: 'Not authorized for this account' }, 403);
     return await createUser(adminClient, body);
+  }
+  if (body.mode === 'manage-user') {
+    const isAdmin = callerProfile.role === 'Superadmin' || callerProfile.role === 'Accountadmin';
+    if (!isAdmin) return json({ error: 'Admin only' }, 403);
+    return await manageUser(adminClient, body);
   }
   return json({ error: 'Unknown mode' }, 400);
 });
@@ -156,6 +167,35 @@ async function createUser(admin: ReturnType<typeof createClient>, body: UserMode
     email: body.email,
     temp_password: body.temp_password,
   }, 200);
+}
+
+async function manageUser(admin: ReturnType<typeof createClient>, body: ManageUserBody) {
+  const { user_id, action, new_password } = body;
+
+  if (action === 'reset-password') {
+    if (!new_password || new_password.length < 8) {
+      return json({ error: 'Password too short (min 8 chars)' }, 400);
+    }
+    const { error } = await admin.auth.admin.updateUserById(user_id, { password: new_password });
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true }, 200);
+  }
+
+  if (action === 'deactivate') {
+    const { error: authErr } = await admin.auth.admin.updateUserById(user_id, { ban_duration: '876600h' });
+    if (authErr) return json({ error: authErr.message }, 500);
+    await admin.from('user_profiles').update({ status: 'suspended' }).eq('id', user_id);
+    return json({ ok: true }, 200);
+  }
+
+  if (action === 'activate') {
+    const { error: authErr } = await admin.auth.admin.updateUserById(user_id, { ban_duration: 'none' });
+    if (authErr) return json({ error: authErr.message }, 500);
+    await admin.from('user_profiles').update({ status: 'active' }).eq('id', user_id);
+    return json({ ok: true }, 200);
+  }
+
+  return json({ error: 'Unknown action' }, 400);
 }
 
 function json(body: unknown, status: number) {
