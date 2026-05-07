@@ -4308,6 +4308,7 @@ async function resetUserPassword(userId) {
 
   const supabase = getSupabaseClient();
   const { data: { session } } = await supabase.auth.getSession();
+  if (!session) { showToast('Session expired. Please refresh and try again.', 'error'); return; }
   const supaUrl = (window.ENV?.SUPABASE_URL) || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
 
   const res = await fetch(`${supaUrl}/functions/v1/create-user`, {
@@ -4326,6 +4327,7 @@ async function setUserStatus(userId, action) {
 
   const supabase = getSupabaseClient();
   const { data: { session } } = await supabase.auth.getSession();
+  if (!session) { showToast('Session expired. Please refresh and try again.', 'error'); return; }
   const supaUrl = (window.ENV?.SUPABASE_URL) || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
 
   const res = await fetch(`${supaUrl}/functions/v1/create-user`, {
