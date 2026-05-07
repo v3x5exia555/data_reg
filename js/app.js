@@ -828,6 +828,7 @@ function showPage(pageId, navEl, noPush) {
 
   // Page-specific actions
   if (pageId === 'vendors' && typeof loadVendorsFromSupabase === 'function') loadVendorsFromSupabase();
+  if (pageId === 'access' && typeof loadSeatUsage === 'function') loadSeatUsage();
   if (pageId === 'accounts' && typeof loadAccounts === 'function') loadAccounts();
   if (pageId === 'training' && typeof loadTrainingFromSupabase === 'function') loadTrainingFromSupabase();
   if (pageId === 'processing_activities' && typeof loadActivitiesFromSupabase === 'function') loadActivitiesFromSupabase();
@@ -1687,6 +1688,57 @@ function getEffectiveAccountId() {
   if (state.role === 'Superadmin') return state.viewAsAccountId || null;
   return state.accountId || null;
 }
+
+async function loadSeatUsage() {
+  if (state.role === 'Superadmin' && !state.viewAsAccountId) return; // not on a per-account view
+  const accountId = getEffectiveAccountId();
+  if (!accountId) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  const { data: account } = await supabase
+    .from('accounts').select('seat_limit').eq('id', accountId).single();
+  const { count } = await supabase
+    .from('user_profiles').select('id', { count: 'exact', head: true }).eq('account_id', accountId);
+  const limit = account?.seat_limit ?? 0;
+  const current = count ?? 0;
+  const limitEl = document.getElementById('seat-limit');
+  const curEl = document.getElementById('seat-current');
+  const btn = document.getElementById('btn-add-user');
+  if (limitEl) limitEl.textContent = limit;
+  if (curEl) curEl.textContent = current;
+  if (btn) {
+    btn.disabled = current >= limit;
+    btn.title = btn.disabled ? 'Upgrade to add more seats. Contact support.' : '';
+  }
+}
+
+async function addUserPrompt() {
+  const email = window.prompt('User email:');
+  if (!email) return;
+  const temp = window.prompt('Temporary password (min 8 chars):');
+  if (!temp || temp.length < 8) { showToast('Password too short', 'error'); return; }
+  const supabase = getSupabaseClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const accountId = getEffectiveAccountId();
+  const supaUrl = (window.ENV?.SUPABASE_URL) || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+  const res = await fetch(`${supaUrl}/functions/v1/create-user`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'user', email, temp_password: temp, account_id: accountId }),
+  });
+  const out = await res.json();
+  if (!res.ok) {
+    if (res.status === 402) showToast('Seat limit reached. Upgrade to add more users.', 'error');
+    else showToast(out.error || 'Failed to add user', 'error');
+    return;
+  }
+  showToast(`Added. Share: ${out.email} / ${out.temp_password}`, 'success');
+  await loadSeatUsage();
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target?.id === 'btn-add-user') addUserPrompt();
+});
 
 function renderViewAsBanner() {
   const banner = document.getElementById('view-as-banner');
