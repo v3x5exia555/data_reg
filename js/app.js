@@ -216,9 +216,34 @@ function loadState() {
       if (typeof parsed.isLoggedIn !== 'undefined') state.isLoggedIn = parsed.isLoggedIn;
       if (parsed.user) {
         Object.assign(state.user, parsed.user);
-        // Migration: Fix non-UUID IDs from legacy registration
-        if (state.user.id && (state.user.id.startsWith('user-') || state.user.id.length < 32)) {
-           state.user.id = '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
+        // One-shot migration for legacy non-UUID IDs (e.g. 'user-1234567890'
+        // produced by older builds of doLogin). Generate a stable UUID, write
+        // it back to dataRexState AND the matching datarex_users record, and
+        // re-tag any localStorage documents that were saved with the old id
+        // so docMatchesScope keeps showing them.
+        const oldId = state.user.id;
+        if (oldId && (oldId.startsWith('user-') || oldId.length < 32)) {
+          const stableId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
+          state.user.id = stableId;
+          try {
+            const localUsers = JSON.parse(localStorage.getItem('datarex_users') || '[]');
+            const match = localUsers.find(u => u.email === state.user.email);
+            if (match) {
+              match.id = stableId;
+              localStorage.setItem('datarex_users', JSON.stringify(localUsers));
+            }
+          } catch (_) { /* best effort */ }
+          try {
+            const docs = JSON.parse(localStorage.getItem('datarex_documents') || '[]');
+            let dirty = false;
+            for (const d of docs) {
+              if (d && d.userId === oldId) { d.userId = stableId; dirty = true; }
+            }
+            if (dirty) localStorage.setItem('datarex_documents', JSON.stringify(docs));
+          } catch (_) { /* best effort */ }
+          try { saveState(); } catch (_) {}
         }
       }
       if (parsed.bizType) state.bizType = parsed.bizType;
@@ -1067,6 +1092,17 @@ async function doLogin() {
       const pwHash = await hashPasswordForStorage(pw);
       const localUser = localUsers.find(u => u.email === email && u.password_hash === pwHash);
       if (localUser) {
+        // Persist a stable id on the user record so every subsequent login
+        // produces the same state.user.id. Without this, doRegister stored
+        // no id, the fallback used `'user-' + Date.now()`, and per-user data
+        // (e.g. uploaded documents matched by docMatchesScope) became
+        // invisible after the next login or reload.
+        if (!localUser.id) {
+          localUser.id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
+          localStorage.setItem('datarex_users', JSON.stringify(localUsers));
+        }
         data = localUser;
         console.log('Login SUCCESS (local):', data.email);
       }
@@ -1295,7 +1331,12 @@ async function doRegister() {
   if (exists) { showToast('Email already registered', 'error'); return; }
 
   const pwHash = await hashPasswordForStorage(pw);
-  users.push({ name, company, email, password_hash: pwHash, industry, size, regNo });
+  const newId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
+  // Persist the id on the user record so doLogin's localStorage fallback
+  // returns the same id on every subsequent login.
+  users.push({ id: newId, name, company, email, password_hash: pwHash, industry, size, regNo });
   localStorage.setItem('datarex_users', JSON.stringify(users));
 
   // Set current user
@@ -1306,7 +1347,7 @@ async function doRegister() {
     industry: industry,
     companySize: size,
     regNo: regNo,
-    id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0')
+    id: newId
   };
   state.isLoggedIn = true;
   saveState();
