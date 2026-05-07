@@ -840,6 +840,7 @@ function showPage(pageId, navEl, noPush) {
   if (pageId === 'vendors' && typeof loadVendorsFromSupabase === 'function') loadVendorsFromSupabase();
   if (pageId === 'access' && typeof loadSeatUsage === 'function') loadSeatUsage();
   if (pageId === 'accounts' && typeof loadAccounts === 'function') loadAccounts();
+  if (pageId === 'people' && typeof loadAllPeople === 'function') loadAllPeople();
   if (pageId === 'training' && typeof loadTrainingFromSupabase === 'function') loadTrainingFromSupabase();
   if (pageId === 'processing_activities' && typeof loadActivitiesFromSupabase === 'function') loadActivitiesFromSupabase();
   if (pageId === 'dpo' && typeof loadDPOFromSupabase === 'function') loadDPOFromSupabase();
@@ -3883,7 +3884,8 @@ const NAV_ITEMS = [
   { id: 'alerts', label: 'Alerts', section: 'Monitoring', hasBadge: true },
   { id: 'cases', label: 'Cases', section: 'Monitoring' },
   { id: 'monitoring', label: 'Monitoring', section: 'Monitoring' },
-  { id: 'accounts', label: 'Accounts', section: 'Admin', superadminOnly: true }
+  { id: 'accounts', label: 'Accounts', section: 'Admin', superadminOnly: true },
+  { id: 'people', label: 'People', section: 'Admin', accountadminOnly: true }
 ];
 
 function openAddRoleModal() {
@@ -4050,11 +4052,14 @@ function applyNavPermissions() {
   const userLevel = state.currentUserLevel || 'Accountadmin';
   const savedConfig = state.navPermissions?.[userLevel];
   const isSuperadmin = state.role === 'Superadmin';
+  const isAccountadmin = state.role === 'Accountadmin';
 
   NAV_ITEMS.forEach(item => {
     const navEl = document.getElementById('nav-' + item.id);
     if (navEl) {
       if (item.superadminOnly && !isSuperadmin) {
+        navEl.style.display = 'none';
+      } else if (item.accountadminOnly && !isSuperadmin && !isAccountadmin) {
         navEl.style.display = 'none';
       } else {
         navEl.style.display = (savedConfig && savedConfig[item.id] === false) ? 'none' : '';
@@ -4062,9 +4067,9 @@ function applyNavPermissions() {
     }
   });
 
-  // Hide the Admin nav section label for non-Superadmin users.
+  // Show Admin label for Superadmin and Accountadmin (People page lives there).
   const adminLabel = document.getElementById('nav-section-admin');
-  if (adminLabel) adminLabel.style.display = isSuperadmin ? '' : 'none';
+  if (adminLabel) adminLabel.style.display = (isSuperadmin || isAccountadmin) ? '' : 'none';
 }
 
 function setUserLevel(level) {
