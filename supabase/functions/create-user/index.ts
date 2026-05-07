@@ -116,6 +116,19 @@ async function createAccount(admin: ReturnType<typeof createClient>, body: Accou
   await admin.from('accounts').update({ accountadmin_user_id: authUser.user.id }).eq('id', account.id);
   await admin.from('companies').insert({ name: body.company_name, account_id: account.id });
 
+  const defaultConsent = [
+    { category: 'Customer contact data', title: 'Newsletter & marketing', is_enabled: true },
+    { category: 'Customer contact data', title: 'Order confirmations', is_enabled: true },
+    { category: 'Customer contact data', title: 'Third-party sharing', is_enabled: false },
+    { category: 'Employee personal data', title: 'Payroll processing', is_enabled: true },
+    { category: 'Employee personal data', title: 'Training communications', is_enabled: true },
+    { category: 'Website analytics', title: 'Analytics cookies', is_enabled: false },
+    { category: 'Website analytics', title: 'Functional cookies', is_enabled: true },
+  ];
+  await admin.from('consent_settings').insert(
+    defaultConsent.map(r => ({ ...r, account_id: account.id }))
+  );
+
   if (body.seed_sample_data) {
     // Sample data seeding is left as a server-side TODO marker — implement by
     // porting js/sample_data.js payloads into a SQL function or inline inserts
