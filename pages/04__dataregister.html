@@ -1,0 +1,20 @@
+<div id="page-dataregister" class="page-shell">
+  <div class="data-register-header">
+    <div class="page-header">
+      <div class="page-title">Personal Data Register</div>
+      <div class="page-sub">A comprehensive log of all personal data categories, processing purposes, and storage locations.</div>
+    </div>
+    <button class="btn btn-primary ml-auto" onclick="openModal('modal-record')">+ Add record</button>
+  </div>
+
+  <div class="co-summary" id="register-summary"></div>
+
+  <div class="co-toolbar">
+    <div class="co-search-wrap">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="register-search" class="co-search-input" placeholder="Search inventory…" oninput="renderRegister()">
+    </div>
+  </div>
+
+  <div id="register-body-wrap"></div>
+</div>

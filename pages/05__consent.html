@@ -1,0 +1,114 @@
+<div id="page-consent" class="page-shell">
+  <div class="page-header">
+    <h1>Purpose & Consent</h1>
+    <p>Track consent, marketing use, and opt-outs for every record.</p>
+  </div>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+  <section class="consent-card">
+    <div class="consent-card-header">
+      <div class="consent-icon">
+        <i class="fa-solid fa-bullhorn"></i>
+      </div>
+      <div class="consent-card-title">
+        <h2>Direct Marketing</h2>
+        <p>PDPA gives people the right to stop direct marketing at any time.</p>
+      </div>
+    </div>
+    
+    <div class="stats-row">
+      <div class="stat-card-inline">
+        <div class="stat-label">Records Used for Marketing</div>
+        <div class="stat-value" id="marketing-records-count">0</div>
+      </div>
+      <div class="stat-card-inline">
+        <div class="stat-label">Missing Opt-out Mechanism</div>
+        <div class="stat-value" id="missing-optout-count">0</div>
+      </div>
+      <div class="stat-card-inline">
+        <div class="stat-label">Opt-outs Logged</div>
+        <div class="stat-value" id="optouts-logged-count">0</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="consent-card">
+    <div class="consent-card-header">
+      <div class="consent-card-title">
+        <h2>Marketing Opt-out Log</h2>
+        <p>Every person who asked to stop receiving marketing.</p>
+      </div>
+      <button class="btn btn-primary" onclick="resetOptOutForm(); openModal('modal-log-optout')">
+        <i class="fa-solid fa-plus"></i> Log Opt-out
+      </button>
+    </div>
+    <div id="optout-log-body" class="optout-empty">
+      No opt-outs logged yet.
+    </div>
+  </section>
+
+  <section>
+    <h2 class="consent-section-title">Consent by Record</h2>
+    <div id="consent-body">
+      <div class="empty-state">
+        <i class="fa-solid fa-shield-halved"></i>
+        <h3>No Data Records Yet</h3>
+        <p>Add a record in the Data Register first.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<style>
+  .consent-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    margin-bottom: var(--space-6);
+  }
+  .consent-card-header {
+    display: flex;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+  .consent-icon {
+    width: 44px;
+    height: 44px;
+    background: var(--primary-light);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    flex-shrink: 0;
+  }
+  .consent-card-title {
+    flex: 1;
+  }
+  .consent-card-title h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 4px 0;
+  }
+  .consent-card-title p {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 0;
+  }
+  .consent-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: var(--space-4);
+  }
+  .optout-empty {
+    padding: var(--space-8) 0;
+    text-align: center;
+    color: var(--text-light);
+    font-size: 14px;
+    font-style: italic;
+  }
+</style>

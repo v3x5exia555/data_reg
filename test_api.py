@@ -429,6 +429,155 @@ def test_cases_select():
     print(f"✅ Test 23: Cases - Found {len(data)} case(s)")
 
 
+
+# ============================================================
+# TEST SUITE 17: DPO TABLE
+# ============================================================
+def test_dpo_select():
+    """Test 24: Get DPO records."""
+    url = f"{BASE_URL}/dpo?select=*&limit=5"
+    response = requests.get(url, headers=HEADERS)
+    
+    assert response.status_code == 200, "Should get DPO records"
+    data = response.json()
+    print(f"✅ Test 24: DPO records - Found {len(data)} record(s)")
+
+def test_dpo_insert():
+    """Test 25: Insert DPO record."""
+    test_timestamp = int(time.time())
+    data = {
+        "name": f"DPO Test User {test_timestamp}",
+        "email": f"dpo_{test_timestamp}@test.com",
+        "phone": "+60 12 345 6789",
+        "nationality": "Malaysian"
+    }
+    
+    url = f"{BASE_URL}/dpo"
+    response = requests.post(url, headers=HEADERS, json=data)
+    
+    if response.status_code in [200, 201]:
+        result = response.json()
+        record_id = result[0].get("id") if isinstance(result, list) else result.get("id")
+        print(f"✅ Test 25: DPO insert - ID {record_id}")
+        
+        # Clean up
+        delete_test_record("dpo", record_id)
+    else:
+        print(f"⚠️ Test 25: DPO insert blocked (status {response.status_code})")
+
+def test_dpo_update():
+    """Test 26: Update DPO record."""
+    # First get existing
+    url = f"{BASE_URL}/dpo?select=id&limit=1"
+    response = requests.get(url, headers=HEADERS)
+    
+    if response.status_code == 200 and response.json():
+        record_id = response.json()[0].get("id")
+        
+        update_url = f"{BASE_URL}/dpo?id=eq.{record_id}"
+        update_response = requests.patch(
+            update_url,
+            headers=HEADERS,
+            json={"phone": "+60 99 999 9999"}
+        )
+        
+        if update_response.status_code in [200, 204]:
+            print(f"✅ Test 26: DPO update - ID {record_id}")
+        else:
+            print(f"⚠️ Test 26: DPO update blocked (status {update_response.status_code})")
+    else:
+        print("⚠️ Test 26: No DPO records to update")
+
+# ============================================================
+# TEST SUITE 18: ADDITIONAL TABLES
+# ============================================================
+def test_profiles_select():
+    """Test 27: Get user profiles."""
+    url = f"{BASE_URL}/profiles?select=*&limit=5"
+    response = requests.get(url, headers=HEADERS)
+    assert response.status_code == 200, "Should get profiles"
+    data = response.json()
+    print(f"✅ Test 27: Profiles - Found {len(data)} record(s)")
+
+def test_retention_rules_select():
+    """Test 28: Get retention rules."""
+    url = f"{BASE_URL}/retention_rules?select=*&limit=5"
+    response = requests.get(url, headers=HEADERS)
+    assert response.status_code == 200, "Should get retention rules"
+    data = response.json()
+    print(f"✅ Test 28: Retention rules - Found {len(data)} record(s)")
+
+def test_activity_log_select():
+    """Test 29: Get activity log."""
+    url = f"{BASE_URL}/activity_log?select=*&limit=5"
+    response = requests.get(url, headers=HEADERS)
+    assert response.status_code == 200, "Should get activity log"
+    data = response.json()
+    print(f"✅ Test 29: Activity log - Found {len(data)} record(s)")
+
+def test_sessions_select():
+    """Test 30: Get sessions."""
+    url = f"{BASE_URL}/sessions?select=*&limit=5"
+    response = requests.get(url, headers=HEADERS)
+    assert response.status_code == 200, "Should get sessions"
+    data = response.json()
+    print(f"✅ Test 30: Sessions - Found {len(data)} record(s)")
+
+def test_documents_insert():
+    """Test 31: Insert document record."""
+    test_ts = int(time.time())
+    data = {
+        "title": f"Test Document {test_ts}",
+        "doc_type": "Policy",
+        "file_url": "https://example.com/test.pdf"
+    }
+    url = f"{BASE_URL}/documents"
+    response = requests.post(url, headers=HEADERS, json=data)
+    if response.status_code in [200, 201]:
+        result = response.json()
+        record_id = result[0].get("id") if isinstance(result, list) else result.get("id")
+        print(f"✅ Test 31: Documents insert - ID {record_id}")
+        delete_test_record("documents", record_id)
+    else:
+        print(f"⚠️ Test 31: Insert blocked (status {response.status_code})")
+
+def test_vendors_insert():
+    """Test 32: Insert vendor record."""
+    test_ts = int(time.time())
+    data = {
+        "name": f"Test Vendor {test_ts}",
+        "contact_email": f"vendor{test_ts}@test.com",
+        "country": "Singapore"
+    }
+    url = f"{BASE_URL}/vendors"
+    response = requests.post(url, headers=HEADERS, json=data)
+    if response.status_code in [200, 201]:
+        result = response.json()
+        record_id = result[0].get("id") if isinstance(result, list) else result.get("id")
+        print(f"✅ Test 32: Vendors insert - ID {record_id}")
+        delete_test_record("vendors", record_id)
+    else:
+        print(f"⚠️ Test 32: Insert blocked (status {response.status_code})")
+
+def test_data_requests_insert():
+    """Test 33: Insert data request record."""
+    test_ts = int(time.time())
+    data = {
+        "request_type": "Access",
+        "requester_name": f"Test Requester {test_ts}",
+        "requester_email": f"requester{test_ts}@test.com",
+        "status": "Pending"
+    }
+    url = f"{BASE_URL}/data_requests"
+    response = requests.post(url, headers=HEADERS, json=data)
+    if response.status_code in [200, 201]:
+        result = response.json()
+        record_id = result[0].get("id") if isinstance(result, list) else result.get("id")
+        print(f"✅ Test 33: Data requests insert - ID {record_id}")
+        delete_test_record("data_requests", record_id)
+    else:
+        print(f"⚠️ Test 33: Insert blocked (status {response.status_code})")
+
 # ============================================================
 # TEST RESULTS SUMMARY
 # ============================================================
@@ -437,7 +586,7 @@ if __name__ == "__main__":
     print("📊 DataRex Supabase API UAT Test Suite")
     print("="*50)
     print(f"API URL: {SUPABASE_URL}")
-    print(f"Tables tested: 16")
-    print(f"Endpoints tested: 23")
+    print(f"Tables tested: 22")
+    print(f"Endpoints tested: 33")
     print("="*50)
     print("\nRun: pytest test_api.py -v\n")

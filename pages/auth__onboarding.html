@@ -1,0 +1,58 @@
+<div id="screen-onboarding" class="screen">
+  <div class="onboard-bg" style="min-height:100vh; display:flex; flex-direction:column;">
+    <nav class="onboard-nav">
+      <div class="logo" onclick="goTo('screen-landing')" style="cursor:pointer">
+        <div class="logo-icon">D</div><span class="logo-name">DataRex</span>
+      </div>
+      <div class="step-indicator">
+        <div class="step-dot active"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+      </div>
+    </nav>
+
+    <div class="onboard-body">
+      <div class="onboard-content">
+        <h2>Tell us about your business</h2>
+        <p>This helps us customize your compliance checklist. You can change this later.</p>
+
+        <div class="option-grid">
+          <div class="option-card" onclick="selectBiz('Ecommerce', this)">
+            <div class="option-icon">🛒</div>
+            <div class="option-text">
+              <h4>E-Commerce</h4>
+              <p>Online store, delivery, payments</p>
+            </div>
+          </div>
+          <div class="option-card" onclick="selectBiz('Healthcare', this)">
+            <div class="option-icon">🏥</div>
+            <div class="option-text">
+              <h4>Healthcare</h4>
+              <p>Patient data, medical records</p>
+            </div>
+          </div>
+          <div class="option-card" onclick="selectBiz('Finance', this)">
+            <div class="option-icon">💰</div>
+            <div class="option-text">
+              <h4>Finance / Fintech</h4>
+              <p>Banking, KYC, transactions</p>
+            </div>
+          </div>
+          <div class="option-card" onclick="selectBiz('General', this)">
+            <div class="option-icon">🏢</div>
+            <div class="option-text">
+              <h4>General B2B/B2C</h4>
+              <p>Marketing, CRM, general ops</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="onboard-hint">💡 Healthcare and Finance industries have additional PDPA requirements in Malaysia.</div>
+
+        <div class="onboard-actions">
+          <button class="btn btn-primary" id="finish-onboard">Finish setup →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,20 @@
+<div id="page-dpiapage" class="page-shell">
+  <div class="data-register-header">
+    <div class="page-header">
+      <div class="page-title">DPIA</div>
+      <div class="page-sub">Data Protection Impact Assessments for high-risk activities.</div>
+    </div>
+    <button class="btn btn-primary ml-auto" onclick="openModal('modal-dpia')">+ Run assessment</button>
+  </div>
+
+  <div class="co-summary" id="dpia-summary"></div>
+
+  <div class="co-toolbar">
+    <div class="co-search-wrap">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="dpia-search" class="co-search-input" placeholder="Search assessments…" oninput="renderDPIA(state.dpiaItems)">
+    </div>
+  </div>
+
+  <div id="dpiapage-body"></div>
+</div>

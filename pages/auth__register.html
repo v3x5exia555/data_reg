@@ -1,0 +1,107 @@
+<div id="screen-register" class="screen">
+  <div class="auth-bg">
+    <a class="auth-logo logo" href="#" onclick="goTo('screen-landing');return false;">
+      <div class="logo-icon">D</div><span class="logo-name">DataRex</span>
+    </a>
+
+    <div class="auth-card">
+      <div id="register-form-step">
+        <h2 class="auth-title">Create Account</h2>
+        <p class="auth-sub">Start your 14-day free trial</p>
+
+        <div class="form-group">
+          <label>Full Name</label>
+          <div class="input-wrap">
+            <span class="icon">👤</span>
+            <input type="text" id="reg-name" class="form-input" placeholder="Your name">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Work Email</label>
+          <div class="input-wrap">
+            <span class="icon">📧</span>
+            <input type="email" id="reg-email" class="form-input" placeholder="name@company.com">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Company Name</label>
+          <div class="input-wrap">
+            <span class="icon">🏢</span>
+            <input type="text" id="reg-company" class="form-input" placeholder="Your organization">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Password</label>
+          <div class="input-wrap">
+            <span class="icon">🔒</span>
+            <input type="password" id="reg-password" class="form-input" placeholder="Min 8 characters" oninput="updatePasswordStrength(this.value)">
+          </div>
+          <div class="password-strength">
+            <div class="strength-bars">
+              <div class="strength-bar" id="strength-bar-1"></div>
+              <div class="strength-bar" id="strength-bar-2"></div>
+              <div class="strength-bar" id="strength-bar-3"></div>
+              <div class="strength-bar" id="strength-bar-4"></div>
+            </div>
+            <span class="strength-text" id="strength-text">Enter a password</span>
+          </div>
+        </div>
+
+        <button class="btn-submit" onclick="doRegister()">
+          Create Account →
+        </button>
+
+        <p class="terms-note">By signing up, you agree to our <a href="#">Terms</a> and <a href="#">Privacy
+            Policy</a>.</p>
+
+        <div class="auth-footer">
+          Already have an account? <a href="#" onclick="goTo('screen-login');return false;">Log in</a>
+        </div>
+      </div>
+
+      <div id="register-success-step" class="success-screen">
+        <div class="success-icon blue">✨</div>
+        <h3>Check your email</h3>
+        <p>We've sent a verification link to <strong id="sent-email-display">your email</strong>. Please click it to
+          continue.</p>
+        <button class="btn btn-primary btn-full" style="margin-top:24px"
+          onclick="goTo('screen-onboarding')">Continue setup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .password-strength {
+    margin-top: 8px;
+  }
+  .strength-bars {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+  .strength-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    transition: background 0.2s;
+  }
+  .strength-bar.active-weak { background: var(--danger); }
+  .strength-bar.active-fair { background: var(--warning); }
+  .strength-bar.active-good { background: var(--success); }
+  .strength-bar.active-strong { background: var(--success); }
+  .strength-text {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .strength-text.weak { color: var(--danger); }
+  .strength-text.fair { color: var(--warning); }
+  .strength-text.good { color: var(--success); }
+  .strength-text.strong { color: var(--success); font-weight: 600; }
+</style>
+
+<!-- updatePasswordStrength is defined in js/app.js (no inline scripts). -->

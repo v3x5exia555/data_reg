@@ -1,0 +1,49 @@
+<div id="page-crossborder" class="page-shell">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  
+  <div class="page-header">
+    <h1>Cross-Border Transfers</h1>
+    <p>Track data transfers outside Malaysia.</p>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-primary">
+        <i class="fa-solid fa-globe"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Total Transfers</div>
+        <div class="stat-value" id="crossborder-total-count">0</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-success">
+        <i class="fa-solid fa-flag"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Countries</div>
+        <div class="stat-value" id="crossborder-countries-count">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-toolbar">
+    <div class="search-box">
+      <i class="fa-solid fa-search"></i>
+      <input type="text" id="crossborder-search" placeholder="Search transfers…" oninput="renderCrossBorder(state.crossBorderTransfers)">
+    </div>
+    <button class="btn btn-primary" onclick="resetCrossBorderForm(); openModal('modal-crossborder')">
+      <i class="fa-solid fa-plus"></i> Log Transfer
+    </button>
+  </div>
+
+  <div id="crossborder-tbody"></div>
+</div>
+
+<style>
+  .data-table-header { grid-template-columns: 1fr 1fr 1fr 1fr auto; }
+  .data-table-row { grid-template-columns: 1fr 1fr 1fr 1fr auto; }
+  .country-name { font-weight: 500; color: var(--text); }
+  .badge-active { background: var(--success-light); color: var(--success); }
+  .badge-inactive { background: var(--danger-light); color: var(--danger); }
+</style>

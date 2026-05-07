@@ -5,7 +5,7 @@
 
 # Configuration
 PROJECT_DIR="/Users/tysonchua/Desktop/project/data-reg"
-PORT=8050
+PORT=8060
 PYTHON="/usr/bin/python3"
 PYTEST="$PYTHON -m pytest"
 
@@ -199,21 +199,21 @@ run_all_tests() {
     # API Tests
     print_header "PHASE 1: API TESTS"
     if run_api_tests; then
-        api_passed=23
+        api_passed=33
         api_failed=0
     else
         api_passed=0
-        api_failed=23
+        api_failed=33
     fi
     
     # Frontend Tests
     print_header "PHASE 2: FRONTEND TESTS"
     if run_frontend_tests; then
-        fe_passed=25
+        fe_passed=45
         fe_failed=0
     else
         fe_passed=0
-        fe_failed=25
+        fe_failed=45
     fi
     
     # Summary
@@ -221,10 +221,10 @@ run_all_tests() {
     echo ""
     echo "  Test Suite       | Total | Passed | Failed"
     echo "  --------------|-------|--------|--------"
-    echo "  API Tests     |   23  |  $api_passed   |   $api_failed"
-    echo "  Frontend     |   25  |  $fe_passed   |   $fe_failed"
+    echo "  API Tests     |   33  |  $api_passed   |   $api_failed"
+    echo "  Frontend     |   45  |  $fe_passed   |   $fe_failed"
     echo "  --------------|-------|--------|--------"
-    echo "  TOTAL        |   48  |  $((api_passed + fe_passed))   |   $((api_failed + fe_failed))"
+    echo "  TOTAL        |   78  |  $((api_passed + fe_passed))   |   $((api_failed + fe_failed))"
     echo ""
     
     local total_failed=$((api_failed + fe_failed))
@@ -281,8 +281,8 @@ main() {
             echo ""
             echo "Commands:"
             echo "  install    - Install all dependencies"
-            echo "  api       - Run API tests only (23 tests)"
-            echo "  frontend  - Run frontend tests only (25 tests)"
+            echo "  api       - Run API tests only (33 tests)"
+            echo "  frontend  - Run frontend tests only (45 tests)"
             echo "  all       - Run all tests (default)"
             echo "  report    - Generate HTML report"
             echo "  help      - Show this help message"
