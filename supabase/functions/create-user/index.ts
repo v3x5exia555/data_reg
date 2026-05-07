@@ -1,7 +1,8 @@
 // supabase/functions/create-user/index.ts
-// One Edge Function, two modes:
-//   mode='account' — Superadmin creates a new account + Accountadmin user
-//   mode='user'    — Accountadmin invites a User into their own account
+// One Edge Function, three modes:
+//   mode='account'      — Superadmin creates a new account + Accountadmin user
+//   mode='user'         — Accountadmin invites a User into their own account
+//   mode='manage-user'  — Accountadmin/Superadmin resets password, activates, or deactivates a user
 //
 // Atomicity: best-effort rollback. If a step fails, the function attempts to
 // delete the auth user / accounts row that was already created.
@@ -75,6 +76,7 @@ serve(async (req) => {
   if (body.mode === 'manage-user') {
     const isAdmin = callerProfile.role === 'Superadmin' || callerProfile.role === 'Accountadmin';
     if (!isAdmin) return json({ error: 'Admin only' }, 403);
+    if (body.user_id === caller.id) return json({ error: 'Cannot manage your own account' }, 400);
     return await manageUser(adminClient, body);
   }
   return json({ error: 'Unknown mode' }, 400);
@@ -182,16 +184,26 @@ async function manageUser(admin: ReturnType<typeof createClient>, body: ManageUs
   }
 
   if (action === 'deactivate') {
+    // ~100 years: Supabase has no permanent-ban option
     const { error: authErr } = await admin.auth.admin.updateUserById(user_id, { ban_duration: '876600h' });
     if (authErr) return json({ error: authErr.message }, 500);
-    await admin.from('user_profiles').update({ status: 'suspended' }).eq('id', user_id);
+    const { error: dbErr } = await admin.from('user_profiles').update({ status: 'suspended' }).eq('id', user_id);
+    if (dbErr) {
+      await admin.auth.admin.updateUserById(user_id, { ban_duration: 'none' });
+      return json({ error: 'DB update failed', detail: dbErr.message }, 500);
+    }
     return json({ ok: true }, 200);
   }
 
   if (action === 'activate') {
     const { error: authErr } = await admin.auth.admin.updateUserById(user_id, { ban_duration: 'none' });
     if (authErr) return json({ error: authErr.message }, 500);
-    await admin.from('user_profiles').update({ status: 'active' }).eq('id', user_id);
+    const { error: dbErr } = await admin.from('user_profiles').update({ status: 'active' }).eq('id', user_id);
+    if (dbErr) {
+      // ~100 years: Supabase has no permanent-ban option
+      await admin.auth.admin.updateUserById(user_id, { ban_duration: '876600h' });
+      return json({ error: 'DB update failed', detail: dbErr.message }, 500);
+    }
     return json({ ok: true }, 200);
   }
 
