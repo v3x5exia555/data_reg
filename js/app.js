@@ -864,6 +864,8 @@ function showPage(pageId, navEl, noPush) {
     console.log('Updating URL to:', newUrl);
     history.pushState(null, '', newUrl);
   }
+
+  if (typeof renderViewAsBanner === 'function') renderViewAsBanner();
 }
 
 // Expose to global scope for onclick handlers
@@ -1363,6 +1365,9 @@ function launchApp(user) {
     showPage('dashboard', null, true);
     history.replaceState(null, '', '#/dashboard');
   }
+
+  // Render view-as banner on boot (state.viewAsAccountId already restored from localStorage above)
+  if (typeof renderViewAsBanner === 'function') renderViewAsBanner();
 }
 
 /* ───────────────────────────────────────────────
@@ -1658,6 +1663,37 @@ function getEffectiveAccountId() {
   if (state.role === 'Superadmin') return state.viewAsAccountId || null;
   return state.accountId || null;
 }
+
+function renderViewAsBanner() {
+  const banner = document.getElementById('view-as-banner');
+  if (!banner) return;
+  if (!state.viewAsAccountId) {
+    banner.hidden = true;
+    banner.innerHTML = '';
+    return;
+  }
+  // Best-effort: we have the id; ask Supabase for the name (cached in state).
+  const cached = state._viewAsAccountName;
+  if (cached && cached.id === state.viewAsAccountId) {
+    paint(cached.name);
+    return;
+  }
+  const supabase = getSupabaseClient();
+  if (!supabase) return paint('account');
+  supabase.from('accounts').select('name').eq('id', state.viewAsAccountId).single()
+    .then(({ data }) => {
+      state._viewAsAccountName = { id: state.viewAsAccountId, name: data?.name || 'account' };
+      paint(state._viewAsAccountName.name);
+    });
+  function paint(name) {
+    banner.hidden = false;
+    banner.innerHTML = `👁 Viewing as <strong>${name}</strong> · <button id="btn-exit-view-as">Exit view-as</button>`;
+  }
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target?.id === 'btn-exit-view-as' && typeof exitViewAs === 'function') exitViewAs();
+});
 
 function readLocalList(key) {
   try {
