@@ -77,6 +77,16 @@ serve(async (req) => {
     const isAdmin = callerProfile.role === 'Superadmin' || callerProfile.role === 'Accountadmin';
     if (!isAdmin) return json({ error: 'Admin only' }, 403);
     if (body.user_id === caller.id) return json({ error: 'Cannot manage your own account' }, 400);
+    if (callerProfile.role === 'Accountadmin') {
+      const { data: targetProfile } = await adminClient
+        .from('user_profiles')
+        .select('role')
+        .eq('id', body.user_id)
+        .single();
+      if (targetProfile?.role === 'Superadmin') {
+        return json({ error: 'Not authorized to manage Superadmin accounts' }, 403);
+      }
+    }
     return await manageUser(adminClient, body);
   }
   return json({ error: 'Unknown mode' }, 400);
