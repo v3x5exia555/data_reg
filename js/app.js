@@ -3663,13 +3663,27 @@ function docMatchesScope(doc) {
 }
 
 function mergeDocuments(primary, secondary) {
-  const seen = new Set();
-  return [...primary, ...secondary].filter(doc => {
+  // Dedupe by id/storagePath/name. When two entries share a key, keep the
+  // primary record but fill in missing fields from the secondary — most
+  // importantly `dataUrl`, which only the local copy carries. Without this
+  // a synced doc's row hides the local dataUrl and Download has to fall
+  // through to the (popup-prone) signed-URL path.
+  const byKey = new Map();
+  const order = [];
+  for (const doc of [...primary, ...secondary]) {
+    if (!doc || !doc.name) continue;
     const key = doc.id || doc.storagePath || `${doc.name}-${doc.uploadedAt}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    if (byKey.has(key)) {
+      const existing = byKey.get(key);
+      if (!existing.dataUrl && doc.dataUrl) existing.dataUrl = doc.dataUrl;
+      if (!existing.storagePath && doc.storagePath) existing.storagePath = doc.storagePath;
+    } else {
+      const copy = { ...doc };
+      byKey.set(key, copy);
+      order.push(copy);
+    }
+  }
+  return order;
 }
 
 function getDocType(fileName = '', mimeType = '') {
@@ -3798,20 +3812,41 @@ function getDocIcon(type) {
   return '📄';
 }
 
+// Trigger a browser download by adding a temporary <a> to the DOM. Detached
+// anchors are silently ignored in some browsers (notably Firefox) and the
+// `download` attribute on a popup window can be blocked, so this is the
+// reliable way to fire a download from JS.
+function triggerDownload(href, filename) {
+  const link = document.createElement('a');
+  link.href = href;
+  link.rel = 'noopener';
+  if (filename) link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => link.remove(), 0);
+}
+
 async function downloadDocument(docId) {
   const doc = state.documents.find(d => String(d.id) === String(docId));
   if (!doc) return;
-  if (doc.dataUrl) {
-    const link = document.createElement('a');
-    link.href = doc.dataUrl;
-    link.download = doc.name || 'document';
-    link.click();
+  // dataUrl can have been stripped from state.documents during render (e.g.
+  // when the synced row from Supabase replaced the local one). Fall back to
+  // the canonical localStorage record before giving up.
+  let dataUrl = doc.dataUrl || '';
+  if (!dataUrl) {
+    try {
+      const local = (JSON.parse(localStorage.getItem(DOCUMENTS_LOCAL_KEY) || '[]') || [])
+        .find(d => String(d.id) === String(docId) || (d.storagePath && d.storagePath === doc.storagePath));
+      if (local?.dataUrl) dataUrl = local.dataUrl;
+    } catch (_) {}
+  }
+  if (dataUrl) {
+    triggerDownload(dataUrl, doc.name || 'document');
     return;
   }
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured() && doc.storagePath) {
-    // Bucket is private (see 20260509000005_documents_storage_bucket.sql),
-    // so getPublicUrl() returns a 400. Use a short-lived signed URL instead.
+    // Bucket is private (see 20260509000005_documents_storage_bucket.sql).
     const { data, error } = await supabase.storage
       .from('documents')
       .createSignedUrl(doc.storagePath, 60, { download: doc.name || true });
@@ -3819,9 +3854,9 @@ async function downloadDocument(docId) {
       showToast('Could not generate download link', 'error');
       return;
     }
-    window.open(data.signedUrl, '_blank');
+    triggerDownload(data.signedUrl, doc.name || 'document');
   } else {
-    showToast('Only document metadata is available locally for this file', 'info');
+    showToast('File content was not stored locally for this document', 'info');
   }
 }
 
