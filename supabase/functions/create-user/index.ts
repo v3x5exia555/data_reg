@@ -1,7 +1,8 @@
 // supabase/functions/create-user/index.ts
-// One Edge Function, two modes:
-//   mode='account' — Superadmin creates a new account + Accountadmin user
-//   mode='user'    — Accountadmin invites a User into their own account
+// One Edge Function, three modes:
+//   mode='account'      — Superadmin creates a new account + Accountadmin user
+//   mode='user'         — Accountadmin invites a User into their own account
+//   mode='manage-user'  — Accountadmin/Superadmin resets password, activates, or deactivates a user
 //
 // Atomicity: best-effort rollback. If a step fails, the function attempts to
 // delete the auth user / accounts row that was already created.
@@ -27,7 +28,13 @@ interface UserModeBody {
   temp_password: string;
   account_id: string;
 }
-type Body = AccountModeBody | UserModeBody;
+interface ManageUserBody {
+  mode: 'manage-user';
+  user_id: string;
+  action: 'reset-password' | 'activate' | 'deactivate';
+  new_password?: string;
+}
+type Body = AccountModeBody | UserModeBody | ManageUserBody;
 
 serve(async (req) => {
   if (req.method !== 'POST') {
@@ -66,6 +73,22 @@ serve(async (req) => {
     if (!isSuper && !isOwnAdmin) return json({ error: 'Not authorized for this account' }, 403);
     return await createUser(adminClient, body);
   }
+  if (body.mode === 'manage-user') {
+    const isAdmin = callerProfile.role === 'Superadmin' || callerProfile.role === 'Accountadmin';
+    if (!isAdmin) return json({ error: 'Admin only' }, 403);
+    if (body.user_id === caller.id) return json({ error: 'Cannot manage your own account' }, 400);
+    if (callerProfile.role === 'Accountadmin') {
+      const { data: targetProfile } = await adminClient
+        .from('user_profiles')
+        .select('role')
+        .eq('id', body.user_id)
+        .single();
+      if (targetProfile?.role === 'Superadmin') {
+        return json({ error: 'Not authorized to manage Superadmin accounts' }, 403);
+      }
+    }
+    return await manageUser(adminClient, body);
+  }
   return json({ error: 'Unknown mode' }, 400);
 });
 
@@ -102,6 +125,19 @@ async function createAccount(admin: ReturnType<typeof createClient>, body: Accou
 
   await admin.from('accounts').update({ accountadmin_user_id: authUser.user.id }).eq('id', account.id);
   await admin.from('companies').insert({ name: body.company_name, account_id: account.id });
+
+  const defaultConsent = [
+    { category: 'Customer contact data', title: 'Newsletter & marketing', is_enabled: true },
+    { category: 'Customer contact data', title: 'Order confirmations', is_enabled: true },
+    { category: 'Customer contact data', title: 'Third-party sharing', is_enabled: false },
+    { category: 'Employee personal data', title: 'Payroll processing', is_enabled: true },
+    { category: 'Employee personal data', title: 'Training communications', is_enabled: true },
+    { category: 'Website analytics', title: 'Analytics cookies', is_enabled: false },
+    { category: 'Website analytics', title: 'Functional cookies', is_enabled: true },
+  ];
+  await admin.from('consent_settings').insert(
+    defaultConsent.map(r => ({ ...r, account_id: account.id }))
+  );
 
   if (body.seed_sample_data) {
     // Sample data seeding is left as a server-side TODO marker — implement by
@@ -156,6 +192,45 @@ async function createUser(admin: ReturnType<typeof createClient>, body: UserMode
     email: body.email,
     temp_password: body.temp_password,
   }, 200);
+}
+
+async function manageUser(admin: ReturnType<typeof createClient>, body: ManageUserBody) {
+  const { user_id, action, new_password } = body;
+
+  if (action === 'reset-password') {
+    if (!new_password || new_password.length < 8) {
+      return json({ error: 'Password too short (min 8 chars)' }, 400);
+    }
+    const { error } = await admin.auth.admin.updateUserById(user_id, { password: new_password });
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true }, 200);
+  }
+
+  if (action === 'deactivate') {
+    // ~100 years: Supabase has no permanent-ban option
+    const { error: authErr } = await admin.auth.admin.updateUserById(user_id, { ban_duration: '876600h' });
+    if (authErr) return json({ error: authErr.message }, 500);
+    const { error: dbErr } = await admin.from('user_profiles').update({ status: 'suspended' }).eq('id', user_id);
+    if (dbErr) {
+      await admin.auth.admin.updateUserById(user_id, { ban_duration: 'none' });
+      return json({ error: 'DB update failed', detail: dbErr.message }, 500);
+    }
+    return json({ ok: true }, 200);
+  }
+
+  if (action === 'activate') {
+    const { error: authErr } = await admin.auth.admin.updateUserById(user_id, { ban_duration: 'none' });
+    if (authErr) return json({ error: authErr.message }, 500);
+    const { error: dbErr } = await admin.from('user_profiles').update({ status: 'active' }).eq('id', user_id);
+    if (dbErr) {
+      // ~100 years: Supabase has no permanent-ban option
+      await admin.auth.admin.updateUserById(user_id, { ban_duration: '876600h' });
+      return json({ error: 'DB update failed', detail: dbErr.message }, 500);
+    }
+    return json({ ok: true }, 200);
+  }
+
+  return json({ error: 'Unknown action' }, 400);
 }
 
 function json(body: unknown, status: number) {

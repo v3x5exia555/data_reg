@@ -150,11 +150,11 @@ const PAGES_TO_LOAD = [
   '00__dashboard', '01__checklist', '02__companies', '03__datasources',
   '04__dataregister', '05__consent', '06__access', '07__retention',
   '07__vendors', '08__dpo', '08__training', '09__datarequests', '10__breachlog',
-  '04__dpia', '06__crossborder', '15__documents',
+  '04__dpia', '11__deica', '06__crossborder', '15__documents',
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
-  '20__accounts'
+  '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '17';
+const PAGE_ASSET_VERSION = '23';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -225,6 +225,7 @@ function loadState() {
       if (parsed.checks) Object.assign(state.checks, parsed.checks);
       if (parsed.records) state.records = parsed.records;
       if (parsed.team) state.team = parsed.team;
+      if (parsed.documents) state.documents = parsed.documents;
       if (parsed.currentUserLevel) state.currentUserLevel = parsed.currentUserLevel;
       if (parsed.navPermissions) state.navPermissions = parsed.navPermissions;
     } catch (e) {
@@ -277,6 +278,12 @@ function toggleOrgDropdown() {
       renderOrgDropdown();
     }
   }
+}
+
+function openCompaniesTab() {
+  const dropdown = document.getElementById('org-dropdown');
+  if (dropdown) dropdown.classList.remove('open');
+  showPage('companies', document.getElementById('nav-companies'));
 }
 
 function renderOrgDropdown() {
@@ -564,10 +571,11 @@ async function loadConsentFromSupabase() {
     return;
   }
 
-  const { data, error } = await supabase
-    .from('consent_settings')
-    .select('*')
-    .order('category');
+  const accountId = getEffectiveAccountId();
+  if (state.role === 'Accountadmin' && !accountId) { renderConsent(); return; }
+  let consentQuery = supabase.from('consent_settings').select('*');
+  if (accountId) consentQuery = consentQuery.eq('account_id', accountId);
+  const { data, error } = await consentQuery.order('category');
 
   if (error) {
     console.error('Failed to load consent:', error);
@@ -666,10 +674,12 @@ async function updateConsentDb(id, checked) {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
 
-  const { error } = await supabase
-    .from('consent_settings')
-    .update({ is_enabled: checked })
-    .eq('id', id);
+  const accountId = getEffectiveAccountId();
+  if (state.role === 'Accountadmin' && !accountId) return;
+
+  let query = supabase.from('consent_settings').update({ is_enabled: checked }).eq('id', id);
+  if (accountId) query = query.eq('account_id', accountId);
+  const { error } = await query;
 
   if (error) {
     console.error('Update failed:', error);
@@ -793,7 +803,7 @@ function closeSidebar() {
 }
 
 function showPage(pageId, navEl, noPush) {
-  const pageAliases = { dpia: 'dpiapage' };
+  const pageAliases = { dpia: 'dpiapage', 'dpia-workflow': 'deica', deica_workflow: 'deica' };
   pageId = pageAliases[pageId] || pageId;
   console.log('showPage called:', pageId);
 
@@ -830,6 +840,7 @@ function showPage(pageId, navEl, noPush) {
   if (pageId === 'vendors' && typeof loadVendorsFromSupabase === 'function') loadVendorsFromSupabase();
   if (pageId === 'access' && typeof loadSeatUsage === 'function') loadSeatUsage();
   if (pageId === 'accounts' && typeof loadAccounts === 'function') loadAccounts();
+  if (pageId === 'people' && typeof loadAllPeople === 'function') loadAllPeople();
   if (pageId === 'training' && typeof loadTrainingFromSupabase === 'function') loadTrainingFromSupabase();
   if (pageId === 'processing_activities' && typeof loadActivitiesFromSupabase === 'function') loadActivitiesFromSupabase();
   if (pageId === 'dpo' && typeof loadDPOFromSupabase === 'function') loadDPOFromSupabase();
@@ -841,6 +852,7 @@ function showPage(pageId, navEl, noPush) {
   if (pageId === 'datarequests') loadDataRequestsFromSupabase();
   if (pageId === 'breachlog') loadBreachLogFromSupabase();
   if (pageId === 'dpiapage') loadDPIAFromSupabase();
+  if (pageId === 'deica') renderDEICA();
   if (pageId === 'crossborder') loadCrossBorderFromSupabase();
   if (pageId === 'alerts') loadAlertsFromSupabase();
   if (pageId === 'cases') loadCasesFromSupabase();
@@ -1331,6 +1343,7 @@ function demoLogin()     {
 window.demoLogin = demoLogin;
 window.doLogin = doLogin;
 window.toggleOrgDropdown = toggleOrgDropdown;
+window.openCompaniesTab = openCompaniesTab;
 window.switchOrg = switchOrg;
 if (typeof saveDPOToSupabase !== 'undefined') window.saveDPOToSupabase = saveDPOToSupabase;
 if (typeof saveDPO !== 'undefined' && !window.saveDPOToSupabase) window.saveDPOToSupabase = saveDPO;
@@ -2125,8 +2138,8 @@ function renderCompanies() {
   const COLORS = ['#3B6FF0','#7C3AED','#0891B2','#059669','#D97706','#DB2777'];
   const getColor = (s) => COLORS[(s||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0) % COLORS.length];
 
-  body.innerHTML = `<div class="data-table-wrap"><table class="styled-table"><thead><tr>
-    <th class="th-company">Company</th><th class="th-industry">Industry</th><th class="th-country">Country</th><th class="th-dpo">DPO</th><th class="th-date">Updated</th><th class="th-actions"></th>
+  body.innerHTML = `<div class="data-table-wrap companies-table-wrap"><table class="styled-table companies-table"><thead><tr>
+    <th class="th-company">Company</th><th class="th-industry">Industry</th><th class="th-country">Country</th><th class="th-dpo">DPO</th><th class="th-date">Updated</th><th class="th-company-status">Status</th><th class="th-actions th-company-actions">Actions</th>
   </tr></thead><tbody>${list.map(c => {
     const isCurrent = (c.name||'').toLowerCase() === (currentCompanyName||'').toLowerCase();
     const color = getColor(c.name);
@@ -2139,8 +2152,10 @@ function renderCompanies() {
       <td class="td-muted">${c.country || '—'}</td>
       <td class="td-muted">${c.dpo_name || '—'}</td>
       <td class="td-muted co-date">${lastUpdated}</td>
-      <td><div class="row-actions co-actions td-actions">
+      <td class="td-company-status">
         ${isCurrent ? '<span class="status-badge status-active">Active</span>' : `<button class="btn-edit" onclick="switchOrg('${c.name}')">Switch</button>`}
+      </td>
+      <td class="td-actions td-company-actions"><div class="row-actions co-actions">
         <button class="btn-edit" onclick="editCompany('${cJson}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
         <button class="btn-delete" onclick="deleteCompany('${c.id}', '${c.name}')" title="Delete"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
       </div></td>
@@ -2204,6 +2219,7 @@ async function loadCompaniesFromSupabase() {
   if (!supabase || !isSupabaseConfigured()) return;
 
   const accountId = getEffectiveAccountId();
+  if (state.role === 'Accountadmin' && !accountId) return;
   let query = supabase.from('companies').select('*');
   if (accountId) query = query.eq('account_id', accountId);
   const { data, error } = await query.order('name');
@@ -2245,6 +2261,7 @@ async function loadDataRequestsFromSupabase() {
   }
 
   const accountId = getEffectiveAccountId();
+  if (state.role === 'Accountadmin' && !accountId) { renderDataRequests(state.dataRequests); return; }
   let query = supabase.from('data_requests').select('*');
   if (accountId) query = query.eq('account_id', accountId);
   const { data, error } = await query.order('created_at', { ascending: false });
@@ -2511,6 +2528,7 @@ async function loadBreachLogFromSupabase() {
 
   try {
     const accountId = getEffectiveAccountId();
+    if (state.role === 'Accountadmin' && !accountId) return;
     let query = supabase.from('breach_log').select('*');
     if (accountId) query = query.eq('account_id', accountId);
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -2783,6 +2801,7 @@ async function loadDPIAFromSupabase() {
   console.log('[JARVIS] Fetching DPIAs...');
   try {
     const accountId = getEffectiveAccountId();
+    if (state.role === 'Accountadmin' && !accountId) return;
     let query = supabase.from('dpia_assessments').select('*');
     if (accountId) query = query.eq('account_id', accountId);
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -2864,6 +2883,217 @@ function viewDPIADetails(id) {
   ].join('\n'));
 }
 
+/* ───────────────────────────────────────────────
+   DEICA / DPIA WORKFLOW
+   ─────────────────────────────────────────────── */
+const DEICA_STORAGE_KEY = 'dpia_screenings';
+const DEICA_QUAL_FACTORS = [
+  ['legal_or_significant_impact', 'Legal or significant impact on the subject'],
+  ['systematic_monitoring', 'Systematic monitoring of subjects'],
+  ['innovative_technology', 'Innovative or novel technology'],
+  ['restriction_of_rights', "Restriction of subjects' rights"],
+  ['behaviour_or_location_tracking', 'Behaviour or location tracking'],
+  ['children_or_vulnerable', 'Children or other vulnerable groups'],
+  ['automated_decision_making', 'Automated decision-making with legal effect']
+];
+const DEICA_KEYS = [
+  'subjects_over_20k',
+  'sensitive_subjects_over_10k',
+  ...DEICA_QUAL_FACTORS.map(([key]) => key)
+];
+let deicaCurrent = null;
+let deicaBound = false;
+
+function readDEICAScreenings() {
+  try {
+    return JSON.parse(localStorage.getItem(DEICA_STORAGE_KEY) || '[]');
+  } catch (err) {
+    console.error('[JARVIS] Failed to parse DEICA screenings', err);
+    return [];
+  }
+}
+
+function saveDEICAScreenings(rows) {
+  localStorage.setItem(DEICA_STORAGE_KEY, JSON.stringify(rows || []));
+}
+
+function blankDEICAScreening() {
+  return {
+    id: '',
+    activity_name: '',
+    justification: '',
+    decision: 'pending',
+    ...Object.fromEntries(DEICA_KEYS.map(key => [key, false]))
+  };
+}
+
+function decideDEICA(screening) {
+  if (screening.subjects_over_20k || screening.sensitive_subjects_over_10k) return 'required';
+  if (DEICA_QUAL_FACTORS.some(([key]) => screening[key])) return 'required';
+  return 'not_required';
+}
+
+function deicaEscape(value) {
+  return String(value || '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+
+function renderDEICA() {
+  const page = document.getElementById('page-deica');
+  const list = document.getElementById('deica-list');
+  if (!page || !list) return;
+
+  bindDEICAEvents();
+  const rows = readDEICAScreenings();
+
+  if (!rows.length) {
+    list.className = 'deica-empty';
+    list.innerHTML = 'No DEICA screenings yet. Run one whenever you launch a new processing activity.';
+    return;
+  }
+
+  list.className = 'deica-list';
+  list.innerHTML = rows.map(row => {
+    const tags = [];
+    if (row.subjects_over_20k) tags.push('>20k subjects');
+    if (row.sensitive_subjects_over_10k) tags.push('>10k sensitive');
+    DEICA_QUAL_FACTORS.forEach(([key, label]) => {
+      if (row[key] && tags.length < 5) tags.push(label);
+    });
+    const required = row.decision === 'required';
+    return `
+      <div class="deica-card">
+        <div class="deica-card-head">
+          <div class="deica-card-title">${deicaEscape(row.activity_name || 'Untitled activity')}</div>
+          <span class="deica-badge ${required ? 'required' : 'not-required'}">${required ? 'DPIA required' : 'Not required'}</span>
+        </div>
+        <div class="deica-tags">
+          ${tags.length ? tags.map(tag => `<span class="deica-tag">${deicaEscape(tag)}</span>`).join('') : '<span class="deica-tag">No risk factors selected</span>'}
+        </div>
+        ${required ? '' : `<div class="deica-note">${deicaEscape(row.justification || 'No justification recorded yet.')}</div>`}
+        <div class="deica-card-actions">
+          <button class="deica-link-btn deica-edit-btn" type="button" data-id="${deicaEscape(row.id)}">Edit</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function bindDEICAEvents() {
+  if (deicaBound) return;
+
+  document.getElementById('deica-new-btn')?.addEventListener('click', () => openDEICAModal(blankDEICAScreening()));
+  document.getElementById('deica-cancel-btn')?.addEventListener('click', closeDEICAModal);
+  document.getElementById('deica-save-btn')?.addEventListener('click', saveDEICADecision);
+  document.getElementById('deica-list')?.addEventListener('click', (event) => {
+    const button = event.target?.closest?.('.deica-edit-btn');
+    if (button?.dataset?.id) editDEICA(button.dataset.id);
+  });
+  document.getElementById('deica-modal')?.addEventListener('click', (event) => {
+    if (event.target?.id === 'deica-modal') closeDEICAModal();
+  });
+
+  deicaBound = true;
+}
+
+function openDEICAModal(screening) {
+  deicaCurrent = { ...screening };
+  const modal = document.getElementById('deica-modal');
+  const title = document.getElementById('deica-modal-title');
+  const activity = document.getElementById('deica-activity-name');
+  const justification = document.getElementById('deica-justification');
+  const qualWrap = document.getElementById('deica-qual-wrap');
+  if (!modal || !activity || !justification || !qualWrap) return;
+
+  if (title) title.textContent = deicaCurrent.id ? 'Edit DPIA screening' : 'New DPIA screening';
+  activity.value = deicaCurrent.activity_name || '';
+  justification.value = deicaCurrent.justification || '';
+  qualWrap.innerHTML = DEICA_QUAL_FACTORS.map(([key, label]) => `
+    <div class="deica-row">
+      <span>${deicaEscape(label)}</span>
+      <button class="deica-switch" type="button" data-key="${key}" aria-label="Toggle ${deicaEscape(label)}"></button>
+    </div>
+  `).join('');
+
+  document.querySelectorAll('#page-deica .deica-switch').forEach(button => {
+    const key = button.dataset.key;
+    button.classList.toggle('on', Boolean(deicaCurrent[key]));
+    button.onclick = () => {
+      deicaCurrent[key] = !deicaCurrent[key];
+      button.classList.toggle('on', Boolean(deicaCurrent[key]));
+      updateDEICADecision();
+    };
+  });
+
+  updateDEICADecision();
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeDEICAModal() {
+  const modal = document.getElementById('deica-modal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function updateDEICADecision() {
+  if (!deicaCurrent) return;
+  const decision = decideDEICA(deicaCurrent);
+  const box = document.getElementById('deica-decision-box');
+  const icon = document.getElementById('deica-decision-icon');
+  const text = document.getElementById('deica-decision-text');
+  const justifyWrap = document.getElementById('deica-justify-wrap');
+
+  if (box) box.className = `deica-decision ${decision === 'required' ? 'required' : 'not-required'}`;
+  if (icon) icon.textContent = decision === 'required' ? 'Alert' : 'OK';
+  if (text) text.textContent = decision === 'required' ? 'DPIA REQUIRED' : 'DPIA not required';
+  if (justifyWrap) justifyWrap.style.display = decision === 'required' ? 'none' : 'block';
+}
+
+function saveDEICADecision() {
+  if (!deicaCurrent) return;
+  const activity = document.getElementById('deica-activity-name')?.value.trim() || '';
+  const justification = document.getElementById('deica-justification')?.value || '';
+  if (!activity) {
+    showToast('Activity name is required', 'error');
+    return;
+  }
+
+  const rows = readDEICAScreenings();
+  deicaCurrent.activity_name = activity;
+  deicaCurrent.justification = justification;
+  deicaCurrent.decision = decideDEICA(deicaCurrent);
+  deicaCurrent.updated_at = new Date().toISOString();
+
+  if (deicaCurrent.id) {
+    saveDEICAScreenings(rows.map(row => row.id === deicaCurrent.id ? deicaCurrent : row));
+  } else {
+    deicaCurrent.id = (window.crypto?.randomUUID && window.crypto.randomUUID()) || `deica-${Date.now()}`;
+    deicaCurrent.created_at = new Date().toISOString();
+    saveDEICAScreenings([deicaCurrent, ...rows]);
+  }
+
+  closeDEICAModal();
+  renderDEICA();
+  showToast('DEICA decision saved', 'success');
+}
+
+function editDEICA(id) {
+  const row = readDEICAScreenings().find(item => String(item.id) === String(id));
+  if (!row) {
+    showToast('DEICA screening not found', 'warning');
+    return;
+  }
+  openDEICAModal(row);
+}
+
+window.editDEICA = editDEICA;
+
 async function loadCrossBorderFromSupabase() {
   const supabase = getSupabaseClient();
   const localData = readLocalList('cross_border_data');
@@ -2875,6 +3105,7 @@ async function loadCrossBorderFromSupabase() {
   console.log('[JARVIS] Fetching Cross-Border Transfers...');
   try {
     const accountId = getEffectiveAccountId();
+    if (state.role === 'Accountadmin' && !accountId) return;
     let query = supabase.from('cross_border_transfers').select('*');
     if (accountId) query = query.eq('account_id', accountId);
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -3060,6 +3291,7 @@ async function loadAlertsFromSupabase() {
   if (!supabase || !isSupabaseConfigured()) return;
 
   const accountId = getEffectiveAccountId();
+  if (state.role === 'Accountadmin' && !accountId) return;
   let query = supabase.from('alerts').select('*');
   if (accountId) query = query.eq('account_id', accountId);
   const { data, error } = await query.order('created_at', { ascending: false });
@@ -3082,6 +3314,7 @@ async function loadCasesFromSupabase() {
   if (!supabase || !isSupabaseConfigured()) return;
 
   const accountId = getEffectiveAccountId();
+  if (state.role === 'Accountadmin' && !accountId) return;
   let query = supabase.from('cases').select('*');
   if (accountId) query = query.eq('account_id', accountId);
   const { data, error } = await query.order('created_at', { ascending: false });
@@ -3320,12 +3553,89 @@ function formatFileSize(bytes) {
 /* ───────────────────────────────────────────────
    DOCUMENTS
    ─────────────────────────────────────────────── */
+const DOCUMENTS_LOCAL_KEY = 'datarex_documents';
+
+function getDocumentScope() {
+  return {
+    accountId: (typeof getEffectiveAccountId === 'function' && getEffectiveAccountId()) || state.accountId || state.viewAsAccountId || '',
+    userId: state.user?.id || ''
+  };
+}
+
+function readLocalDocuments() {
+  try {
+    const direct = JSON.parse(localStorage.getItem(DOCUMENTS_LOCAL_KEY) || '[]');
+    const savedState = JSON.parse(localStorage.getItem('dataRexState') || '{}');
+    const fromState = Array.isArray(savedState.documents) ? savedState.documents : [];
+    const merged = [...direct, ...fromState];
+    const seen = new Set();
+    return merged.filter(doc => {
+      const key = doc.id || doc.storagePath || `${doc.name}-${doc.uploadedAt}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return Boolean(doc.name);
+    });
+  } catch (err) {
+    console.error('[JARVIS] Failed to read local documents', err);
+    return [];
+  }
+}
+
+function writeLocalDocuments(docs) {
+  const safeDocs = (docs || []).filter(doc => doc && doc.name);
+  localStorage.setItem(DOCUMENTS_LOCAL_KEY, JSON.stringify(safeDocs));
+  state.documents = safeDocs;
+  saveState();
+}
+
+function docMatchesScope(doc) {
+  const { accountId, userId } = getDocumentScope();
+  if (accountId && doc.accountId && String(doc.accountId) !== String(accountId)) return false;
+  if (userId && doc.userId && String(doc.userId) !== String(userId)) return false;
+  return true;
+}
+
+function mergeDocuments(primary, secondary) {
+  const seen = new Set();
+  return [...primary, ...secondary].filter(doc => {
+    const key = doc.id || doc.storagePath || `${doc.name}-${doc.uploadedAt}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getDocType(fileName = '', mimeType = '') {
+  const ext = String(fileName).split('.').pop()?.toLowerCase() || '';
+  const mime = String(mimeType).toLowerCase();
+  if (mime.includes('pdf') || ext === 'pdf') return 'PDF';
+  if (mime.includes('word') || ['doc', 'docx'].includes(ext)) return 'Word';
+  if (mime.includes('spreadsheet') || mime.includes('excel') || ['xls', 'xlsx', 'csv'].includes(ext)) return 'Excel';
+  if (mime.includes('image') || ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return 'Image';
+  if (mime.includes('text') || ['txt', 'md'].includes(ext)) return 'Text';
+  return ext ? ext.toUpperCase() : 'File';
+}
+
+function fileToDataUrl(file) {
+  return new Promise(resolve => {
+    if (!file || file.size > 1500000) {
+      resolve('');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+}
+
 async function renderDocuments() {
   const body = document.getElementById('documents-list');
   if (!body) return;
 
   const supabase = getSupabaseClient();
-  let docs = [];
+  const localDocs = readLocalDocuments().filter(docMatchesScope);
+  let docs = localDocs;
 
   if (supabase && isSupabaseConfigured() && state.user.id) {
     const filterCat = document.getElementById('doc-filter')?.value || '';
@@ -3349,12 +3659,17 @@ async function renderDocuments() {
         category: r.category,
         size: r.file_size,
         uploadedAt: r.created_at,
-        storagePath: r.storage_path
+        storagePath: r.storage_path,
+        accountId: r.account_id,
+        userId: r.user_id,
+        source: 'supabase',
+        uploadStatus: 'Synced'
       }));
+      docs = mergeDocuments(docs, localDocs);
       state.documents = docs;
+    } else if (error) {
+      JARVIS_LOG.error('Documents', 'Load from Supabase', error);
     }
-  } else {
-    docs = state.documents || [];
   }
 
   // Summary
@@ -3377,18 +3692,19 @@ async function renderDocuments() {
   const fmtDate = (d) => new Date(d).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'});
 
   body.innerHTML = `<div class="data-table-wrap"><table><thead><tr>
-    <th>Document</th><th>Category</th><th>Size</th><th>Uploaded</th><th>Actions</th>
+    <th>Document</th><th>Category</th><th>Size</th><th>Uploaded</th><th>Status</th><th>Actions</th>
   </tr></thead><tbody>${filtered.map((doc, i) => `
     <tr>
       <td>
         <div style="display:flex;align-items:center;gap:10px;">
-          <div style="font-size:18px;">📄</div>
+          <div style="font-size:18px;">${getDocIcon(doc.type)}</div>
           <div class="table-avatar-name">${doc.name}</div>
         </div>
       </td>
       <td><span class="table-tag">${doc.category}</span></td>
       <td class="td-muted">${fmtSize(doc.size)}</td>
       <td class="td-muted co-date">${fmtDate(doc.uploadedAt)}</td>
+      <td><span class="status-badge ${doc.uploadStatus === 'Local copy' ? 'status-inactive' : 'status-active'}">${doc.uploadStatus || 'Synced'}</span></td>
       <td>
         <div class="row-actions co-actions">
           <button class="btn-edit" onclick="downloadDocument('${doc.id}')">Download</button>
@@ -3409,25 +3725,34 @@ function getDocIcon(type) {
 }
 
 async function downloadDocument(docId) {
-  const doc = state.documents.find(d => d.id === docId);
+  const doc = state.documents.find(d => String(d.id) === String(docId));
   if (!doc) return;
+  if (doc.dataUrl) {
+    const link = document.createElement('a');
+    link.href = doc.dataUrl;
+    link.download = doc.name || 'document';
+    link.click();
+    return;
+  }
   const supabase = getSupabaseClient();
-  if (supabase && isSupabaseConfigured()) {
+  if (supabase && isSupabaseConfigured() && doc.storagePath) {
     const { data } = supabase.storage.from('documents').getPublicUrl(doc.storagePath);
     window.open(data.publicUrl + '?download=', '_blank');
+  } else {
+    showToast('Only document metadata is available locally for this file', 'info');
   }
 }
 
 async function deleteDocument(docId) {
   if (!confirm('Delete this document?')) return;
   const supabase = getSupabaseClient();
-  const doc = state.documents.find(d => d.id === docId);
-  if (supabase && isSupabaseConfigured()) {
+  const doc = state.documents.find(d => String(d.id) === String(docId));
+  if (supabase && isSupabaseConfigured() && doc?.source === 'supabase') {
     if (doc?.storagePath) await supabase.storage.from('documents').remove([doc.storagePath]);
     await supabase.from('documents').delete().eq('id', docId);
   }
-  state.documents = state.documents.filter(d => d.id !== docId);
-  saveState();
+  const remaining = readLocalDocuments().filter(d => String(d.id) !== String(docId));
+  writeLocalDocuments(remaining);
   renderDocuments();
   showSuccess('Document deleted');
 }
@@ -3455,51 +3780,84 @@ async function handleFileUpload() {
 
   const supabase = getSupabaseClient();
   const category = categorySelect.value;
-  const uploaderName = state.user.name;
+  const uploaderName = state.user?.name || 'Current user';
+  const { accountId, userId } = getDocumentScope();
   let uploadedCount = 0;
+  const nextLocalDocs = readLocalDocuments();
 
   for (const file of files) {
     const fileExt = file.name.split('.').pop();
     const uniqueName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-    const storagePath = `${state.user.id}/${uniqueName}`;
+    const storagePath = `${userId || 'local'}/${uniqueName}`;
+    const createdAt = new Date().toISOString();
+    const localDoc = {
+      id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      uploader: uploaderName,
+      name: file.name,
+      type: getDocType(file.name, file.type),
+      category,
+      size: file.size,
+      uploadedAt: createdAt,
+      storagePath: '',
+      accountId,
+      userId,
+      source: 'local',
+      uploadStatus: 'Local copy',
+      dataUrl: await fileToDataUrl(file)
+    };
 
-    if (supabase && isSupabaseConfigured()) {
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(storagePath, file, { cacheControl: '3600', upsert: false });
+    if (supabase && isSupabaseConfigured() && userId) {
+      try {
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(storagePath, file, { cacheControl: '3600', upsert: false });
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        showToast(`Failed: ${file.name}`, 'error');
-        continue;
+        if (uploadError) throw uploadError;
+
+        const payload = {
+          user_id: userId,
+          uploader_name: uploaderName,
+          name: file.name,
+          doc_type: localDoc.type,
+          category,
+          file_size: file.size,
+          storage_path: storagePath
+        };
+        if (accountId) payload.account_id = accountId;
+
+        const { data: inserted, error: dbError } = await supabase
+          .from('documents')
+          .insert(payload)
+          .select('*')
+          .single();
+
+        if (dbError) throw dbError;
+
+        localDoc.id = inserted?.id || localDoc.id;
+        localDoc.storagePath = inserted?.storage_path || storagePath;
+        localDoc.accountId = inserted?.account_id || accountId;
+        localDoc.userId = inserted?.user_id || userId;
+        localDoc.uploadedAt = inserted?.created_at || createdAt;
+        localDoc.source = 'supabase';
+        localDoc.uploadStatus = 'Synced';
+      } catch (err) {
+        console.error('Document upload/save error:', err);
+        JARVIS_LOG.error('Documents', 'Upload', err, { file: file.name, accountId });
+        showToast(`Saved locally only: ${file.name}`, 'warning');
       }
-
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(storagePath);
-
-      const { error: dbError } = await supabase.from('documents').insert({
-        user_id: state.user.id,
-        uploader_name: uploaderName,
-        name: file.name,
-        doc_type: getDocType(file.name),
-        category: category,
-        file_size: file.size,
-        storage_path: storagePath
-      });
-
-      if (dbError) {
-        console.error('DB error:', dbError);
-        showToast(`Saved locally: ${file.name}`, 'warning');
-      }
-
-      uploadedCount++;
+    } else {
+      showToast(`Saved locally: ${file.name}`, 'info');
     }
+
+    nextLocalDocs.unshift(localDoc);
+    uploadedCount++;
   }
 
-  state.documents = [];
-  saveState();
+  writeLocalDocuments(nextLocalDocs);
   await renderDocuments();
   showSuccess(`${uploadedCount} file(s) uploaded!`);
   fileInput.value = '';
+  updateFileName(fileInput);
 }
 
 /* ───────────────────────────────────────────────
@@ -3508,6 +3866,7 @@ async function handleFileUpload() {
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', section: 'Overview' },
   { id: 'checklist', label: 'Checklist', section: 'Overview' },
+  { id: 'companies', label: 'Companies', section: 'Foundation' },
   { id: 'datasources', label: 'Data Sources', section: 'Foundation' },
   { id: 'dataregister', label: 'Data Register', section: 'Foundation' },
   { id: 'consent', label: 'Consent', section: 'Foundation' },
@@ -3516,6 +3875,7 @@ const NAV_ITEMS = [
   { id: 'datarequests', label: 'Data Requests', section: 'Operations' },
   { id: 'breachlog', label: 'Breach Log', section: 'Operations' },
   { id: 'dpiapage', label: 'DPIA', section: 'Operations' },
+  { id: 'deica', label: 'DPIA Workflow (DEICA)', section: 'Operations' },
   { id: 'crossborder', label: 'Cross-border', section: 'Operations' },
   { id: 'vendors', label: 'Vendors', section: 'Operations' },
   { id: 'training', label: 'Training', section: 'Operations' },
@@ -3524,7 +3884,8 @@ const NAV_ITEMS = [
   { id: 'alerts', label: 'Alerts', section: 'Monitoring', hasBadge: true },
   { id: 'cases', label: 'Cases', section: 'Monitoring' },
   { id: 'monitoring', label: 'Monitoring', section: 'Monitoring' },
-  { id: 'accounts', label: 'Accounts', section: 'Admin', superadminOnly: true }
+  { id: 'accounts', label: 'Accounts', section: 'Admin', superadminOnly: true },
+  { id: 'people', label: 'People', section: 'Admin', accountadminOnly: true }
 ];
 
 function openAddRoleModal() {
@@ -3691,11 +4052,14 @@ function applyNavPermissions() {
   const userLevel = state.currentUserLevel || 'Accountadmin';
   const savedConfig = state.navPermissions?.[userLevel];
   const isSuperadmin = state.role === 'Superadmin';
+  const isAccountadmin = state.role === 'Accountadmin';
 
   NAV_ITEMS.forEach(item => {
     const navEl = document.getElementById('nav-' + item.id);
     if (navEl) {
       if (item.superadminOnly && !isSuperadmin) {
+        navEl.style.display = 'none';
+      } else if (item.accountadminOnly && !isSuperadmin && !isAccountadmin) {
         navEl.style.display = 'none';
       } else {
         navEl.style.display = (savedConfig && savedConfig[item.id] === false) ? 'none' : '';
@@ -3703,9 +4067,9 @@ function applyNavPermissions() {
     }
   });
 
-  // Hide the Admin nav section label for non-Superadmin users.
+  // Show Admin label for Superadmin and Accountadmin (People page lives there).
   const adminLabel = document.getElementById('nav-section-admin');
-  if (adminLabel) adminLabel.style.display = isSuperadmin ? '' : 'none';
+  if (adminLabel) adminLabel.style.display = (isSuperadmin || isAccountadmin) ? '' : 'none';
 }
 
 function setUserLevel(level) {
@@ -3794,6 +4158,7 @@ async function renderTeam() {
   const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.id;
   if (supabase && isSupabaseConfigured() && orgId) {
     const accountId = getEffectiveAccountId();
+    if (state.role === 'Accountadmin' && !accountId) return;
     let query = supabase.from('team_members').select('*');
     if (accountId) query = query.eq('account_id', accountId);
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -3858,6 +4223,122 @@ async function removeTeamMember(id) {
   saveState();
   renderTeam();
   showToast('Team member removed', 'success');
+}
+
+/* ───────────────────────────────────────────────
+   PEOPLE MANAGEMENT (Accountadmin + Superadmin)
+   ─────────────────────────────────────────────── */
+let _allPeople = [];
+
+async function loadAllPeople() {
+  if (state.role !== 'Accountadmin' && state.role !== 'Superadmin') return;
+  const supabase = getSupabaseClient();
+  if (!supabase || !isSupabaseConfigured()) {
+    document.getElementById('people-list').innerHTML =
+      '<div style="text-align:center;padding:40px;color:var(--muted);">Supabase not configured.</div>';
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('id, email, role, status, account_id, accounts(name)')
+    .order('email');
+
+  if (error) {
+    console.error('Failed to load people:', error);
+    document.getElementById('people-list').innerHTML =
+      '<div style="text-align:center;padding:40px;color:var(--muted);">Failed to load users.</div>';
+    return;
+  }
+
+  _allPeople = data || [];
+  renderPeopleList(_allPeople);
+}
+
+function filterPeopleTable() {
+  const search = (document.getElementById('people-search')?.value || '').toLowerCase();
+  const statusFilter = document.getElementById('people-status-filter')?.value || 'all';
+  const filtered = _allPeople.filter(u => {
+    if (statusFilter !== 'all' && (u.status || 'active') !== statusFilter) return false;
+    const haystack = [u.email, u.role, u.accounts?.name].filter(Boolean).join(' ').toLowerCase();
+    return !search || haystack.includes(search);
+  });
+  renderPeopleList(filtered);
+}
+
+function renderPeopleList(people) {
+  const list = document.getElementById('people-list');
+  if (!list) return;
+
+  if (!people.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No users found.</div>';
+    return;
+  }
+
+  list.innerHTML = people.map(u => {
+    const status = u.status || 'active';
+    const accountName = u.accounts?.name || u.account_id || '—';
+    const initials = (u.email || '?')[0].toUpperCase();
+    return `
+    <article class="account-row ${status === 'suspended' ? 'is-suspended' : ''}" data-uid="${u.id}">
+      <button class="account-main" type="button" style="cursor:default;pointer-events:none;">
+        <span class="account-avatar">${initials}</span>
+        <span class="account-copy">
+          <span class="account-name">${escapeHtml(u.email || '—')}</span>
+          <span class="account-meta">${escapeHtml(accountName)} · ${escapeHtml(u.role || 'user')}</span>
+        </span>
+      </button>
+      <div class="account-status">
+        <span class="account-status-badge ${status === 'active' ? 'active' : 'suspended'}">${escapeHtml(status)}</span>
+      </div>
+      <div class="account-actions">
+        <button class="btn-secondary account-action-primary" onclick="resetUserPassword('${u.id}')">Reset PW</button>
+        ${status === 'active'
+          ? `<button class="btn-secondary" onclick="setUserStatus('${u.id}', 'deactivate')">Deactivate</button>`
+          : `<button class="btn-secondary" onclick="setUserStatus('${u.id}', 'activate')">Activate</button>`
+        }
+      </div>
+    </article>`;
+  }).join('');
+}
+
+async function resetUserPassword(userId) {
+  const newPw = window.prompt('New password for user (min 8 chars):');
+  if (!newPw || newPw.length < 8) { showToast('Password must be at least 8 characters', 'error'); return; }
+
+  const supabase = getSupabaseClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) { showToast('Session expired. Please refresh and try again.', 'error'); return; }
+  const supaUrl = (window.ENV?.SUPABASE_URL) || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+
+  const res = await fetch(`${supaUrl}/functions/v1/create-user`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'manage-user', action: 'reset-password', user_id: userId, new_password: newPw }),
+  });
+  const out = await res.json();
+  if (!res.ok) { showToast(out.error || 'Failed to reset password', 'error'); return; }
+  showToast('Password reset successfully', 'success');
+}
+
+async function setUserStatus(userId, action) {
+  const label = action === 'activate' ? 'Activate' : 'Deactivate';
+  if (!confirm(`${label} this user?`)) return;
+
+  const supabase = getSupabaseClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) { showToast('Session expired. Please refresh and try again.', 'error'); return; }
+  const supaUrl = (window.ENV?.SUPABASE_URL) || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+
+  const res = await fetch(`${supaUrl}/functions/v1/create-user`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'manage-user', action, user_id: userId }),
+  });
+  const out = await res.json();
+  if (!res.ok) { showToast(out.error || `Failed to ${action} user`, 'error'); return; }
+  showToast(`User ${action}d`, 'success');
+  await loadAllPeople();
 }
 
 /* ───────────────────────────────────────────────
@@ -4039,6 +4520,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     const active = document.querySelector('.screen.active');
     if (active && active.id === 'screen-login') doLogin();
+    if (active && active.id === 'screen-register') doRegister();
   }
   if (e.key === 'Escape') {
     document.querySelectorAll('.modal-overlay.open').forEach(m => {
