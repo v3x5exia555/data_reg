@@ -2218,6 +2218,7 @@ async function loadCompaniesFromSupabase() {
   if (!supabase || !isSupabaseConfigured()) return;
 
   const accountId = getEffectiveAccountId();
+  if (state.role === 'Accountadmin' && !accountId) return;
   let query = supabase.from('companies').select('*');
   if (accountId) query = query.eq('account_id', accountId);
   const { data, error } = await query.order('name');
@@ -2259,6 +2260,7 @@ async function loadDataRequestsFromSupabase() {
   }
 
   const accountId = getEffectiveAccountId();
+  if (state.role === 'Accountadmin' && !accountId) { renderDataRequests(state.dataRequests); return; }
   let query = supabase.from('data_requests').select('*');
   if (accountId) query = query.eq('account_id', accountId);
   const { data, error } = await query.order('created_at', { ascending: false });
@@ -2525,6 +2527,7 @@ async function loadBreachLogFromSupabase() {
 
   try {
     const accountId = getEffectiveAccountId();
+    if (state.role === 'Accountadmin' && !accountId) return;
     let query = supabase.from('breach_log').select('*');
     if (accountId) query = query.eq('account_id', accountId);
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -2797,6 +2800,7 @@ async function loadDPIAFromSupabase() {
   console.log('[JARVIS] Fetching DPIAs...');
   try {
     const accountId = getEffectiveAccountId();
+    if (state.role === 'Accountadmin' && !accountId) return;
     let query = supabase.from('dpia_assessments').select('*');
     if (accountId) query = query.eq('account_id', accountId);
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -3100,6 +3104,7 @@ async function loadCrossBorderFromSupabase() {
   console.log('[JARVIS] Fetching Cross-Border Transfers...');
   try {
     const accountId = getEffectiveAccountId();
+    if (state.role === 'Accountadmin' && !accountId) return;
     let query = supabase.from('cross_border_transfers').select('*');
     if (accountId) query = query.eq('account_id', accountId);
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -3285,6 +3290,7 @@ async function loadAlertsFromSupabase() {
   if (!supabase || !isSupabaseConfigured()) return;
 
   const accountId = getEffectiveAccountId();
+  if (state.role === 'Accountadmin' && !accountId) return;
   let query = supabase.from('alerts').select('*');
   if (accountId) query = query.eq('account_id', accountId);
   const { data, error } = await query.order('created_at', { ascending: false });
@@ -3307,6 +3313,7 @@ async function loadCasesFromSupabase() {
   if (!supabase || !isSupabaseConfigured()) return;
 
   const accountId = getEffectiveAccountId();
+  if (state.role === 'Accountadmin' && !accountId) return;
   let query = supabase.from('cases').select('*');
   if (accountId) query = query.eq('account_id', accountId);
   const { data, error } = await query.order('created_at', { ascending: false });
@@ -4146,6 +4153,7 @@ async function renderTeam() {
   const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.id;
   if (supabase && isSupabaseConfigured() && orgId) {
     const accountId = getEffectiveAccountId();
+    if (state.role === 'Accountadmin' && !accountId) return;
     let query = supabase.from('team_members').select('*');
     if (accountId) query = query.eq('account_id', accountId);
     const { data, error } = await query.order('created_at', { ascending: false });
