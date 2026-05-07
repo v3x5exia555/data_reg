@@ -151,7 +151,8 @@ const PAGES_TO_LOAD = [
   '04__dataregister', '05__consent', '06__access', '07__retention',
   '07__vendors', '08__dpo', '08__training', '09__datarequests', '10__breachlog',
   '04__dpia', '06__crossborder', '15__documents',
-  '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing'
+  '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
+  '20__accounts'
 ];
 const PAGE_ASSET_VERSION = '17';
 
@@ -827,6 +828,7 @@ function showPage(pageId, navEl, noPush) {
 
   // Page-specific actions
   if (pageId === 'vendors' && typeof loadVendorsFromSupabase === 'function') loadVendorsFromSupabase();
+  if (pageId === 'accounts' && typeof loadAccounts === 'function') loadAccounts();
   if (pageId === 'training' && typeof loadTrainingFromSupabase === 'function') loadTrainingFromSupabase();
   if (pageId === 'processing_activities' && typeof loadActivitiesFromSupabase === 'function') loadActivitiesFromSupabase();
   if (pageId === 'dpo' && typeof loadDPOFromSupabase === 'function') loadDPOFromSupabase();
@@ -3378,7 +3380,8 @@ const NAV_ITEMS = [
   { id: 'audit', label: 'Audit Report', section: 'Records' },
   { id: 'alerts', label: 'Alerts', section: 'Monitoring', hasBadge: true },
   { id: 'cases', label: 'Cases', section: 'Monitoring' },
-  { id: 'monitoring', label: 'Monitoring', section: 'Monitoring' }
+  { id: 'monitoring', label: 'Monitoring', section: 'Monitoring' },
+  { id: 'accounts', label: 'Accounts', section: 'Admin', superadminOnly: true }
 ];
 
 function openAddRoleModal() {
@@ -3544,13 +3547,22 @@ async function saveNavConfig() {
 function applyNavPermissions() {
   const userLevel = state.currentUserLevel || 'Accountadmin';
   const savedConfig = state.navPermissions?.[userLevel];
+  const isSuperadmin = state.role === 'Superadmin';
 
   NAV_ITEMS.forEach(item => {
     const navEl = document.getElementById('nav-' + item.id);
     if (navEl) {
-      navEl.style.display = (savedConfig && savedConfig[item.id] === false) ? 'none' : '';
+      if (item.superadminOnly && !isSuperadmin) {
+        navEl.style.display = 'none';
+      } else {
+        navEl.style.display = (savedConfig && savedConfig[item.id] === false) ? 'none' : '';
+      }
     }
   });
+
+  // Hide the Admin nav section label for non-Superadmin users.
+  const adminLabel = document.getElementById('nav-section-admin');
+  if (adminLabel) adminLabel.style.display = isSuperadmin ? '' : 'none';
 }
 
 function setUserLevel(level) {

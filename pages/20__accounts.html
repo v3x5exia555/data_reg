@@ -1,0 +1,44 @@
+<section class="page page-shell" id="page-accounts" data-page="accounts">
+  <header class="page-head">
+    <div class="page-head-text">
+      <h1>Accounts</h1>
+      <p class="page-sub">All customer accounts. Click an account to view as.</p>
+    </div>
+    <div class="page-head-actions">
+      <button id="btn-new-account" class="btn-primary">+ New account</button>
+    </div>
+  </header>
+
+  <div class="stat-row" id="account-stats">
+    <div class="stat-card"><div class="stat-num" id="stat-total">–</div><div class="stat-label">Total</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-active">–</div><div class="stat-label">Active</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-seats">–</div><div class="stat-label">Seats used</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-suspended">–</div><div class="stat-label">Suspended</div></div>
+  </div>
+
+  <div class="filter-row">
+    <input type="search" id="account-search" placeholder="Search by name or admin email" />
+    <select id="account-status-filter">
+      <option value="all">All</option>
+      <option value="active">Active</option>
+      <option value="suspended">Suspended</option>
+    </select>
+  </div>
+
+  <div id="accounts-list" class="card-list" aria-live="polite"></div>
+</section>
+
+<!-- New-account modal -->
+<div class="modal" id="modal-new-account" aria-hidden="true">
+  <div class="modal-card">
+    <header><h2>New account</h2><button class="modal-close" data-close="modal-new-account">×</button></header>
+    <form id="form-new-account">
+      <label>Company name <input name="company_name" required /></label>
+      <label>Accountadmin email <input name="email" type="email" required /></label>
+      <label>Temporary password <input name="temp_password" required minlength="8" /></label>
+      <label>Seat limit <input name="seat_limit" type="number" min="1" value="2" required /></label>
+      <label class="checkbox-row"><input name="seed_sample_data" type="checkbox" /> Seed sample data</label>
+      <footer><button type="submit" class="btn-primary">Create</button></footer>
+    </form>
+  </div>
+</div>
