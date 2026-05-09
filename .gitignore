@@ -34,3 +34,6 @@ test-results/
 
 # Jupyter
 venv/share/jupyter/
+
+# Local worktrees (superpowers workflow)
+.worktrees/
