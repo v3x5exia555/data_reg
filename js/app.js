@@ -266,6 +266,7 @@ function loadState() {
   if (selectEl && state.user.company) {
     selectEl.value = state.user.company;
   }
+  updateActiveCompanyLabel();
 }
 function saveState() {
   // `state.documents` items can carry multi-MB `dataUrl` payloads. The
@@ -275,14 +276,65 @@ function saveState() {
   const { documents: _docs, ...rest } = state;
   localStorage.setItem('dataRexState', JSON.stringify(rest));
 }
+
+function getDisplayCompanyName(preferredName = '') {
+  if (preferredName) return preferredName;
+  if (state.viewAsAccountId && state._viewAsAccountName?.id === state.viewAsAccountId) {
+    return state._viewAsAccountName.name;
+  }
+
+  const candidates = [
+    state.user?.company,
+    state.company,
+    state.companies?.find(c => c?.active)?.name,
+    state.companies?.[0]?.name
+  ];
+
+  try {
+    const savedState = JSON.parse(localStorage.getItem('dataRexState') || '{}');
+    candidates.push(savedState.user?.company, savedState.company);
+  } catch (_) { /* best effort */ }
+
+  try {
+    const localUsers = JSON.parse(localStorage.getItem('datarex_users') || '[]');
+    const currentEmail = state.user?.email;
+    const currentUser = currentEmail ? localUsers.find(u => u.email === currentEmail) : null;
+    candidates.push(currentUser?.company, localUsers[0]?.company);
+  } catch (_) { /* best effort */ }
+
+  return candidates.find(name => name && name !== 'Select Company') || 'Acme Pte Ltd';
+}
+
+function updateActiveCompanyLabel(preferredName = '') {
+  const companyName = getDisplayCompanyName(preferredName);
+
+  if (companyName && companyName !== 'Select Company') {
+    state.user.company = companyName;
+    state.company = companyName;
+  }
+
+  const activeCompanyName = document.getElementById('active-company-name');
+  if (activeCompanyName) {
+    activeCompanyName.textContent = companyName;
+    activeCompanyName.title = companyName;
+  }
+
+  const sidebarOrg = document.getElementById('sidebar-org');
+  if (sidebarOrg) {
+    sidebarOrg.textContent = companyName;
+    sidebarOrg.title = companyName;
+  }
+
+  const selector = document.getElementById('sidebar-org-selector');
+  if (selector) selector.title = companyName;
+}
+
 function switchOrg(company) {
   state.user.company = company;
   state.company = company;
   saveState();
 
-  // Update UI immediately
-  const activeCompanyName = document.getElementById('active-company-name');
-  if (activeCompanyName) activeCompanyName.textContent = company;
+  updateActiveCompanyLabel(company);
 
   const dropdown = document.getElementById('org-dropdown');
   if (dropdown) dropdown.classList.remove('open');
@@ -1174,7 +1226,13 @@ async function doLogin() {
 
     // Check account status (Accountadmin/user only — Superadmin has no account).
     if (state.role !== 'Superadmin' && state.accountId) {
-      const { data: acct } = await supabase.from('accounts').select('status').eq('id', state.accountId).single();
+      const { data: acct } = await supabase.from('accounts').select('status,name').eq('id', state.accountId).single();
+      if (acct?.name) {
+        state.user.company = acct.name;
+        state.company = acct.name;
+        saveState();
+        updateActiveCompanyLabel(acct.name);
+      }
       if (acct?.status === 'suspended') {
         await supabase.auth.signOut();
         state.user = { name: '', company: '', email: '' };
@@ -1444,10 +1502,8 @@ function launchApp(user) {
   if (sidebarName) sidebarName.textContent = state.user.name;
 
   const sidebarOrg = document.getElementById('sidebar-org');
-  if (sidebarOrg) sidebarOrg.textContent = state.user.company;
-
-  const activeCompanyName = document.getElementById('active-company-name');
-  if (activeCompanyName) activeCompanyName.textContent = state.user.company || 'Select Company';
+  if (sidebarOrg) sidebarOrg.textContent = getDisplayCompanyName();
+  updateActiveCompanyLabel();
 
   const sidebarAvatar = document.getElementById('sidebar-avatar');
   if (sidebarAvatar) sidebarAvatar.textContent = firstName[0] ? firstName[0].toUpperCase() : 'D';
@@ -1948,6 +2004,7 @@ function renderViewAsBanner() {
   if (!state.viewAsAccountId) {
     banner.hidden = true;
     banner.innerHTML = '';
+    updateActiveCompanyLabel();
     return;
   }
   // Best-effort: we have the id; ask Supabase for the name (cached in state).
@@ -1965,6 +2022,7 @@ function renderViewAsBanner() {
     });
   function paint(name) {
     banner.hidden = false;
+    updateActiveCompanyLabel(name);
     banner.innerHTML = `👁 Viewing as <strong>${name}</strong> · <button id="btn-exit-view-as">Exit view-as</button>`;
   }
 }
