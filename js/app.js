@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '26';
+const PAGE_ASSET_VERSION = '27';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -3071,9 +3071,10 @@ function renderDEICACards(rows) {
     if (row.subjects_over_20k) tags.push('>20k subjects');
     if (row.sensitive_subjects_over_10k) tags.push('>10k sensitive');
     DEICA_QUAL_FACTORS.forEach(([key, label]) => {
-      if (row[key] && tags.length < 5) tags.push(label);
+      if (row[key]) tags.push(label);
     });
     const required = row.decision === 'required';
+    const justification = deicaEscape(row.justification || 'No justification recorded yet.');
     return `
       <div class="deica-card">
         <div class="deica-card-head">
@@ -3083,7 +3084,7 @@ function renderDEICACards(rows) {
         <div class="deica-tags">
           ${tags.length ? tags.map(tag => `<span class="deica-tag">${deicaEscape(tag)}</span>`).join('') : '<span class="deica-tag">No risk factors selected</span>'}
         </div>
-        ${required ? '' : `<div class="deica-note">${deicaEscape(row.justification || 'No justification recorded yet.')}</div>`}
+        <div class="deica-note"><strong>Justification:</strong> ${justification}</div>
         <div class="deica-card-actions">
           <button class="deica-link-btn deica-edit-btn" type="button" data-id="${deicaEscape(row.id)}">Edit</button>
         </div>
@@ -3161,7 +3162,7 @@ function updateDEICADecision() {
   if (box) box.className = `deica-decision ${decision === 'required' ? 'required' : 'not-required'}`;
   if (icon) icon.className = `fa-solid ${decision === 'required' ? 'fa-triangle-exclamation' : 'fa-circle-check'}`;
   if (text) text.textContent = decision === 'required' ? 'DPIA REQUIRED' : 'DPIA not required';
-  if (justifyWrap) justifyWrap.style.display = decision === 'required' ? 'none' : 'block';
+  if (justifyWrap) justifyWrap.style.display = 'block';
 }
 
 async function saveDEICADecision() {
@@ -4649,15 +4650,39 @@ function updateAlertBadge() {
    AUDIT REPORT
    ─────────────────────────────────────────────── */
 async function renderAudit() {
-  const total = Object.keys(state.checks).length;
-  const done = Object.values(state.checks).filter(Boolean).length;
-  const pct = Math.round((done / total) * 100);
+  // Mirror renderChecklist's fetch so the audit reflects the user's actual
+  // ticks even when they open Audit Report directly (before visiting the
+  // Checklist page) or on a fresh browser where localStorage is empty but
+  // Supabase has the data.
+  const supabase = getSupabaseClient();
+  if (supabase && isSupabaseConfigured() && state.user?.id) {
+    try {
+      const { data, error } = await supabase
+        .from('checklist_items')
+        .select('item_id, completed')
+        .eq('user_id', state.user.id);
+      if (!error && Array.isArray(data)) {
+        data.forEach(item => { state.checks[item.item_id] = item.completed; });
+        // Persist the freshly-loaded ticks so Dashboard / score widgets stay
+        // in sync without an extra fetch.
+        saveState();
+      }
+    } catch (err) {
+      JARVIS_LOG.error('Audit', 'Load checklist from Supabase', err);
+    }
+  }
+
+  // Only count the items that exist in the current CHECKLIST so legacy keys
+  // from older builds don't skew total/done.
+  const checklistIds = CHECKLIST.flatMap(s => s.items.map(i => i.id));
+  const total = checklistIds.length;
+  const done = checklistIds.filter(id => state.checks[id]).length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
   const risk = pct >= 80 ? 'Low' : pct >= 50 ? 'Medium' : 'High';
   const riskClass = pct >= 80 ? 'low' : pct >= 50 ? 'medium' : 'high';
   const riskColor = pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
 
   let recordsCount = (state.records || []).length;
-  const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured() && state.user?.id) {
     const { count, error } = await supabase
       .from('data_records')
