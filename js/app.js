@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '30';
+const PAGE_ASSET_VERSION = '31';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -249,6 +249,10 @@ function loadState() {
       if (parsed.bizType) state.bizType = parsed.bizType;
       if (parsed.checks) Object.assign(state.checks, parsed.checks);
       if (parsed.records) state.records = parsed.records;
+      else {
+        const savedRecords = localStorage.getItem('datarex_records');
+        if (savedRecords) state.records = JSON.parse(savedRecords);
+      }
       if (parsed.team) state.team = parsed.team;
       if (parsed.documents) state.documents = parsed.documents;
       if (parsed.currentUserLevel) state.currentUserLevel = parsed.currentUserLevel;
@@ -1625,12 +1629,90 @@ async function renderChecklist() {
 /* ───────────────────────────────────────────────
    ONBOARDING
    ─────────────────────────────────────────────── */
+function getDataRecordScope() {
+  return {
+    accountId: (typeof getEffectiveAccountId === 'function' && getEffectiveAccountId()) || state.accountId || state.viewAsAccountId || '',
+    userId: state.user?.id || ''
+  };
+}
+
+function normalizeDataRecord(row, source = 'local') {
+  return {
+    id: row.id || `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type: row.type || row.data_type || '',
+    purpose: row.purpose || '',
+    storage: row.storage || '',
+    access: row.access || row.access_level || '',
+    retention: row.retention || row.retention_months || 12,
+    consent: typeof row.consent !== 'undefined' ? row.consent : Boolean(row.consent_obtained),
+    note: row.note || '',
+    accountId: row.accountId || row.account_id || '',
+    userId: row.userId || row.user_id || '',
+    source,
+    created_at: row.created_at || row.createdAt || new Date().toISOString(),
+    updated_at: row.updated_at || row.updatedAt || row.created_at || new Date().toISOString()
+  };
+}
+
+function readLocalDataRecords() {
+  try {
+    const direct = JSON.parse(localStorage.getItem('datarex_records') || '[]');
+    const savedState = JSON.parse(localStorage.getItem('dataRexState') || '{}');
+    const fromState = Array.isArray(savedState.records) ? savedState.records : [];
+    return mergeDataRecords(
+      direct.map(row => normalizeDataRecord(row, row.source || 'local')),
+      fromState.map(row => normalizeDataRecord(row, row.source || 'local'))
+    );
+  } catch (err) {
+    console.error('[JARVIS] Failed to read local data records', err);
+    return [];
+  }
+}
+
+function writeLocalDataRecords(records) {
+  const normalized = (records || []).filter(Boolean).map(row => normalizeDataRecord(row, row.source || 'local'));
+  state.records = normalized;
+  localStorage.setItem('datarex_records', JSON.stringify(normalized));
+  saveState();
+}
+
+function dataRecordMatchesScope(record) {
+  const { accountId, userId } = getDataRecordScope();
+  if (accountId && record.accountId && String(record.accountId) !== String(accountId)) return false;
+  if (userId && record.userId && String(record.userId) !== String(userId)) return false;
+  return true;
+}
+
+function mergeDataRecords(primary, secondary) {
+  const byKey = new Map();
+  for (const row of [...(primary || []), ...(secondary || [])]) {
+    if (!row) continue;
+    const record = normalizeDataRecord(row, row.source || 'local');
+    const key = record.id || `${record.type}-${record.purpose}-${record.storage}-${record.created_at}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, record);
+      continue;
+    }
+    const existingTs = Date.parse(existing.updated_at || existing.created_at || 0) || 0;
+    const recordTs = Date.parse(record.updated_at || record.created_at || 0) || 0;
+    if (recordTs >= existingTs) byKey.set(key, record);
+  }
+  return Array.from(byKey.values()).sort((a, b) => {
+    const ad = Date.parse(a.created_at || 0) || 0;
+    const bd = Date.parse(b.created_at || 0) || 0;
+    return bd - ad;
+  });
+}
+
 async function renderRegister() {
   const body = document.getElementById('register-body-wrap');
   if (!body) return;
 
   const supabase = getSupabaseClient();
   const userId = state.user?.id;
+  const localRecords = readLocalDataRecords().filter(dataRecordMatchesScope);
+  let list = localRecords;
 
   console.log('[JARVIS] Fetching from data_records...');
   if (supabase && isSupabaseConfigured() && userId) {
@@ -1641,20 +1723,15 @@ async function renderRegister() {
 
     if (!error && data) {
       console.log(`[JARVIS] Fetching from data_records... Success: ${data.length} records found.`);
-      state.records = data.map(r => ({
-        id: r.id,
-        type: r.data_type,
-        purpose: r.purpose || '',
-        storage: r.storage || '',
-        access: r.access_level || '',
-        retention: r.retention_months || 12,
-        consent: r.consent_obtained || false,
-        note: r.note || ''
-      }));
+      const remoteRecords = data.map(r => normalizeDataRecord(r, 'supabase'));
+      list = mergeDataRecords(remoteRecords, localRecords);
+      writeLocalDataRecords(list);
+    } else if (error) {
+      JARVIS_LOG.error('DataRegister', 'Load from Supabase', error);
     }
   }
 
-  const list = state.records || [];
+  state.records = list;
 
   // Summary
   const summaryEl = document.getElementById('register-summary');
@@ -1689,7 +1766,9 @@ async function renderRegister() {
     <th class="th-narrow" style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Retention</th>
     <th class="th-narrow" style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Consent</th>
     <th class="th-actions" style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;"></th>
-  </tr></thead><tbody>${filtered.map((r, i) => `
+  </tr></thead><tbody>${filtered.map((r, i) => {
+    const rowIndex = list.indexOf(r);
+    return `
     <tr>
       <td class="td-id">#${i + 1}</td>
       <td class="td-bold td-type">${r.type}</td>
@@ -1699,10 +1778,11 @@ async function renderRegister() {
       <td class="td-muted">${r.retention} mo</td>
       <td><span class="status-badge ${r.consent ? 'status-active' : 'status-error'}">${r.consent ? 'Yes' : 'Missing'}</span></td>
       <td><div class="row-actions co-actions td-actions">
-        <button class="btn-edit" onclick="editRecord(${i})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-        <button class="btn-delete" onclick="deleteRecord(${i})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        <button class="btn-edit" onclick="editRecord(${rowIndex})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="btn-delete" onclick="deleteRecord(${rowIndex})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
       </div></td>
-    </tr>`).join('')}</tbody></table></div>`;
+    </tr>`;
+  }).join('')}</tbody></table></div>`;
 
   const glanceRecords = document.getElementById('glance-records');
   if (glanceRecords) glanceRecords.textContent = list.length + ' →';
@@ -1712,12 +1792,11 @@ async function deleteRecord(i) {
   const record = state.records[i];
   if (confirm(`Delete "${record?.type || 'this record'}"?`)) {
     const supabase = getSupabaseClient();
-    if (supabase && isSupabaseConfigured() && record?.id) {
+    if (supabase && isSupabaseConfigured() && record?.id && record.source === 'supabase') {
       await supabase.from('data_records').delete().eq('id', record.id);
     }
     state.records.splice(i, 1);
-    localStorage.setItem('datarex_records', JSON.stringify(state.records));
-    saveState();
+    writeLocalDataRecords(state.records);
     renderRegister();
     renderConsent();
     renderRetention();
@@ -1942,9 +2021,25 @@ async function saveRecord() {
     return;
   }
 
-  const recordData = { type, purpose, storage, access, retention, consent, note };
+  const { accountId, userId: scopedUserId } = getDataRecordScope();
   const supabase = getSupabaseClient();
-  const userId = state.user?.id;
+  const userId = scopedUserId || state.user?.id;
+  const now = new Date().toISOString();
+  const recordData = {
+    id: `local-${Date.now()}`,
+    type,
+    purpose,
+    storage,
+    access,
+    retention,
+    consent,
+    note,
+    accountId,
+    userId: userId || '',
+    source: 'local',
+    created_at: now,
+    updated_at: now
+  };
 
   JARVIS_LOG.submit('DataRegister', editIndex >= 0 ? 'Update' : 'Insert', {
     form_data: recordData,
@@ -1956,10 +2051,12 @@ async function saveRecord() {
     const existingRecord = state.records[editIndex];
     Object.assign(state.records[editIndex], recordData);
     state.records[editIndex].id = existingRecord.id;
-    state.records[editIndex].updated_at = new Date().toISOString();
+    state.records[editIndex].source = existingRecord.source || state.records[editIndex].source;
+    state.records[editIndex].created_at = existingRecord.created_at || state.records[editIndex].created_at;
+    state.records[editIndex].updated_at = now;
 
-    if (supabase && isSupabaseConfigured() && existingRecord.id && !String(existingRecord.id).startsWith('local-')) {
-      const { error } = await supabase.from('data_records').update({
+    if (supabase && isSupabaseConfigured() && existingRecord.id && existingRecord.source === 'supabase') {
+      const payload = {
         data_type: type,
         purpose: purpose,
         storage: storage,
@@ -1967,8 +2064,10 @@ async function saveRecord() {
         retention_months: retention,
         consent_obtained: consent,
         note: note,
-        updated_at: new Date().toISOString()
-      }).eq('id', existingRecord.id);
+        updated_at: now
+      };
+      if (accountId) payload.account_id = accountId;
+      const { error } = await supabase.from('data_records').update(payload).eq('id', existingRecord.id);
 
       console.table({
         timestamp: new Date().toISOString(),
@@ -1986,8 +2085,7 @@ async function saveRecord() {
       }
     }
 
-    localStorage.setItem('datarex_records', JSON.stringify(state.records));
-    saveState();
+    writeLocalDataRecords(state.records);
     renderRegister();
     renderConsent();
     renderRetention();
@@ -1998,10 +2096,10 @@ async function saveRecord() {
   }
 
   state.records.unshift(recordData);
-  localStorage.setItem('datarex_records', JSON.stringify(state.records));
+  writeLocalDataRecords(state.records);
 
   if (supabase && isSupabaseConfigured() && userId) {
-    const { data, error } = await supabase.from('data_records').insert([{
+    const payload = {
       user_id: userId,
       data_type: type,
       purpose: purpose,
@@ -2010,7 +2108,9 @@ async function saveRecord() {
       retention_months: retention,
       consent_obtained: consent,
       note: note
-    }]).select().single();
+    };
+    if (accountId) payload.account_id = accountId;
+    const { data, error } = await supabase.from('data_records').insert([payload]).select().single();
 
     console.table({
       timestamp: new Date().toISOString(),
@@ -2027,15 +2127,20 @@ async function saveRecord() {
       showToast('Record saved (local + sync queued)', 'success');
     } else if (data) {
       recordData.id = data.id;
+      recordData.accountId = data.account_id || accountId;
+      recordData.userId = data.user_id || userId;
+      recordData.source = 'supabase';
+      recordData.created_at = data.created_at || recordData.created_at;
+      recordData.updated_at = data.updated_at || recordData.updated_at;
+      writeLocalDataRecords(state.records);
       JARVIS_LOG.success('DataRegister', 'Insert to Supabase', { id: data.id });
       showToast('Record saved!', 'success');
     }
   } else {
-    recordData.id = 'local-' + Date.now();
     showToast('Record saved locally', 'success');
   }
 
-  saveState();
+  writeLocalDataRecords(state.records);
   renderRegister();
   renderConsent();
   renderRetention();
