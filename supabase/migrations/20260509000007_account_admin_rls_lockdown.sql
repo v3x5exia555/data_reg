@@ -128,3 +128,100 @@ BEGIN
           tbl || '_delete', tbl);
     END LOOP;
 END $$;
+
+-- ============================================================
+-- 3. Special-case tables
+-- ============================================================
+
+-- ---- accounts ----------------------------------------------
+ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "accounts_all"    ON public.accounts;
+DROP POLICY IF EXISTS "accounts_select" ON public.accounts;
+DROP POLICY IF EXISTS "accounts_insert" ON public.accounts;
+DROP POLICY IF EXISTS "accounts_update" ON public.accounts;
+DROP POLICY IF EXISTS "accounts_delete" ON public.accounts;
+
+CREATE POLICY "accounts_select" ON public.accounts FOR SELECT
+  USING ( public.auth_is_superadmin()
+       OR id = public.auth_current_account_id() );
+
+CREATE POLICY "accounts_insert" ON public.accounts FOR INSERT
+  WITH CHECK ( public.auth_is_superadmin() );
+
+CREATE POLICY "accounts_update" ON public.accounts FOR UPDATE
+  USING      ( public.auth_is_superadmin() OR id = public.auth_current_account_id() )
+  WITH CHECK ( public.auth_is_superadmin() OR id = public.auth_current_account_id() );
+
+CREATE POLICY "accounts_delete" ON public.accounts FOR DELETE
+  USING ( public.auth_is_superadmin() );
+
+-- ---- user_profiles -----------------------------------------
+ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+-- Drop every legacy policy name that any prior migration created on user_profiles.
+-- Names verified by audit; the original plan's "Users can view own profile" /
+-- "Users can update own profile" do not exist (the actual name is
+-- "Users can read own profile") -- listed for safety.
+DROP POLICY IF EXISTS "Accountadmin can read all profiles" ON public.user_profiles;
+DROP POLICY IF EXISTS "Allow profile management"           ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can read own profile"         ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can view own profile"         ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can update own profile"       ON public.user_profiles;
+DROP POLICY IF EXISTS "Users update own profile"           ON public.user_profiles;
+DROP POLICY IF EXISTS "Users view own profile"             ON public.user_profiles;
+DROP POLICY IF EXISTS "user_profiles_select"               ON public.user_profiles;
+DROP POLICY IF EXISTS "user_profiles_insert"               ON public.user_profiles;
+DROP POLICY IF EXISTS "user_profiles_update"               ON public.user_profiles;
+DROP POLICY IF EXISTS "user_profiles_delete"               ON public.user_profiles;
+
+CREATE POLICY "user_profiles_select" ON public.user_profiles FOR SELECT
+  USING ( public.auth_is_superadmin()
+       OR id = auth.uid()
+       OR ( public.auth_current_role() = 'Accountadmin'
+            AND account_id = public.auth_current_account_id() ) );
+
+CREATE POLICY "user_profiles_insert" ON public.user_profiles FOR INSERT
+  WITH CHECK ( public.auth_is_superadmin()
+            OR ( public.auth_current_role() = 'Accountadmin'
+                 AND account_id = public.auth_current_account_id() ) );
+
+CREATE POLICY "user_profiles_update" ON public.user_profiles FOR UPDATE
+  USING      ( public.auth_is_superadmin()
+            OR id = auth.uid()
+            OR ( public.auth_current_role() = 'Accountadmin'
+                 AND account_id = public.auth_current_account_id() ) )
+  WITH CHECK (
+       public.auth_is_superadmin()
+    OR ( ( id = auth.uid()
+           OR ( public.auth_current_role() = 'Accountadmin'
+                AND account_id = public.auth_current_account_id() ) )
+         AND role <> 'Superadmin'
+         AND account_id = public.auth_current_account_id() ) );
+
+CREATE POLICY "user_profiles_delete" ON public.user_profiles FOR DELETE
+  USING ( public.auth_is_superadmin() );
+
+-- ---- system_logs (account_id is nullable) ------------------
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'system_logs'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS "Allow system log management" ON public.system_logs';
+    EXECUTE 'DROP POLICY IF EXISTS "Enable read for all"   ON public.system_logs';
+    EXECUTE 'DROP POLICY IF EXISTS "Enable insert for all" ON public.system_logs';
+    EXECUTE 'DROP POLICY IF EXISTS "Enable update for all" ON public.system_logs';
+    EXECUTE 'DROP POLICY IF EXISTS "Enable delete for all" ON public.system_logs';
+    EXECUTE 'DROP POLICY IF EXISTS "system_logs_select"    ON public.system_logs';
+    EXECUTE 'DROP POLICY IF EXISTS "system_logs_insert"    ON public.system_logs';
+
+    EXECUTE 'CREATE POLICY "system_logs_select" ON public.system_logs FOR SELECT
+      USING ( public.auth_is_superadmin()
+           OR account_id = public.auth_current_account_id() )';
+    EXECUTE 'CREATE POLICY "system_logs_insert" ON public.system_logs FOR INSERT
+      WITH CHECK ( public.auth_is_superadmin()
+                OR account_id = public.auth_current_account_id() )';
+    -- system_logs is append-only; no update/delete policies = denied.
+  END IF;
+END $$;
