@@ -32,3 +32,76 @@ REVOKE ALL ON FUNCTION public.auth_is_superadmin()       FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.auth_current_role()       TO authenticated;
 GRANT EXECUTE ON FUNCTION public.auth_current_account_id() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.auth_is_superadmin()      TO authenticated;
+
+-- ============================================================
+-- 2. Uniform per-table policies
+-- ============================================================
+-- Every table whose `account_id` is NOT NULL gets the same four policies:
+--   <table>_select / _insert / _update / _delete
+-- Caller must be Superadmin OR row.account_id = caller's account_id.
+
+DO $$
+DECLARE
+    tbl  TEXT;
+    tbls TEXT[] := ARRAY[
+        'companies',
+        'vendors',
+        'training_records',
+        'data_records',
+        'data_requests',
+        'breach_log',
+        'dpia_assessments',
+        'dpia_screenings',
+        'cross_border_transfers',
+        'cases',
+        'alerts',
+        'dpo',
+        'processing_activities',
+        'documents',
+        'team_members',
+        'consent_settings'
+    ];
+    legacy TEXT[] := ARRAY[
+        'Enable read for all',
+        'Enable insert for all',
+        'Enable update for all',
+        'Enable delete for all',
+        'Allow all access',
+        'Allow all operations',
+        'Allow DPO management'
+    ];
+    p TEXT;
+BEGIN
+    FOREACH tbl IN ARRAY tbls
+    LOOP
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = tbl
+        ) THEN
+            CONTINUE;
+        END IF;
+
+        EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', tbl);
+
+        FOREACH p IN ARRAY legacy LOOP
+            EXECUTE format('DROP POLICY IF EXISTS %I ON %I', p, tbl);
+        END LOOP;
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I', tbl || '_select', tbl);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I', tbl || '_insert', tbl);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I', tbl || '_update', tbl);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I', tbl || '_delete', tbl);
+
+        EXECUTE format(
+          'CREATE POLICY %I ON %I FOR SELECT USING ( public.auth_is_superadmin() OR account_id = public.auth_current_account_id() )',
+          tbl || '_select', tbl);
+        EXECUTE format(
+          'CREATE POLICY %I ON %I FOR INSERT WITH CHECK ( public.auth_is_superadmin() OR account_id = public.auth_current_account_id() )',
+          tbl || '_insert', tbl);
+        EXECUTE format(
+          'CREATE POLICY %I ON %I FOR UPDATE USING ( public.auth_is_superadmin() OR account_id = public.auth_current_account_id() ) WITH CHECK ( public.auth_is_superadmin() OR account_id = public.auth_current_account_id() )',
+          tbl || '_update', tbl);
+        EXECUTE format(
+          'CREATE POLICY %I ON %I FOR DELETE USING ( public.auth_is_superadmin() OR account_id = public.auth_current_account_id() )',
+          tbl || '_delete', tbl);
+    END LOOP;
+END $$;
