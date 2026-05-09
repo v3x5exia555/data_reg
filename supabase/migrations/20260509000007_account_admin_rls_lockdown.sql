@@ -68,7 +68,24 @@ DECLARE
         'Enable delete for all',
         'Allow all access',
         'Allow all operations',
-        'Allow DPO management'
+        'Allow DPO management',
+        'Allow company management',
+        'Allow vendor management',
+        'Allow training management',
+        'Allow data record management',
+        'Allow data request management',
+        'Allow breach log management',
+        'Allow DPIA management',
+        'dpia_screenings_owner_all',
+        'Allow cross border management',
+        'Allow case management',
+        'Allow alert management',
+        'Allow document management',
+        'Users manage own documents',
+        'Allow team member management',
+        'Users manage own team',
+        'Users manage company processing activities',
+        'Allow consent settings'
     ];
     p TEXT;
 BEGIN
