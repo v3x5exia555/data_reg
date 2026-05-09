@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '23';
+const PAGE_ASSET_VERSION = '24';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -3096,7 +3096,7 @@ function updateDEICADecision() {
   const justifyWrap = document.getElementById('deica-justify-wrap');
 
   if (box) box.className = `deica-decision ${decision === 'required' ? 'required' : 'not-required'}`;
-  if (icon) icon.textContent = decision === 'required' ? 'Alert' : 'OK';
+  if (icon) icon.className = `fa-solid ${decision === 'required' ? 'fa-triangle-exclamation' : 'fa-circle-check'}`;
   if (text) text.textContent = decision === 'required' ? 'DPIA REQUIRED' : 'DPIA not required';
   if (justifyWrap) justifyWrap.style.display = decision === 'required' ? 'none' : 'block';
 }

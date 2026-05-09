@@ -1,0 +1,367 @@
+<div id="page-deica" class="page-shell deica-page">
+  <style>
+    #page-deica {
+      --deica-bg: #f8fafc;
+      --deica-card: #ffffff;
+      --deica-muted: #64748b;
+      --deica-border: #e2e8f0;
+      --deica-primary: #4f46e5;
+      --deica-danger: #dc2626;
+      --deica-danger-soft: #fef2f2;
+      --deica-success: #16a34a;
+      --deica-success-soft: #f0fdf4;
+    }
+
+    #page-deica .deica-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    #page-deica .deica-title {
+      margin: 0;
+      color: var(--text);
+      font-size: 28px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+
+    #page-deica .deica-subtitle {
+      margin-top: 8px;
+      color: var(--deica-muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    #page-deica .deica-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    #page-deica .deica-empty {
+      border: 1px dashed #cbd5e1;
+      border-radius: 12px;
+      background: var(--deica-card);
+      color: var(--deica-muted);
+      padding: 44px 24px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    #page-deica .deica-card {
+      border: 1px solid var(--deica-border);
+      border-radius: 12px;
+      background: var(--deica-card);
+      padding: 18px;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+    }
+
+    #page-deica .deica-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    #page-deica .deica-card-title {
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    #page-deica .deica-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 9px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    #page-deica .deica-badge.required {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    #page-deica .deica-badge.not-required {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    #page-deica .deica-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 14px;
+    }
+
+    #page-deica .deica-tag {
+      border: 1px solid var(--deica-border);
+      border-radius: 999px;
+      background: #fff;
+      color: #475569;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+    }
+
+    #page-deica .deica-note {
+      margin-top: 12px;
+      color: var(--deica-muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    #page-deica .deica-card-actions {
+      margin-top: 14px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    #page-deica .deica-link-btn {
+      border: 0;
+      background: transparent;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 4px 0;
+    }
+
+    #page-deica .deica-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      overflow-y: auto;
+      padding: 40px 16px;
+      background: rgba(15, 23, 42, 0.48);
+    }
+
+    #page-deica .deica-modal.open {
+      display: flex;
+    }
+
+    #page-deica .deica-dialog {
+      width: min(720px, 100%);
+      overflow: hidden;
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+    }
+
+    #page-deica .deica-dialog-head,
+    #page-deica .deica-dialog-foot {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--deica-border);
+    }
+
+    #page-deica .deica-dialog-foot {
+      border-top: 1px solid var(--deica-border);
+      border-bottom: 0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    #page-deica .deica-dialog-title {
+      margin: 0;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    #page-deica .deica-dialog-body {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 22px;
+    }
+
+    #page-deica .deica-field label,
+    #page-deica .deica-panel-title {
+      display: block;
+      margin-bottom: 7px;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    #page-deica .deica-field input,
+    #page-deica .deica-field textarea {
+      width: 100%;
+      border: 1px solid var(--deica-border);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      font-size: 14px;
+      padding: 10px 12px;
+    }
+
+    #page-deica .deica-field textarea {
+      min-height: 74px;
+      resize: vertical;
+    }
+
+    #page-deica .deica-panel {
+      border-radius: 10px;
+      background: #f1f5f9;
+      padding: 14px;
+    }
+
+    #page-deica .deica-panel-kicker {
+      margin-bottom: 10px;
+      color: var(--deica-muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    #page-deica .deica-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 34px;
+      color: #334155;
+      font-size: 14px;
+    }
+
+    #page-deica .deica-row + .deica-row {
+      margin-top: 8px;
+    }
+
+    #page-deica .deica-switch {
+      position: relative;
+      flex: 0 0 auto;
+      width: 38px;
+      height: 22px;
+      border: 0;
+      border-radius: 999px;
+      background: #cbd5e1;
+      cursor: pointer;
+      transition: background .15s ease;
+    }
+
+    #page-deica .deica-switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background: #fff;
+      transition: transform .15s ease;
+    }
+
+    #page-deica .deica-switch.on {
+      background: var(--deica-primary);
+    }
+
+    #page-deica .deica-switch.on::after {
+      transform: translateX(16px);
+    }
+
+    #page-deica .deica-decision {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    #page-deica .deica-decision.required {
+      border: 1px solid #fecaca;
+      background: var(--deica-danger-soft);
+      color: #991b1b;
+    }
+
+    #page-deica .deica-decision.not-required {
+      border: 1px solid #bbf7d0;
+      background: var(--deica-success-soft);
+      color: #166534;
+    }
+
+    @media (max-width: 720px) {
+      #page-deica .deica-header,
+      #page-deica .deica-dialog-foot {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      #page-deica .deica-row {
+        align-items: flex-start;
+      }
+    }
+  </style>
+
+  <div class="deica-header">
+    <div>
+      <h1 class="deica-title">DPIA Workflow (DEICA)</h1>
+      <div class="deica-subtitle">Two-stage decision: quantitative thresholds plus qualitative risk factors.</div>
+    </div>
+    <button id="deica-new-btn" class="btn btn-primary" type="button">
+      <i class="fa-solid fa-plus"></i>
+      New screening
+    </button>
+  </div>
+
+  <div id="deica-list" class="deica-list"></div>
+
+  <div id="deica-modal" class="deica-modal" aria-hidden="true">
+    <div class="deica-dialog" role="dialog" aria-modal="true" aria-labelledby="deica-modal-title">
+      <div class="deica-dialog-head">
+        <h2 id="deica-modal-title" class="deica-dialog-title">New DPIA screening</h2>
+      </div>
+      <div class="deica-dialog-body">
+        <div class="deica-field">
+          <label for="deica-activity-name">Processing activity name</label>
+          <input id="deica-activity-name" type="text" placeholder="e.g. Customer onboarding">
+        </div>
+
+        <div class="deica-panel">
+          <div class="deica-panel-kicker">Step 1 · Quantitative thresholds</div>
+          <div class="deica-row">
+            <span>Processing involves more than 20,000 data subjects</span>
+            <button class="deica-switch" type="button" data-key="subjects_over_20k" aria-label="Toggle more than 20,000 data subjects"></button>
+          </div>
+          <div class="deica-row">
+            <span>Processing involves more than 10,000 sensitive data subjects</span>
+            <button class="deica-switch" type="button" data-key="sensitive_subjects_over_10k" aria-label="Toggle more than 10,000 sensitive data subjects"></button>
+          </div>
+        </div>
+
+        <div class="deica-panel">
+          <div class="deica-panel-kicker">Step 2 · Qualitative risk factors</div>
+          <div id="deica-qual-wrap"></div>
+        </div>
+
+        <div id="deica-decision-box" class="deica-decision not-required">
+          <i id="deica-decision-icon" class="fa-solid fa-circle-check" aria-hidden="true"></i>
+          <span>Decision: <span id="deica-decision-text">DPIA not required</span></span>
+        </div>
+
+        <div id="deica-justify-wrap" class="deica-field">
+          <label for="deica-justification">Justification (logged)</label>
+          <textarea id="deica-justification" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="deica-dialog-foot">
+        <button id="deica-cancel-btn" class="btn btn-secondary" type="button">Cancel</button>
+        <button id="deica-save-btn" class="btn btn-primary" type="button">Save decision</button>
+      </div>
+    </div>
+  </div>
+</div>
