@@ -6,56 +6,145 @@
 
     <div class="auth-card">
       <div id="register-form-step">
-        <h2 class="auth-title">Create Account</h2>
-        <p class="auth-sub">Start your 14-day free trial</p>
-
-        <div class="form-group">
-          <label>Full Name</label>
-          <div class="input-wrap">
-            <span class="icon">👤</span>
-            <input type="text" id="reg-name" class="form-input" placeholder="Your name">
-          </div>
+        <div class="auth-header">
+          <h2 class="auth-title">Create Account</h2>
+          <p class="auth-sub">Start your 14-day free trial</p>
         </div>
 
-        <div class="form-group">
-          <label>Work Email</label>
-          <div class="input-wrap">
-            <span class="icon">📧</span>
-            <input type="email" id="reg-email" class="form-input" placeholder="name@company.com">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Full Name</label>
+            <div class="input-wrap">
+              <span class="input-icon"><i class="fa-solid fa-user"></i></span>
+              <input type="text" id="register-name" class="form-input" placeholder="Your name" autocomplete="name">
+            </div>
+            <div class="error-msg" id="register-name-error">
+              <i class="fa-solid fa-circle-exclamation"></i> Please enter your name
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Work Email</label>
+            <div class="input-wrap">
+              <span class="input-icon"><i class="fa-solid fa-envelope"></i></span>
+              <input type="email" id="register-email" class="form-input" placeholder="name@company.com" autocomplete="email">
+            </div>
+            <div class="error-msg" id="register-email-error">
+              <i class="fa-solid fa-circle-exclamation"></i> Please enter a valid email
+            </div>
           </div>
         </div>
 
         <div class="form-group">
           <label>Company Name</label>
           <div class="input-wrap">
-            <span class="icon">🏢</span>
-            <input type="text" id="reg-company" class="form-input" placeholder="Your organization">
+            <span class="input-icon"><i class="fa-solid fa-building"></i></span>
+            <input type="text" id="register-company" class="form-input" placeholder="Your organization" autocomplete="organization">
+          </div>
+          <div class="error-msg" id="register-company-error">
+            <i class="fa-solid fa-circle-exclamation"></i> Please enter your company name
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Industry</label>
+            <div class="input-wrap">
+              <span class="input-icon"><i class="fa-solid fa-industry"></i></span>
+              <select id="register-industry" class="form-input">
+                <option value="">Select industry</option>
+                <option value="Technology">Technology</option>
+                <option value="Finance">Finance &amp; Banking</option>
+                <option value="Healthcare">Healthcare</option>
+                <option value="Retail">Retail &amp; E-commerce</option>
+                <option value="Education">Education</option>
+                <option value="Manufacturing">Manufacturing</option>
+                <option value="Hospitality">Hospitality &amp; F&amp;B</option>
+                <option value="Professional Services">Professional Services</option>
+                <option value="Real Estate">Real Estate</option>
+                <option value="Government">Government &amp; Public</option>
+                <option value="Non-profit">Non-profit</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="error-msg" id="register-industry-error">
+              <i class="fa-solid fa-circle-exclamation"></i> Please select your industry
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Company Size</label>
+            <div class="input-wrap">
+              <span class="input-icon"><i class="fa-solid fa-users"></i></span>
+              <select id="register-size" class="form-input">
+                <option value="">Select size</option>
+                <option value="1-10">1 - 10</option>
+                <option value="11-50">11 - 50</option>
+                <option value="51-200">51 - 200</option>
+                <option value="201-500">201 - 500</option>
+                <option value="501-1000">501 - 1000</option>
+                <option value="1000+">1000+</option>
+              </select>
+            </div>
+            <div class="error-msg" id="register-size-error">
+              <i class="fa-solid fa-circle-exclamation"></i> Please select company size
+            </div>
           </div>
         </div>
 
         <div class="form-group">
-          <label>Password</label>
+          <label>Business Registration No <span class="form-optional">(optional)</span></label>
           <div class="input-wrap">
-            <span class="icon">🔒</span>
-            <input type="password" id="reg-password" class="form-input" placeholder="Min 8 characters" oninput="updatePasswordStrength(this.value)">
-          </div>
-          <div class="password-strength">
-            <div class="strength-bars">
-              <div class="strength-bar" id="strength-bar-1"></div>
-              <div class="strength-bar" id="strength-bar-2"></div>
-              <div class="strength-bar" id="strength-bar-3"></div>
-              <div class="strength-bar" id="strength-bar-4"></div>
-            </div>
-            <span class="strength-text" id="strength-text">Enter a password</span>
+            <span class="input-icon"><i class="fa-solid fa-id-card"></i></span>
+            <input type="text" id="register-reg-no" class="form-input" placeholder="e.g. 202001000001 (A)">
           </div>
         </div>
 
-        <button class="btn-submit" onclick="doRegister()">
-          Create Account →
+        <div class="form-row">
+          <div class="form-group">
+            <label>Password</label>
+            <div class="input-wrap">
+              <span class="input-icon"><i class="fa-solid fa-lock"></i></span>
+              <input type="password" id="register-password" class="form-input" placeholder="Min 8 characters" autocomplete="new-password" oninput="updatePasswordStrength(this.value)">
+              <button class="pw-toggle" onclick="togglePassword('register-password', this)" type="button" aria-label="Show password">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+            <div class="password-strength">
+              <div class="strength-bars">
+                <div class="strength-bar" id="strength-bar-1"></div>
+                <div class="strength-bar" id="strength-bar-2"></div>
+                <div class="strength-bar" id="strength-bar-3"></div>
+                <div class="strength-bar" id="strength-bar-4"></div>
+              </div>
+              <span class="strength-text" id="strength-text">Enter a password</span>
+            </div>
+            <div class="error-msg" id="register-password-error">
+              <i class="fa-solid fa-circle-exclamation"></i> Min 6 characters required
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Confirm Password</label>
+            <div class="input-wrap">
+              <span class="input-icon"><i class="fa-solid fa-lock"></i></span>
+              <input type="password" id="register-confirm" class="form-input" placeholder="Re-enter your password" autocomplete="new-password">
+              <button class="pw-toggle" onclick="togglePassword('register-confirm', this)" type="button" aria-label="Show password">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+            <div class="error-msg" id="register-confirm-error">
+              <i class="fa-solid fa-circle-exclamation"></i> Passwords do not match
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-full" id="register-btn" onclick="doRegister()">
+          <span class="btn-text">Create Account</span>
+          <i class="fa-solid fa-arrow-right"></i>
         </button>
 
-        <p class="terms-note">By signing up, you agree to our <a href="#">Terms</a> and <a href="#">Privacy
-            Policy</a>.</p>
+        <p class="terms-note">By signing up, you agree to our <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.</p>
 
         <div class="auth-footer">
           Already have an account? <a href="#" onclick="goTo('screen-login');return false;">Log in</a>
@@ -63,45 +152,156 @@
       </div>
 
       <div id="register-success-step" class="success-screen">
-        <div class="success-icon blue">✨</div>
+        <div class="success-icon blue"><i class="fa-solid fa-envelope-circle-check"></i></div>
         <h3>Check your email</h3>
-        <p>We've sent a verification link to <strong id="sent-email-display">your email</strong>. Please click it to
-          continue.</p>
-        <button class="btn btn-primary btn-full" style="margin-top:24px"
-          onclick="goTo('screen-onboarding')">Continue setup</button>
+        <p>We've sent a verification link to <strong id="sent-email-display">your email</strong>. Please click it to continue.</p>
+        <button class="btn btn-primary btn-full" style="margin-top:24px" onclick="goTo('screen-onboarding')">
+          <span class="btn-text">Continue setup</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
       </div>
     </div>
   </div>
-</div>
 
 <style>
-  .password-strength {
+  /* Two-column rows on the register form. Falls back to single column on
+     narrow screens. Mirrors the visual rhythm of the login card while
+     keeping the wider form readable. */
+  #screen-register .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  @media (max-width: 560px) {
+    #screen-register .form-row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  #screen-register .auth-card {
+    width: 100%;
+    max-width: 560px;
+  }
+
+  /* Pin icon inside the input. The global stylesheet only knows about
+     .icon (emoji style) and the matching .input-icon rule lives inside
+     auth__login.html's scoped style. Re-declare here so the register
+     form looks right on first load even if the user never visits login. */
+  #screen-register .input-wrap { position: relative; }
+  #screen-register .input-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-light, #6b7280);
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    pointer-events: none;
+  }
+  #screen-register .form-input {
+    padding-left: 42px !important;
+  }
+
+  /* Inline error rows (matches login). The global rule already shows
+     them on .visible, but re-declare the icon flex-shrink so the icon
+     never wraps. */
+  #screen-register .error-msg {
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  #screen-register .error-msg i { flex-shrink: 0; }
+
+  /* Password show/hide toggle */
+  #screen-register .pw-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    color: var(--text-light, #6b7280);
+    padding: 4px;
+    display: inline-flex;
+    align-items: center;
+  }
+  #screen-register .pw-toggle:hover { color: var(--text); }
+
+  /* Optional-field label hint */
+  #screen-register .form-optional {
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 11px;
+    margin-left: 4px;
+  }
+
+  /* Reuse the same input + button styles already defined globally and on
+     the login page (input-icon, error-msg, pw-toggle, btn btn-primary
+     btn-full, etc.) so register stays visually consistent. */
+
+  #screen-register select.form-input {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px !important;
+  }
+
+  /* Password strength bars (kept here so the register page is self-
+     contained even if the global stylesheet doesn't know about them). */
+  #screen-register .password-strength {
     margin-top: 8px;
   }
-  .strength-bars {
+  #screen-register .strength-bars {
     display: flex;
     gap: 4px;
     margin-bottom: 4px;
   }
-  .strength-bar {
+  #screen-register .strength-bar {
     flex: 1;
     height: 4px;
     background: var(--border);
     border-radius: 2px;
     transition: background 0.2s;
   }
-  .strength-bar.active-weak { background: var(--danger); }
-  .strength-bar.active-fair { background: var(--warning); }
-  .strength-bar.active-good { background: var(--success); }
-  .strength-bar.active-strong { background: var(--success); }
-  .strength-text {
+  #screen-register .strength-bar.active-weak   { background: var(--danger); }
+  #screen-register .strength-bar.active-fair   { background: var(--warning); }
+  #screen-register .strength-bar.active-good   { background: var(--success); }
+  #screen-register .strength-bar.active-strong { background: var(--success); }
+  #screen-register .strength-text {
     font-size: 11px;
     color: var(--text-muted);
   }
-  .strength-text.weak { color: var(--danger); }
-  .strength-text.fair { color: var(--warning); }
-  .strength-text.good { color: var(--success); }
-  .strength-text.strong { color: var(--success); font-weight: 600; }
-</style>
+  #screen-register .strength-text.weak   { color: var(--danger); }
+  #screen-register .strength-text.fair   { color: var(--warning); }
+  #screen-register .strength-text.good   { color: var(--success); }
+  #screen-register .strength-text.strong { color: var(--success); font-weight: 600; }
 
-<!-- updatePasswordStrength is defined in js/app.js (no inline scripts). -->
+  #screen-register .terms-note {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+  #screen-register .terms-note a {
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  #screen-register .success-icon.blue {
+    width: 64px;
+    height: 64px;
+    border-radius: 999px;
+    background: var(--primary-light, #eef2ff);
+    color: var(--primary);
+    font-size: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+</style>
+</div>

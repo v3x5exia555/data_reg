@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '27';
+const PAGE_ASSET_VERSION = '30';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -1308,27 +1308,41 @@ function goToDashboard() {
    AUTH: REGISTER
    ─────────────────────────────────────────────── */
 async function doRegister() {
-  const name = document.getElementById('register-name').value.trim();
-  const company = document.getElementById('register-company').value.trim();
-  const email = document.getElementById('register-email').value.trim();
-  const pw = document.getElementById('register-password').value;
-  const pwConfirm = document.getElementById('register-confirm').value;
-  const industry = document.getElementById('register-industry').value;
-  const size = document.getElementById('register-size').value;
-  const regNo = document.getElementById('register-reg-no').value.trim();
+  // Read all fields up front and clear any prior inline error rows so the
+  // form mirrors login's validation UX (red inline message under the
+  // offending field plus a toast).
+  const fieldIds = [
+    'register-name', 'register-email', 'register-company',
+    'register-industry', 'register-size',
+    'register-password', 'register-confirm'
+  ];
+  clearErrors(...fieldIds);
+  const val = (id) => (document.getElementById(id)?.value ?? '');
+  const name = val('register-name').trim();
+  const company = val('register-company').trim();
+  const email = val('register-email').trim();
+  const pw = val('register-password');
+  const pwConfirm = val('register-confirm');
+  const industry = val('register-industry');
+  const size = val('register-size');
+  const regNo = val('register-reg-no').trim();
 
-  if (!name) { showToast('Please enter your name', 'error'); return; }
-  if (!company) { showToast('Please enter company name', 'error'); return; }
-  if (!industry) { showToast('Please select your industry', 'error'); return; }
-  if (!size) { showToast('Please select company size', 'error'); return; }
-  if (!isValidEmail(email)) { showToast('Please enter a valid email', 'error'); return; }
-  if (!pw || pw.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
-  if (pw !== pwConfirm) { showToast('Passwords do not match', 'error'); return; }
+  const fail = (fieldId, message) => {
+    showError(fieldId);
+    showToast(message, 'error');
+  };
+  if (!name)     { return fail('register-name',     'Please enter your name'); }
+  if (!email || !isValidEmail(email)) { return fail('register-email', 'Please enter a valid email'); }
+  if (!company)  { return fail('register-company',  'Please enter company name'); }
+  if (!industry) { return fail('register-industry', 'Please select your industry'); }
+  if (!size)     { return fail('register-size',     'Please select company size'); }
+  if (!pw || pw.length < 6) { return fail('register-password', 'Password must be at least 6 characters'); }
+  if (pw !== pwConfirm)     { return fail('register-confirm',  'Passwords do not match'); }
 
   // Save user data to localStorage for login validation
   const users = JSON.parse(localStorage.getItem('datarex_users') || '[]');
   const exists = users.find(u => u.email === email);
-  if (exists) { showToast('Email already registered', 'error'); return; }
+  if (exists) { return fail('register-email', 'Email already registered'); }
 
   const pwHash = await hashPasswordForStorage(pw);
   const newId = (typeof crypto !== 'undefined' && crypto.randomUUID)
