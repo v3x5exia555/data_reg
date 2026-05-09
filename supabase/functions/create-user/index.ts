@@ -77,14 +77,21 @@ serve(async (req) => {
     const isAdmin = callerProfile.role === 'Superadmin' || callerProfile.role === 'Accountadmin';
     if (!isAdmin) return json({ error: 'Admin only' }, 403);
     if (body.user_id === caller.id) return json({ error: 'Cannot manage your own account' }, 400);
+
     if (callerProfile.role === 'Accountadmin') {
-      const { data: targetProfile } = await adminClient
+      const { data: targetProfile, error: targetErr } = await adminClient
         .from('user_profiles')
-        .select('role')
+        .select('role, account_id')
         .eq('id', body.user_id)
         .single();
-      if (targetProfile?.role === 'Superadmin') {
+      if (targetErr || !targetProfile) {
+        return json({ error: 'Target user not found' }, 404);
+      }
+      if (targetProfile.role === 'Superadmin') {
         return json({ error: 'Not authorized to manage Superadmin accounts' }, 403);
+      }
+      if (targetProfile.account_id !== callerProfile.account_id) {
+        return json({ error: 'Not authorized for this account' }, 403);
       }
     }
     return await manageUser(adminClient, body);
