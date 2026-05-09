@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '24';
+const PAGE_ASSET_VERSION = '26';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -2950,6 +2950,14 @@ const DEICA_KEYS = [
 let deicaCurrent = null;
 let deicaBound = false;
 
+function getDEICAModal() {
+  const modal = document.getElementById('deica-modal');
+  if (modal && modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+  }
+  return modal;
+}
+
 function readDEICAScreenings() {
   try {
     return JSON.parse(localStorage.getItem(DEICA_STORAGE_KEY) || '[]');
@@ -2989,20 +2997,74 @@ function deicaEscape(value) {
   }[c]));
 }
 
-function renderDEICA() {
+async function renderDEICA() {
   const page = document.getElementById('page-deica');
   const list = document.getElementById('deica-list');
   if (!page || !list) return;
 
   bindDEICAEvents();
-  const rows = readDEICAScreenings();
 
+  // Render local immediately so the page never appears empty while we fetch.
+  const localRows = readDEICAScreenings();
+  renderDEICACards(localRows);
+
+  const remoteRows = await fetchDEICAFromSupabase();
+  if (!remoteRows.length && !localRows.length) return;
+
+  const merged = mergeDEICARows(remoteRows, localRows);
+  // Mirror Supabase rows into localStorage so a hard refresh on a clean
+  // browser still shows them — this is the surviving-the-cache fix the user
+  // hit. We only overwrite when remote actually returned data, so an offline
+  // session doesn't wipe the local copy.
+  if (remoteRows.length) saveDEICAScreenings(merged);
+  renderDEICACards(merged);
+}
+
+function mergeDEICARows(remote, local) {
+  // Prefer the freshest version of each screening across the two sources.
+  const byId = new Map();
+  for (const row of [...(remote || []), ...(local || [])]) {
+    if (!row || !row.id) continue;
+    const existing = byId.get(row.id);
+    if (!existing) { byId.set(row.id, row); continue; }
+    const existingTs = Date.parse(existing.updated_at || existing.created_at || 0) || 0;
+    const candidateTs = Date.parse(row.updated_at || row.created_at || 0) || 0;
+    if (candidateTs >= existingTs) byId.set(row.id, row);
+  }
+  return Array.from(byId.values()).sort((a, b) => {
+    const ad = Date.parse(a.created_at || 0) || 0;
+    const bd = Date.parse(b.created_at || 0) || 0;
+    return bd - ad;
+  });
+}
+
+async function fetchDEICAFromSupabase() {
+  const supabase = getSupabaseClient();
+  if (!supabase || !isSupabaseConfigured() || !state.user?.id) return [];
+  try {
+    let query = supabase.from('dpia_screenings').select('*').eq('user_id', state.user.id);
+    const accountId = getEffectiveAccountId();
+    if (accountId) query = query.eq('account_id', accountId);
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) {
+      JARVIS_LOG.error('DEICA', 'Load from Supabase', error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    JARVIS_LOG.error('DEICA', 'Load exception', err);
+    return [];
+  }
+}
+
+function renderDEICACards(rows) {
+  const list = document.getElementById('deica-list');
+  if (!list) return;
   if (!rows.length) {
     list.className = 'deica-empty';
     list.innerHTML = 'No DEICA screenings yet. Run one whenever you launch a new processing activity.';
     return;
   }
-
   list.className = 'deica-list';
   list.innerHTML = rows.map(row => {
     const tags = [];
@@ -3032,14 +3094,15 @@ function renderDEICA() {
 function bindDEICAEvents() {
   if (deicaBound) return;
 
+  const modal = getDEICAModal();
   document.getElementById('deica-new-btn')?.addEventListener('click', () => openDEICAModal(blankDEICAScreening()));
-  document.getElementById('deica-cancel-btn')?.addEventListener('click', closeDEICAModal);
-  document.getElementById('deica-save-btn')?.addEventListener('click', saveDEICADecision);
+  modal?.querySelector('#deica-cancel-btn')?.addEventListener('click', closeDEICAModal);
+  modal?.querySelector('#deica-save-btn')?.addEventListener('click', saveDEICADecision);
   document.getElementById('deica-list')?.addEventListener('click', (event) => {
     const button = event.target?.closest?.('.deica-edit-btn');
     if (button?.dataset?.id) editDEICA(button.dataset.id);
   });
-  document.getElementById('deica-modal')?.addEventListener('click', (event) => {
+  modal?.addEventListener('click', (event) => {
     if (event.target?.id === 'deica-modal') closeDEICAModal();
   });
 
@@ -3048,7 +3111,7 @@ function bindDEICAEvents() {
 
 function openDEICAModal(screening) {
   deicaCurrent = { ...screening };
-  const modal = document.getElementById('deica-modal');
+  const modal = getDEICAModal();
   const title = document.getElementById('deica-modal-title');
   const activity = document.getElementById('deica-activity-name');
   const justification = document.getElementById('deica-justification');
@@ -3065,7 +3128,7 @@ function openDEICAModal(screening) {
     </div>
   `).join('');
 
-  document.querySelectorAll('#page-deica .deica-switch').forEach(button => {
+  modal.querySelectorAll('.deica-switch').forEach(button => {
     const key = button.dataset.key;
     button.classList.toggle('on', Boolean(deicaCurrent[key]));
     button.onclick = () => {
@@ -3081,7 +3144,7 @@ function openDEICAModal(screening) {
 }
 
 function closeDEICAModal() {
-  const modal = document.getElementById('deica-modal');
+  const modal = getDEICAModal();
   if (!modal) return;
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
@@ -3101,7 +3164,7 @@ function updateDEICADecision() {
   if (justifyWrap) justifyWrap.style.display = decision === 'required' ? 'none' : 'block';
 }
 
-function saveDEICADecision() {
+async function saveDEICADecision() {
   if (!deicaCurrent) return;
   const activity = document.getElementById('deica-activity-name')?.value.trim() || '';
   const justification = document.getElementById('deica-justification')?.value || '';
@@ -3115,18 +3178,56 @@ function saveDEICADecision() {
   deicaCurrent.justification = justification;
   deicaCurrent.decision = decideDEICA(deicaCurrent);
   deicaCurrent.updated_at = new Date().toISOString();
-
-  if (deicaCurrent.id) {
-    saveDEICAScreenings(rows.map(row => row.id === deicaCurrent.id ? deicaCurrent : row));
-  } else {
+  const isUpdate = Boolean(deicaCurrent.id);
+  if (!isUpdate) {
     deicaCurrent.id = (window.crypto?.randomUUID && window.crypto.randomUUID()) || `deica-${Date.now()}`;
     deicaCurrent.created_at = new Date().toISOString();
-    saveDEICAScreenings([deicaCurrent, ...rows]);
   }
+
+  // Best-effort Supabase sync. If it succeeds, the row also survives
+  // localStorage being cleared (the user's "data is gone after hard refresh"
+  // case). If it fails (no session, offline, missing account), the local
+  // copy is still saved below so the UI continues to work.
+  let syncedRow = null;
+  const supabase = getSupabaseClient();
+  if (supabase && isSupabaseConfigured() && state.user?.id) {
+    const accountId = getEffectiveAccountId() || state.accountId || null;
+    const payload = {
+      id: deicaCurrent.id,
+      user_id: state.user.id,
+      account_id: accountId || null,
+      activity_name: deicaCurrent.activity_name,
+      justification: deicaCurrent.justification,
+      decision: deicaCurrent.decision,
+      ...Object.fromEntries(DEICA_KEYS.map(key => [key, Boolean(deicaCurrent[key])])),
+      updated_at: deicaCurrent.updated_at
+    };
+    if (!isUpdate) payload.created_at = deicaCurrent.created_at;
+    try {
+      const { data, error } = await supabase
+        .from('dpia_screenings')
+        .upsert(payload, { onConflict: 'id' })
+        .select('*')
+        .single();
+      if (error) throw error;
+      syncedRow = data;
+    } catch (err) {
+      JARVIS_LOG.error('DEICA', 'Save to Supabase', err, { activity });
+      console.warn('[JARVIS] DEICA Supabase sync failed, kept local only', err);
+    }
+  }
+
+  // Always write to localStorage so the UI is responsive and survives a
+  // disconnected session.
+  const merged = isUpdate
+    ? rows.map(row => row.id === deicaCurrent.id ? (syncedRow || deicaCurrent) : row)
+    : [(syncedRow || deicaCurrent), ...rows];
+  saveDEICAScreenings(merged);
+  if (syncedRow) Object.assign(deicaCurrent, syncedRow);
 
   closeDEICAModal();
   renderDEICA();
-  showToast('DEICA decision saved', 'success');
+  showToast(syncedRow ? 'DEICA decision saved' : 'Saved locally (cloud sync unavailable)', syncedRow ? 'success' : 'info');
 }
 
 function editDEICA(id) {
