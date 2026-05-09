@@ -4497,10 +4497,24 @@ async function loadAllPeople() {
     return;
   }
 
-  const { data, error } = await supabase
+  let q = supabase
     .from('user_profiles')
     .select('id, email, role, status, account_id, accounts(name)')
     .order('email');
+
+  if (state.role !== 'Superadmin') {
+    const accountId = getEffectiveAccountId();
+    if (!accountId) {
+      document.getElementById('people-list').innerHTML =
+        '<div style="text-align:center;padding:40px;color:var(--muted);">No account selected.</div>';
+      return;
+    }
+    q = q.eq('account_id', accountId);
+  } else if (state.viewAsAccountId) {
+    q = q.eq('account_id', state.viewAsAccountId);
+  }
+
+  const { data, error } = await q;
 
   if (error) {
     console.error('Failed to load people:', error);
