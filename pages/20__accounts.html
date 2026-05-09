@@ -1,44 +1,73 @@
-<section class="page page-shell" id="page-accounts" data-page="accounts">
-  <header class="page-head">
-    <div class="page-head-text">
-      <h1>Accounts</h1>
-      <p class="page-sub">All customer accounts. Click an account to view as.</p>
+<section class="page page-shell accounts-shell" id="page-accounts" data-page="accounts">
+  <div class="accounts-page-inner">
+    <header class="accounts-hero">
+      <div>
+        <span class="accounts-eyebrow">Admin workspace</span>
+        <h1>Accounts</h1>
+        <p class="page-sub">Manage customer accounts, seats, and view-as access.</p>
+      </div>
+      <button id="btn-new-account" class="btn-primary accounts-new-btn" type="button">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        New account
+      </button>
+    </header>
+
+    <div class="accounts-stat-grid" id="account-stats">
+      <div class="accounts-stat-card">
+        <div class="accounts-stat-icon"><i class="fa-solid fa-building" aria-hidden="true"></i></div>
+        <div><div class="stat-num" id="stat-total">-</div><div class="stat-label">Total accounts</div></div>
+      </div>
+      <div class="accounts-stat-card">
+        <div class="accounts-stat-icon success"><i class="fa-solid fa-circle-check" aria-hidden="true"></i></div>
+        <div><div class="stat-num" id="stat-active">-</div><div class="stat-label">Active</div></div>
+      </div>
+      <div class="accounts-stat-card">
+        <div class="accounts-stat-icon primary"><i class="fa-solid fa-chair" aria-hidden="true"></i></div>
+        <div><div class="stat-num" id="stat-seats">-</div><div class="stat-label">Seats used</div></div>
+      </div>
+      <div class="accounts-stat-card">
+        <div class="accounts-stat-icon danger"><i class="fa-solid fa-ban" aria-hidden="true"></i></div>
+        <div><div class="stat-num" id="stat-suspended">-</div><div class="stat-label">Suspended</div></div>
+      </div>
     </div>
-    <div class="page-head-actions">
-      <button id="btn-new-account" class="btn-primary">+ New account</button>
+
+    <div class="accounts-panel">
+      <div class="accounts-toolbar">
+        <div class="accounts-search-wrap">
+          <span class="accounts-search-icon" aria-hidden="true"></span>
+          <input type="search" id="account-search" placeholder="Search accounts..." />
+        </div>
+        <select id="account-status-filter">
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="suspended">Suspended</option>
+        </select>
+      </div>
+
+      <div id="accounts-list" class="accounts-list" aria-live="polite"></div>
     </div>
-  </header>
-
-  <div class="stat-row" id="account-stats">
-    <div class="stat-card"><div class="stat-num" id="stat-total">–</div><div class="stat-label">Total</div></div>
-    <div class="stat-card"><div class="stat-num" id="stat-active">–</div><div class="stat-label">Active</div></div>
-    <div class="stat-card"><div class="stat-num" id="stat-seats">–</div><div class="stat-label">Seats used</div></div>
-    <div class="stat-card"><div class="stat-num" id="stat-suspended">–</div><div class="stat-label">Suspended</div></div>
   </div>
-
-  <div class="filter-row">
-    <input type="search" id="account-search" placeholder="Search by name or admin email" />
-    <select id="account-status-filter">
-      <option value="all">All</option>
-      <option value="active">Active</option>
-      <option value="suspended">Suspended</option>
-    </select>
-  </div>
-
-  <div id="accounts-list" class="card-list" aria-live="polite"></div>
 </section>
 
 <!-- New-account modal -->
-<div class="modal" id="modal-new-account" aria-hidden="true">
-  <div class="modal-card">
-    <header><h2>New account</h2><button class="modal-close" data-close="modal-new-account">×</button></header>
-    <form id="form-new-account">
+<div class="modal accounts-modal" id="modal-new-account" aria-hidden="true">
+  <div class="modal-card accounts-modal-card">
+    <header class="accounts-modal-head">
+      <div>
+        <h2>New account</h2>
+        <p>Create a customer workspace and invite the account admin.</p>
+      </div>
+      <button class="modal-close" data-close="modal-new-account" type="button">×</button>
+    </header>
+    <form id="form-new-account" class="accounts-form">
       <label>Company name <input name="company_name" required /></label>
-      <label>Accountadmin email <input name="email" type="email" required /></label>
-      <label>Temporary password <input name="temp_password" required minlength="8" /></label>
-      <label>Seat limit <input name="seat_limit" type="number" min="1" value="2" required /></label>
-      <label class="checkbox-row"><input name="seed_sample_data" type="checkbox" /> Seed sample data</label>
-      <footer><button type="submit" class="btn-primary">Create</button></footer>
+      <label>Account admin email <input name="email" type="email" required /></label>
+      <div class="accounts-form-grid">
+        <label>Temporary password <input name="temp_password" required minlength="8" /></label>
+        <label>Seat limit <input name="seat_limit" type="number" min="1" value="2" required /></label>
+      </div>
+      <label class="accounts-checkbox"><input name="seed_sample_data" type="checkbox" /> Seed sample data</label>
+      <footer class="accounts-form-footer"><button type="submit" class="btn-primary">Create account</button></footer>
     </form>
   </div>
 </div>

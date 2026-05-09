@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '31';
+const PAGE_ASSET_VERSION = '32';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
