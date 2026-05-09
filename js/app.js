@@ -404,6 +404,18 @@ function showToast(message, type = 'info') {
 function showSuccess(msg) { showToast(msg, 'success'); }
 function showError(msg) { showToast(msg, 'error'); }
 function showWarning(msg) { showToast(msg, 'warning'); }
+function mapSupabaseError(err) {
+  if (!err) return 'Unknown error';
+  const code = err.code || '';
+  const msg = err.message || String(err);
+  if (code === '42501' || /row-level security/i.test(msg)) {
+    return "You don't have access to that account.";
+  }
+  if (code === '23514' && /role/i.test(msg)) {
+    return "That role change isn't allowed.";
+  }
+  return msg;
+}
 
 // ─── PASSWORD STRENGTH METER ─────────────────────────────────
 function updatePasswordStrength(password) {
@@ -2241,7 +2253,7 @@ async function deleteCompany(id, name) {
       const { error } = await supabase.from('companies').delete().eq('id', id);
       if (error) {
         console.error('Delete error:', error);
-        showToast('Failed to delete from SQL: ' + error.message, 'error');
+        showToast('Failed to delete: ' + mapSupabaseError(error), 'error');
       } else {
         state.companies = state.companies.filter(c => c.id !== id);
         if (state.user.company === name) state.user.company = '';
