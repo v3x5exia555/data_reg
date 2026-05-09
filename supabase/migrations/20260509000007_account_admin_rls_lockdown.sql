@@ -85,7 +85,13 @@ DECLARE
         'Allow team member management',
         'Users manage own team',
         'Users manage company processing activities',
-        'Allow consent settings'
+        'Allow consent settings',
+        'Allow public select on team_members',
+        'Allow public insert on team_members',
+        'Users can view own data records',
+        'Users can insert own data records',
+        'Users can update own data records',
+        'Users can delete own data records'
     ];
     p TEXT;
 BEGIN
