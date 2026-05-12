@@ -917,6 +917,14 @@ function showPage(pageId, navEl, noPush) {
   pageId = pageAliases[pageId] || pageId;
   console.log('showPage called:', pageId);
 
+  const userLevel = state.currentUserLevel || 'Accountadmin';
+  const savedConfig = state.navPermissions?.[userLevel];
+  if (savedConfig && savedConfig[pageId] === false) {
+    showToast('Access denied', 'error');
+    showPage('dashboard');
+    return;
+  }
+
   const page = document.getElementById('page-' + pageId);
   console.log('Page element found:', !!page);
   if (!page) {
@@ -2539,7 +2547,6 @@ function sortCompanies(column) {
 function renderCompanies() {
   const body = document.getElementById('companies-body-wrap');
   if (!body) return;
-  if (state.role !== 'Superadmin') { showPage('dashboard'); return; }
 
   const currentCompanyName = state.user?.company || state.company || 'Acme Pte Ltd';
   const companies = state.companies || [{ name: 'Acme Pte Ltd', regNo: '202001000001 (A)', industry: 'General', country: 'Singapore', dpo_name: 'Demo DPO' }];
@@ -4631,7 +4638,7 @@ async function handleFileUpload() {
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', section: 'Overview' },
   { id: 'checklist', label: 'Checklist', section: 'Overview' },
-  { id: 'companies', label: 'Companies', section: 'Foundation', superadminOnly: true },
+  { id: 'companies', label: 'Companies', section: 'Foundation' },
   { id: 'datasources', label: 'Data Sources', section: 'Foundation' },
   { id: 'dataregister', label: 'Data Register', section: 'Foundation' },
   { id: 'consent', label: 'Consent', section: 'Foundation' },
@@ -4649,8 +4656,8 @@ const NAV_ITEMS = [
   { id: 'alerts', label: 'Alerts', section: 'Monitoring', hasBadge: true },
   { id: 'cases', label: 'Cases', section: 'Monitoring' },
   { id: 'monitoring', label: 'Monitoring', section: 'Monitoring' },
-  { id: 'accounts', label: 'Accounts', section: 'Admin', superadminOnly: true },
-  { id: 'people', label: 'People', section: 'Admin', accountadminOnly: true }
+  { id: 'accounts', label: 'Accounts', section: 'Admin' },
+  { id: 'people', label: 'People', section: 'Admin' }
 ];
 
 function openAddRoleModal() {
@@ -4816,25 +4823,15 @@ async function saveNavConfig() {
 function applyNavPermissions() {
   const userLevel = state.currentUserLevel || 'Accountadmin';
   const savedConfig = state.navPermissions?.[userLevel];
-  const isSuperadmin = state.role === 'Superadmin';
-  const isAccountadmin = state.role === 'Accountadmin';
+
+  const hasConfig = savedConfig && Object.keys(savedConfig).length > 0;
 
   NAV_ITEMS.forEach(item => {
     const navEl = document.getElementById('nav-' + item.id);
     if (navEl) {
-      if (item.superadminOnly && !isSuperadmin) {
-        navEl.style.display = 'none';
-      } else if (item.accountadminOnly && !isSuperadmin && !isAccountadmin) {
-        navEl.style.display = 'none';
-      } else {
-        navEl.style.display = (savedConfig && savedConfig[item.id] === false) ? 'none' : '';
-      }
+      navEl.style.display = (savedConfig && savedConfig[item.id] === false) ? 'none' : '';
     }
   });
-
-  // Show Admin label for Superadmin and Accountadmin (People page lives there).
-  const adminLabel = document.getElementById('nav-section-admin');
-  if (adminLabel) adminLabel.style.display = (isSuperadmin || isAccountadmin) ? '' : 'none';
 }
 
 function setUserLevel(level) {
