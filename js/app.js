@@ -2539,6 +2539,7 @@ function sortCompanies(column) {
 function renderCompanies() {
   const body = document.getElementById('companies-body-wrap');
   if (!body) return;
+  if (state.role !== 'Superadmin') { showPage('dashboard'); return; }
 
   const currentCompanyName = state.user?.company || state.company || 'Acme Pte Ltd';
   const companies = state.companies || [{ name: 'Acme Pte Ltd', regNo: '202001000001 (A)', industry: 'General', country: 'Singapore', dpo_name: 'Demo DPO' }];
@@ -4630,7 +4631,7 @@ async function handleFileUpload() {
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', section: 'Overview' },
   { id: 'checklist', label: 'Checklist', section: 'Overview' },
-  { id: 'companies', label: 'Companies', section: 'Foundation' },
+  { id: 'companies', label: 'Companies', section: 'Foundation', superadminOnly: true },
   { id: 'datasources', label: 'Data Sources', section: 'Foundation' },
   { id: 'dataregister', label: 'Data Register', section: 'Foundation' },
   { id: 'consent', label: 'Consent', section: 'Foundation' },
