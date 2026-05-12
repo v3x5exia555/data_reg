@@ -4411,9 +4411,8 @@ function writeLocalDocuments(docs) {
 }
 
 function docMatchesScope(doc) {
-  const { accountId, userId } = getDocumentScope();
+  const { accountId } = getDocumentScope();
   if (accountId && doc.accountId && String(doc.accountId) !== String(accountId)) return false;
-  if (userId && doc.userId && String(doc.userId) !== String(userId)) return false;
   return true;
 }
 
