@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '34';
+const PAGE_ASSET_VERSION = '35';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -428,10 +428,18 @@ function initAuthListener() {
       }
     } else if (event === 'SIGNED_OUT') {
       state.isLoggedIn = false;
+      state.role = null;
+      state.accountId = null;
+      state.viewAsAccountId = null;
       state.user = { name: '', company: '', email: '' };
+      // Wipe per-account data caches on sign-out so they don't bleed into the next session
+      ['dpia_data','breach_log_data','cross_border_data','cases_data',
+       'dpia_screenings','optout_data','datarex_documents',
+       'dpo_data','vendor_data','activity_data','training_data'
+      ].forEach(k => localStorage.removeItem(k));
       saveState();
-      if (!document.getElementById('screen-landing')?.classList.contains('active')) {
-        goTo('screen-landing');
+      if (!document.getElementById('screen-login')?.classList.contains('active')) {
+        goTo('screen-login');
       }
     }
   });
@@ -1112,6 +1120,14 @@ async function doLogin() {
   state.viewAsAccountId = null;
   localStorage.removeItem('viewAsAccountId');
 
+  // Clear all per-account data caches so the new user starts with a clean slate
+  const DATA_CACHE_KEYS = [
+    'dpia_data', 'breach_log_data', 'cross_border_data', 'cases_data',
+    'dpia_screenings', 'optout_data', 'datarex_documents',
+    'dpo_data', 'vendor_data', 'activity_data', 'training_data'
+  ];
+  DATA_CACHE_KEYS.forEach(k => localStorage.removeItem(k));
+
   const btn = document.getElementById('login-btn');
   btn.classList.add('loading');
   btn.disabled = true;
@@ -1222,8 +1238,13 @@ async function doLogin() {
           ? (localStorage.getItem('viewAsAccountId') || null)
           : null;
         if (profile.role !== 'Superadmin') localStorage.removeItem('viewAsAccountId');
+        console.log(`[AUTH] Login OK — role: ${profile.role} | accountId: ${profile.account_id || 'none'}`);
         JARVIS_LOG.success('Auth', 'Profile loaded', { role: profile.role, accountId: profile.account_id });
+        if (profile.role === 'user' && !profile.account_id) {
+          console.warn('[AUTH] Profile has role=user and no account_id — Edge Function may not have run correctly');
+        }
       } else {
+        console.error('[AUTH] Profile query failed:', profileErr?.message || 'no row returned');
         JARVIS_LOG.error('Auth', 'Failed to load profile', profileErr || new Error('No profile row'));
       }
     }
@@ -1290,7 +1311,7 @@ async function doLogout() {
   state.viewAsAccountId = null;
   localStorage.removeItem('viewAsAccountId');
   clearSession();
-  goTo('screen-landing');
+  goTo('screen-login');
   showSuccess('Logged out successfully');
 }
 
@@ -3528,21 +3549,38 @@ function renderDEICACards(rows) {
     });
     const required = row.decision === 'required';
     const justification = deicaEscape(row.justification || 'No justification recorded yet.');
+    const createdLabel = row.created_at ? formatDashboardDate(row.created_at) : 'Saved screening';
     return `
-      <div class="deica-card">
-        <div class="deica-card-head">
-          <div class="deica-card-title">${deicaEscape(row.activity_name || 'Untitled activity')}</div>
-          <span class="deica-badge ${required ? 'required' : 'not-required'}">${required ? 'DPIA required' : 'Not required'}</span>
+      <article class="deica-card ${required ? 'is-required' : 'is-clear'}">
+        <div class="deica-card-main">
+          <div class="deica-card-icon">
+            <i class="fa-solid ${required ? 'fa-triangle-exclamation' : 'fa-circle-check'}" aria-hidden="true"></i>
+          </div>
+          <div class="deica-card-content">
+            <div class="deica-card-head">
+              <div>
+                <div class="deica-card-kicker">${deicaEscape(createdLabel)} · ${tags.length} trigger${tags.length === 1 ? '' : 's'}</div>
+                <div class="deica-card-title">${deicaEscape(row.activity_name || 'Untitled activity')}</div>
+              </div>
+              <span class="deica-badge ${required ? 'required' : 'not-required'}">${required ? 'DPIA required' : 'Not required'}</span>
+            </div>
+            <div class="deica-tags">
+              ${tags.length ? tags.map(tag => `<span class="deica-tag">${deicaEscape(tag)}</span>`).join('') : '<span class="deica-tag">No risk factors selected</span>'}
+            </div>
+            <div class="deica-note"><strong>Justification:</strong> ${justification}</div>
+            <div class="deica-card-actions">
+              <button class="deica-link-btn deica-edit-btn" type="button" data-id="${deicaEscape(row.id)}">
+                <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                Edit
+              </button>
+              <button class="deica-link-btn deica-delete-btn" type="button" data-id="${deicaEscape(row.id)}">
+                <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="deica-tags">
-          ${tags.length ? tags.map(tag => `<span class="deica-tag">${deicaEscape(tag)}</span>`).join('') : '<span class="deica-tag">No risk factors selected</span>'}
-        </div>
-        <div class="deica-note"><strong>Justification:</strong> ${justification}</div>
-        <div class="deica-card-actions">
-          <button class="deica-link-btn deica-edit-btn" type="button" data-id="${deicaEscape(row.id)}">Edit</button>
-          <button class="deica-link-btn deica-delete-btn" type="button" data-id="${deicaEscape(row.id)}" style="color:#ef4444">Delete</button>
-        </div>
-      </div>`;
+      </article>`;
   }).join('');
 }
 

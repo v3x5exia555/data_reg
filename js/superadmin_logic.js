@@ -164,7 +164,7 @@ async function createAccountFromForm(formEl) {
   // Sign out superadmin so the new account admin can log in immediately
   try { await supabase.auth.signOut(); } catch (e) { console.error('Signout error', e); }
   if (typeof clearSession === 'function') clearSession();
-  if (typeof goTo === 'function') goTo('screen-landing');
+  if (typeof goTo === 'function') goTo('screen-login');
 }
 
 function escapeHtml(s) {
