@@ -27,6 +27,7 @@ interface UserModeBody {
   email: string;
   temp_password: string;
   account_id: string;
+  role?: string;
 }
 interface ManageUserBody {
   mode: 'manage-user';
@@ -36,7 +37,16 @@ interface ManageUserBody {
 }
 type Body = AccountModeBody | UserModeBody | ManageUserBody;
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+};
+
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
   if (req.method !== 'POST') {
     return json({ error: 'Method not allowed' }, 405);
   }
@@ -185,12 +195,15 @@ async function createUser(admin: ReturnType<typeof createClient>, body: UserMode
     return json({ error: 'Auth user create failed', detail: authErr?.message }, code);
   }
 
+  const VALID_ROLES = ['Accountadmin', 'security_user', 'useradmin', 'user'];
+  const assignedRole = body.role && VALID_ROLES.includes(body.role) ? body.role : 'user';
+
   // Upsert because migration 12's on_auth_user_created trigger already inserted a
   // default 'user' profile when auth.admin.createUser() was called above.
   const { error: profileInsErr } = await admin.from('user_profiles').upsert({
     id: authUser.user.id,
     email: body.email,
-    role: 'user',
+    role: assignedRole,
     account_id: body.account_id,
   }, { onConflict: 'id' });
   if (profileInsErr) {
@@ -247,6 +260,6 @@ async function manageUser(admin: ReturnType<typeof createClient>, body: ManageUs
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   });
 }

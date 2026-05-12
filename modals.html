@@ -74,29 +74,41 @@
 
 <!-- MODAL: Add Person -->
 <div class="modal-overlay" id="modal-person">
-  <div class="modal">
-    <div class="modal-head">
-      <h3>Add team member</h3><button class="modal-close" onclick="closeModal('modal-person')">✕</button>
+  <div class="modal person-modal" role="dialog" aria-labelledby="person-modal-title">
+    <div class="modal-head person-modal-head">
+      <div>
+        <span class="modal-kicker">Access control</span>
+        <h3 id="person-modal-title">Create team login</h3>
+        <p>Add a team member and create their portal login in one step.</p>
+      </div>
+      <button class="modal-close" type="button" onclick="closeModal('modal-person')" aria-label="Close">✕</button>
     </div>
-    <div class="form-group"><label>Name</label><input class="form-input no-icon" id="person-name"
-        placeholder="Full name"></div>
-    <div class="form-group"><label>Email</label><input class="form-input no-icon" id="person-email"
-        type="email" autocomplete="email" placeholder="name@company.com"></div>
-    <div class="form-group"><label>Role / Department</label><input class="form-input no-icon" id="person-role"
-        placeholder="e.g. Marketing Lead"></div>
-    <div class="form-group"><label>Password</label><input class="form-input no-icon" id="person-password"
-        type="password" autocomplete="new-password" placeholder="Temporary password (min 8 characters)"></div>
-    <div class="form-group"><label>Access level</label>
-      <select class="form-input no-icon" id="person-access">
-        <option value="Accountadmin">Accountadmin</option>
-        <option value="security_user">Security User</option>
-        <option value="useradmin">Useradmin</option>
-        <option value="user" selected>User</option>
-      </select>
+    <div class="person-modal-body">
+      <div class="person-login-note">
+        <span class="person-login-icon"><i class="fa-solid fa-user-shield" aria-hidden="true"></i></span>
+        <div>
+          <strong>Login access will be created</strong>
+          <span>The email and temporary password can be used on the login screen after saving.</span>
+        </div>
+      </div>
+      <div class="person-form-grid">
+        <div class="form-group"><label>Name</label><input class="form-input no-icon" id="person-name"
+            placeholder="Full name"></div>
+        <div class="form-group"><label>Email</label><input class="form-input no-icon" id="person-email"
+            type="email" autocomplete="email" placeholder="name@company.com"></div>
+        <div class="form-group"><label>Role / Department</label><input class="form-input no-icon" id="person-role"
+            placeholder="e.g. Marketing Lead"></div>
+        <input type="hidden" id="person-access" value="user">
+        <div class="form-group person-password-field"><label>Password</label><input class="form-input no-icon" id="person-password"
+            type="password" autocomplete="new-password" placeholder="Temporary password (min 8 characters)"></div>
+      </div>
     </div>
-    <div class="modal-footer">
-      <button class="btn-cancel" onclick="closeModal('modal-person')">Cancel</button>
-      <button class="btn-save" onclick="savePerson()">Add Member</button>
+    <div class="modal-footer person-modal-footer">
+      <button class="btn-cancel" type="button" onclick="closeModal('modal-person')">Cancel</button>
+      <button class="btn-save" type="button" onclick="savePerson()">
+        <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+        Create login
+      </button>
     </div>
   </div>
 </div>

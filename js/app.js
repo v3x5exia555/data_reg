@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '36';
+const PAGE_ASSET_VERSION = '38';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -4862,108 +4862,115 @@ function updateModalPermissions() {
 }
 
 async function savePerson() {
-  const name   = document.getElementById('person-name').value.trim();
-  const email  = document.getElementById('person-email').value.trim().toLowerCase();
-  const role   = document.getElementById('person-role').value.trim();
-  const password = document.getElementById('person-password').value;
-  const access = document.getElementById('person-access').value;
-  if (!name) {
-    showToast('Please enter a name.', 'error');
-    return;
+  try {
+    await _savePersonImpl();
+  } catch (err) {
+    console.error('[savePerson] Unexpected error:', err);
+    showToast('Unexpected error: ' + (err.message || String(err)), 'error');
   }
-  if (!isValidEmail(email)) {
-    showToast('Please enter a valid email.', 'error');
-    return;
-  }
-  if (!password || password.length < 8) {
-    showToast('Password must be at least 8 characters.', 'error');
-    return;
-  }
+}
 
-  const isChecked = (id) => document.getElementById(id)?.checked || false;
+async function _savePersonImpl() {
+  const name     = document.getElementById('person-name').value.trim();
+  const email    = document.getElementById('person-email').value.trim().toLowerCase();
+  const role     = document.getElementById('person-role').value.trim();
+  const password = document.getElementById('person-password').value;
+  const access   = (document.getElementById('person-access')?.value || 'user');
+
+  if (!name) { showToast('Please enter a name.', 'error'); return; }
+  if (!isValidEmail(email)) { showToast('Please enter a valid email.', 'error'); return; }
+  if (!password || password.length < 8) { showToast('Password must be at least 8 characters.', 'error'); return; }
+
   const permissions = {
-    Dashboard: isChecked('perm-dashboard'),
-    Checklist: isChecked('perm-checklist'),
-    DataRegister: isChecked('perm-dataregister'),
-    DataSources: isChecked('perm-datasources'),
-    Consent: isChecked('perm-consent'),
-    Retention: isChecked('perm-retention')
+    Dashboard: true,
+    Checklist: true,
+    DataRegister: true,
+    DataSources: false,
+    Consent: false,
+    Retention: false,
   };
 
-  const supabase = getSupabaseClient();
-  const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.id;
-  const accountId = getEffectiveAccountId();
-  let authUserId = null;
+  const supabase   = getSupabaseClient();
+  const accountId  = getEffectiveAccountId();
 
-  if (supabase && isSupabaseConfigured() && orgId) {
-    if (!accountId) {
-      showToast('No account selected. Please select a company/account first.', 'error');
-      return;
-    }
+  console.log('[savePerson] role=', state.role, 'accountId=', accountId, 'supabase=', !!supabase, 'configured=', isSupabaseConfigured());
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      showToast('Session expired. Please refresh and try again.', 'error');
-      return;
-    }
-
-    const supaUrl = (window.ENV?.SUPABASE_URL) || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
-    const userRes = await fetch(`${supaUrl}/functions/v1/create-user`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'user', email, temp_password: password, account_id: accountId }),
-    });
-    const userOut = await userRes.json();
-    if (!userRes.ok) {
-      if (userRes.status === 402) showToast('Seat limit reached. Upgrade to add more users.', 'error');
-      else showToast(userOut.error || 'Failed to create login account', 'error');
-      return;
-    }
-    authUserId = userOut.user_id || null;
-
-    let { data, error } = await supabase.from('team_members').insert([{
-      account_id: accountId,
-      name,
-      email,
-      role_department: role || 'Team member',
-      access_level: access,
-      permissions
-    }]).select().single();
-
-    if (error && /email/i.test(error.message || '')) {
-      ({ data, error } = await supabase.from('team_members').insert([{
-        account_id: accountId,
-        name,
-        role_department: role || 'Team member',
-        access_level: access,
-        permissions
-      }]).select().single());
-    }
-
-    if (error) {
-      console.error('Save error:', error);
-      showToast('Login created, but team member row failed to save', 'warning');
-    } else if (data) {
-      state.team.push({
-        id: data.id,
-        authUserId,
-        name,
-        email,
-        role: role || 'Team member',
-        level: access,
-        permissions
-      });
-      showToast(`Login created for ${email}`, 'success');
-    }
-  } else {
-    try {
-      await addLocalLoginUser({ name, email, password, access });
-    } catch (err) {
-      showToast(err.message || 'Failed to create local login', 'error');
-      return;
-    }
+  if (!supabase || !isSupabaseConfigured()) {
+    // Local fallback (no Supabase configured)
+    try { await addLocalLoginUser({ name, email, password, access }); }
+    catch (err) { showToast(err.message || 'Failed to create local login', 'error'); return; }
     state.team.push({ id: 'local-' + Date.now(), name, email, role: role || 'Team member', level: access, permissions });
     showToast(`Local login created for ${email}`, 'success');
+    saveState(); renderTeam(); closeModal('modal-person');
+    document.getElementById('person-name').value = '';
+    document.getElementById('person-email').value = '';
+    document.getElementById('person-role').value = '';
+    document.getElementById('person-password').value = '';
+    return;
+  }
+
+  if (!accountId) {
+    showToast('No account linked to your profile — please log out and log in again.', 'error');
+    return;
+  }
+
+  const sessionRes = await supabase.auth.getSession();
+  const session = sessionRes?.data?.session;
+  if (!session) { showToast('Session expired. Please refresh and try again.', 'error'); return; }
+
+  const supaUrl = (window.ENV?.SUPABASE_URL) || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+  console.log('[savePerson] calling Edge Function | accountId=', accountId, 'email=', email);
+
+  let userRes, userOut;
+  try {
+    userRes = await fetch(`${supaUrl}/functions/v1/create-user`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'user', email, temp_password: password, account_id: accountId, role: access }),
+    });
+    userOut = await userRes.json();
+  } catch (fetchErr) {
+    showToast('Network error contacting server: ' + (fetchErr.message || 'unknown'), 'error');
+    return;
+  }
+
+  console.log('[savePerson] Edge Function response | status=', userRes.status, 'body=', userOut);
+
+  if (!userRes.ok) {
+    if (userRes.status === 402) showToast('Seat limit reached. Upgrade to add more users.', 'error');
+    else showToast(userOut.error || 'Failed to create login account', 'error');
+    return;
+  }
+
+  const authUserId = userOut.user_id || null;
+
+  let { data, error } = await supabase.from('team_members').insert([{
+    account_id: accountId,
+    name,
+    email,
+    role_department: role || 'Team member',
+    access_level: access,
+    permissions,
+  }]).select().single();
+
+  if (error && /email/i.test(error.message || '')) {
+    ({ data, error } = await supabase.from('team_members').insert([{
+      account_id: accountId,
+      name,
+      role_department: role || 'Team member',
+      access_level: access,
+      permissions,
+    }]).select().single());
+  }
+
+  if (error) {
+    console.error('[savePerson] team_members insert error:', error);
+    showToast('Login created, but team record failed: ' + (error.message || ''), 'warning');
+  } else {
+    if (data) {
+      state.team.push({ id: data.id, authUserId, name, email, role: role || 'Team member', level: access, permissions });
+    }
+    showToast(`Login created for ${email}`, 'success');
   }
 
   saveState();
