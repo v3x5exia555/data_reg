@@ -37,3 +37,19 @@ venv/share/jupyter/
 
 # Local worktrees (superpowers workflow)
 .worktrees/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Test artifacts
+scratch/
+test_assets/
+test_*.py
+uat-test-suite.html
+*.png
+
+# Dev docs / scratch notes
+DESIGN-SYSTEM-REFERENCE.md
+client-reply.md
+auth
