@@ -158,9 +158,13 @@ async function createAccountFromForm(formEl) {
     showToast(out.error || 'Failed to create account', 'error');
     return;
   }
-  showToast(`Created. Email: ${out.email}  Password: ${out.temp_password}`, 'success');
+  // Show credentials before sign-out so admin can note them
+  alert(`Account created!\n\nEmail: ${out.email}\nPassword: ${out.temp_password}\n\nShare these credentials with the new user.`);
   if (typeof closeModal === 'function') closeModal('modal-new-account');
-  await loadAccounts();
+  // Sign out superadmin so the new account admin can log in immediately
+  try { await supabase.auth.signOut(); } catch (e) { console.error('Signout error', e); }
+  if (typeof clearSession === 'function') clearSession();
+  if (typeof goTo === 'function') goTo('screen-landing');
 }
 
 function escapeHtml(s) {

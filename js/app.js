@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '32';
+const PAGE_ASSET_VERSION = '33';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -414,12 +414,16 @@ function initAuthListener() {
         ...state.user,
         id: session.user.id,
         email: session.user.email,
-        name: session.user.user_metadata?.name || session.user.email,
-        company: session.user.user_metadata?.company || ''
+        // Preserve name/company already set by doLogin() — for admin-created users
+        // user_metadata is empty and would overwrite valid DB-fetched values with ''.
+        name: session.user.user_metadata?.name || state.user.name || session.user.email,
+        company: session.user.user_metadata?.company || state.user.company || ''
       };
       saveState();
 
-      if (document.getElementById('screen-app')) {
+      // Only auto-launch on session restore (screen-app already visible).
+      // doLogin() handles the launchApp call for explicit password logins.
+      if (document.getElementById('screen-app')?.classList.contains('active')) {
         launchApp(session.user);
       }
     } else if (event === 'SIGNED_OUT') {
@@ -983,21 +987,6 @@ function showPage(pageId, navEl, noPush) {
 // Expose to global scope for onclick handlers
 window.showPage = showPage;
 
-async function doLogout() {
-  const supabase = getSupabaseClient();
-  if (supabase && isSupabaseConfigured()) {
-    try {
-      await supabase.auth.signOut();
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  }
-  state.isLoggedIn = false;
-  state.user = { name: '', company: '', email: '' };
-  saveState();
-  goTo('screen-landing');
-}
-
 /* ───────────────────────────────────────────────
    AUTH: SHARED HELPERS
    ─────────────────────────────────────────────── */
@@ -1117,6 +1106,12 @@ async function doLogin() {
   if (!isValidEmail(email)) { showError('login-email'); console.log('Invalid email'); return; }
   if (!pw || pw.length < 4) { showError('login-password'); console.log('Invalid password'); return; }
 
+  // Clear any stale role/account from the previous session before auth events fire
+  state.role = null;
+  state.accountId = null;
+  state.viewAsAccountId = null;
+  localStorage.removeItem('viewAsAccountId');
+
   const btn = document.getElementById('login-btn');
   btn.classList.add('loading');
   btn.disabled = true;
@@ -1211,13 +1206,22 @@ async function doLogin() {
     if (supabase && state.user?.id) {
       const { data: profile, error: profileErr } = await supabase
         .from('user_profiles')
-        .select('role, account_id')
+        .select('role, account_id, first_name, last_name')
         .eq('id', state.user.id)
         .single();
       if (!profileErr && profile) {
         state.role = profile.role;
         state.accountId = profile.account_id;
-        state.viewAsAccountId = localStorage.getItem('viewAsAccountId') || null;
+        // Use stored first/last name so admin-created users don't show their email as name
+        if (profile.first_name) {
+          const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
+          state.user.name = fullName;
+        }
+        // Only Superadmin uses view-as; clear stale localStorage value for all other roles.
+        state.viewAsAccountId = profile.role === 'Superadmin'
+          ? (localStorage.getItem('viewAsAccountId') || null)
+          : null;
+        if (profile.role !== 'Superadmin') localStorage.removeItem('viewAsAccountId');
         JARVIS_LOG.success('Auth', 'Profile loaded', { role: profile.role, accountId: profile.account_id });
       } else {
         JARVIS_LOG.error('Auth', 'Failed to load profile', profileErr || new Error('No profile row'));
@@ -1277,6 +1281,14 @@ async function doLogin() {
    AUTH: LOGOUT
    ─────────────────────────────────────────────── */
 async function doLogout() {
+  const supabase = getSupabaseClient();
+  if (supabase && isSupabaseConfigured()) {
+    try { await supabase.auth.signOut(); } catch (e) { console.error('Logout error:', e); }
+  }
+  state.role = null;
+  state.accountId = null;
+  state.viewAsAccountId = null;
+  localStorage.removeItem('viewAsAccountId');
   clearSession();
   goTo('screen-landing');
   showSuccess('Logged out successfully');
@@ -1545,11 +1557,19 @@ function launchApp(user) {
    DASHBOARD
    ─────────────────────────────────────────────── */
 async function loadDashboardFromSupabase() {
+  await Promise.allSettled([
+    typeof loadDPOFromSupabase === 'function' ? loadDPOFromSupabase() : Promise.resolve(),
+    typeof loadTrainingFromSupabase === 'function' ? loadTrainingFromSupabase() : Promise.resolve(),
+    typeof loadDPIAFromSupabase === 'function' ? loadDPIAFromSupabase() : Promise.resolve(),
+    typeof loadDataRequestsFromSupabase === 'function' ? loadDataRequestsFromSupabase() : Promise.resolve(),
+    typeof loadBreachLogFromSupabase === 'function' ? loadBreachLogFromSupabase() : Promise.resolve()
+  ]);
+
   const recordsEl = document.getElementById('dash-records-count');
   const dpoEl = document.getElementById('dash-dpo-name');
 
   let recordsCount = (state.records || []).length;
-  let dpoName = 'Not assigned';
+  let dpoName = getDashboardDpoName();
 
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured() && state.user?.id) {
@@ -1566,7 +1586,150 @@ async function loadDashboardFromSupabase() {
 
   if (recordsEl) recordsEl.textContent = recordsCount;
   if (dpoEl) dpoEl.textContent = dpoName;
+  renderDashboardOverview({ recordsCount, dpoName });
   updateScore();
+}
+
+function getDashboardDpoName() {
+  const candidates = [
+    state.dpoRecords?.[0]?.name,
+    state.dpoRecords?.[0]?.dpo_name,
+    state.dpo?.name,
+    state.user?.name
+  ];
+  return candidates.find(Boolean) || 'Not assigned';
+}
+
+function renderDashboardOverview({ recordsCount, dpoName }) {
+  const companyName = typeof getDisplayCompanyName === 'function'
+    ? getDisplayCompanyName()
+    : (state.user?.company || 'Acme Pte Ltd');
+  setDashboardText('dash-company-title', companyName);
+  setDashboardText('dash-company-badge', companyName);
+
+  const hasDpo = dpoName && dpoName !== 'Not assigned';
+  const dpoWarning = document.getElementById('dpo-warning');
+  if (dpoWarning) dpoWarning.hidden = hasDpo;
+  setDashboardText('dpo-status-value', hasDpo ? 'Assigned' : 'Missing');
+  setDashboardText('dpo-status-sub', hasDpo ? dpoName : 'Assign now');
+  setDashboardTone('dpo-status-value', hasDpo ? 'good' : 'danger');
+
+  const dpias = state.dpiaItems || [];
+  const highRisk = dpias.filter(item => String(item.risk_level || '').toLowerCase() === 'high').length;
+  const openMitigations = dpias.filter(item => {
+    const status = String(item.status || '').toLowerCase();
+    return status.includes('pending') || status.includes('review') || String(item.mitigation_measures || '').trim();
+  }).length;
+  setDashboardText('dpia-required-count', dpias.length);
+  setDashboardText('high-risk-count', highRisk);
+  setDashboardTone('high-risk-count', highRisk ? 'danger' : 'good');
+  setDashboardText('expiring-soon-count', countExpiringTraining(state.trainingRecords || [], 90));
+  setDashboardText('open-mitigations-count', openMitigations);
+
+  const trainingStats = getDashboardTrainingStats();
+  setDashboardText('training-coverage-value', `${trainingStats.coverage}%`);
+  const trainingBar = document.getElementById('training-coverage-bar');
+  if (trainingBar) trainingBar.style.width = `${trainingStats.coverage}%`;
+  setDashboardText('training-last-date', trainingStats.lastDate ? `Last: ${formatDashboardDate(trainingStats.lastDate)}` : 'No training yet');
+  setDashboardTone('training-coverage-value', trainingStats.coverage >= 80 ? 'good' : trainingStats.coverage >= 50 ? 'warn' : 'danger');
+
+  const seatsUsed = (state.team || []).length;
+  const seatLimit = Number(state.account?.seat_limit || state.seatLimit || 0);
+  setDashboardText('dashboard-seats-used', `${seatsUsed} / ${seatLimit || seatsUsed || 0}`);
+  const usageCost = 99 + Math.max(seatsUsed - 2, 0) * 4;
+  setDashboardText('dashboard-usage-cost', `$${usageCost.toFixed(2)}`);
+  setDashboardText('dashboard-cycle-cost', `$${usageCost.toFixed(2)}`);
+
+  renderDashboardAlerts({
+    hasDpo,
+    recordsCount,
+    missingConsent: (state.records || []).filter(r => !Boolean(r.consent || r.consent_obtained)).length,
+    highRisk,
+    pendingTasks: Math.max(Object.values(state.checks || {}).filter(v => !v).length, 0),
+    trainingExpiring: countExpiringTraining(state.trainingRecords || [], 60),
+    overdueRequests: getOverdueRequestCount()
+  });
+}
+
+function setDashboardText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function setDashboardTone(id, tone) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('is-good', 'is-warn', 'is-danger');
+  if (tone) el.classList.add(`is-${tone}`);
+}
+
+function getDashboardTrainingStats() {
+  const records = state.trainingRecords || [];
+  const teamSize = Math.max((state.team || []).length, records.length, 1);
+  const completed = records.filter(r => String(r.status || '').toLowerCase() !== 'expired').length;
+  const coverage = Math.min(100, Math.round((completed / teamSize) * 100));
+  const lastDate = records
+    .map(r => r.completion_date || r.training_date || r.created_at)
+    .filter(Boolean)
+    .sort()
+    .pop();
+  return { coverage, lastDate };
+}
+
+function countExpiringTraining(records, days) {
+  const now = new Date();
+  const limit = new Date();
+  limit.setDate(limit.getDate() + days);
+  return records.filter(r => {
+    const raw = r.expiry_date || r.expires_at;
+    if (!raw) return false;
+    const date = new Date(raw);
+    return date >= now && date <= limit;
+  }).length;
+}
+
+function getOverdueRequestCount() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return (state.dataRequests || []).filter(r => {
+    const status = String(r.status || '').toLowerCase();
+    if (!['open', 'pending', 'in progress'].includes(status)) return false;
+    if (!r.created_at) return false;
+    const deadline = new Date(r.created_at);
+    deadline.setDate(deadline.getDate() + 21);
+    return deadline < today;
+  }).length;
+}
+
+function renderDashboardAlerts(metrics) {
+  const alerts = [
+    !metrics.hasDpo && { icon: 'fa-user-shield', text: 'No DPO is assigned for this company.', link: 'dpo', nav: 'nav-dpo' },
+    metrics.overdueRequests && { icon: 'fa-triangle-exclamation', text: `${metrics.overdueRequests} data subject request(s) overdue.`, link: 'datarequests', nav: 'nav-datarequests' },
+    metrics.highRisk && { icon: 'fa-triangle-exclamation', text: `${metrics.highRisk} high-risk DPIA item(s) need review.`, link: 'dpiapage', nav: 'nav-dpiapage' },
+    metrics.missingConsent && { icon: 'fa-circle-exclamation', text: `${metrics.missingConsent} data record(s) missing consent.`, link: 'dataregister', nav: 'nav-dataregister' },
+    metrics.pendingTasks && { icon: 'fa-list-check', text: `${metrics.pendingTasks} checklist task(s) still pending.`, link: 'checklist', nav: 'nav-checklist' },
+    metrics.trainingExpiring && { icon: 'fa-graduation-cap', text: `${metrics.trainingExpiring} training record(s) expiring soon.`, link: 'training', nav: 'nav-training' }
+  ].filter(Boolean);
+
+  setDashboardText('alert-count', `${alerts.length} active`);
+  const list = document.getElementById('dashboard-alerts');
+  if (!list) return;
+  if (!alerts.length) {
+    list.innerHTML = '<li><span><i class="fa-solid fa-circle-check" aria-hidden="true"></i>No active alerts. Great work.</span></li>';
+    return;
+  }
+  list.innerHTML = alerts.map(alert => `
+    <li>
+      <span><i class="fa-solid ${alert.icon}" aria-hidden="true"></i>${escapeHtmlForDashboard(alert.text)}</span>
+      <a href="#/${alert.link}" onclick="showPage('${alert.link}',document.getElementById('${alert.nav}'));return false;">Open</a>
+    </li>
+  `).join('');
+}
+
+function formatDashboardDate(raw) {
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 /* ───────────────────────────────────────────────
@@ -1606,9 +1769,9 @@ function updateScore() {
 
   const badge = document.getElementById('risk-badge');
   if (badge) {
-    if (pct >= 80)      { badge.textContent = 'Low risk';    badge.className = 'badge badge-green'; }
-    else if (pct >= 50) { badge.textContent = 'Medium risk'; badge.className = 'badge badge-amber'; }
-    else                { badge.textContent = 'High risk';   badge.className = 'badge badge-red'; }
+    if (pct >= 80)      { badge.textContent = 'Low risk';    badge.className = 'badge badge-green'; setDashboardText('dashboard-risk-level', 'Low'); setDashboardTone('dashboard-risk-level', 'good'); }
+    else if (pct >= 50) { badge.textContent = 'Medium risk'; badge.className = 'badge badge-amber'; setDashboardText('dashboard-risk-level', 'Medium'); setDashboardTone('dashboard-risk-level', 'warn'); }
+    else                { badge.textContent = 'High risk';   badge.className = 'badge badge-red'; setDashboardText('dashboard-risk-level', 'High'); setDashboardTone('dashboard-risk-level', 'danger'); }
   }
 }
 
@@ -1935,9 +2098,16 @@ async function loadSeatUsage() {
 
 async function loadDashboardActivity() {
   const accountId = getEffectiveAccountId();
-  if (!accountId) return;
+  const list = document.getElementById('user-activity-list');
+  if (!accountId) {
+    if (list) list.innerHTML = '<li><span class="activity-action">No recent activity yet</span></li>';
+    return;
+  }
   const supabase = getSupabaseClient();
-  if (!supabase) return;
+  if (!supabase) {
+    if (list) list.innerHTML = '<li><span class="activity-action">No recent activity yet</span></li>';
+    return;
+  }
   const { data, error } = await supabase
     .from('system_logs')
     .select('action, component, user_email, created_at')
@@ -1945,8 +2115,11 @@ async function loadDashboardActivity() {
     .order('created_at', { ascending: false })
     .limit(5);
   if (error) { JARVIS_LOG.error('Dashboard', 'Activity load', error); return; }
-  const list = document.getElementById('user-activity-list');
   if (!list) return;
+  if (!data?.length) {
+    list.innerHTML = '<li><span class="activity-action">No recent activity yet</span></li>';
+    return;
+  }
   list.innerHTML = (data || []).map(r => `
     <li>
       <span class="activity-user">${escapeHtmlForDashboard(r.user_email || 'someone')}</span>
@@ -2001,7 +2174,7 @@ document.addEventListener('click', (e) => {
 function renderViewAsBanner() {
   const banner = document.getElementById('view-as-banner');
   if (!banner) return;
-  if (!state.viewAsAccountId) {
+  if (!state.viewAsAccountId || state.role !== 'Superadmin') {
     banner.hidden = true;
     banner.innerHTML = '';
     updateActiveCompanyLabel();
@@ -2972,15 +3145,16 @@ async function saveDPIA() {
     return;
   }
 
-  if (!state.user?.company) {
-    JARVIS_LOG.error('DPIA', 'Validation failed', new Error('No company selected'));
-    showToast('Please select a company in the sidebar first', 'warning');
+  const effectiveAccountId = getEffectiveAccountId();
+  if (!effectiveAccountId) {
+    JARVIS_LOG.error('DPIA', 'Validation failed', new Error('No account linked'));
+    showToast('Your account is not linked yet — please log out and log in again', 'warning');
     return;
   }
 
   const dpiaData = {
     id: 'local-' + Date.now(),
-    account_id: getEffectiveAccountId(),
+    account_id: effectiveAccountId,
     activity_name: name,
     description: description,
     processing_purpose: description.substring(0, 50),
@@ -2993,12 +3167,14 @@ async function saveDPIA() {
 
   JARVIS_LOG.submit('DPIA', 'Insert', { dpiaData });
 
+  // Optimistic local render so the UI is responsive while the DB write happens.
   state.dpiaItems = readLocalList('dpia_data');
   state.dpiaItems.unshift(dpiaData);
   saveLocalList('dpia_data', state.dpiaItems);
   renderDPIA(state.dpiaItems);
 
   const supabase = getSupabaseClient();
+  let dbSaveOk = false;
   if (supabase && isSupabaseConfigured()) {
     const { id, ...dbDpiaData } = dpiaData;
     const { error } = await supabase.from('dpia_assessments').insert([dbDpiaData]);
@@ -3008,6 +3184,7 @@ async function saveDPIA() {
       showToast('DPIA saved locally; Supabase save failed', 'warning');
     } else {
       JARVIS_LOG.success('DPIA', 'Insert', { activity_name: name });
+      dbSaveOk = true;
     }
   }
 
@@ -3022,7 +3199,11 @@ async function saveDPIA() {
   document.getElementById('dpia-monitoring').checked = false;
   document.getElementById('dpia-large-scale').checked = false;
 
-  loadDPIAFromSupabase();
+  // If DB save succeeded, reload from DB so the list shows the real UUID row
+  // and we can clean the stale local-xxx entry from localStorage.
+  if (dbSaveOk) {
+    await loadDPIAFromSupabase();
+  }
 }
 
 async function loadDPIAFromSupabase() {
@@ -3043,7 +3224,7 @@ async function loadDPIAFromSupabase() {
 
     if (error) {
       console.error('[JARVIS] DPIA Fetch Error:', error.message);
-      renderDPIA([]);
+      // Keep the local render — don't wipe newly added records on a fetch error.
       return;
     }
 
@@ -3051,10 +3232,13 @@ async function loadDPIAFromSupabase() {
       console.log(`[JARVIS] Fetching DPIAs... Success: ${data.length} records retrieved.`);
       state.dpiaItems = data;
       renderDPIA(data);
+      // DB is authoritative — remove stale local-xxx entries now that we have
+      // the real rows. Any locally-only record (no matching DB id) is dropped.
+      saveLocalList('dpia_data', data);
     }
   } catch (err) {
     console.error('[JARVIS] DPIA Exception:', err);
-    renderDPIA([]);
+    // Keep the local render — don't wipe on exception.
   }
 }
 
@@ -3276,6 +3460,7 @@ function renderDEICACards(rows) {
         <div class="deica-note"><strong>Justification:</strong> ${justification}</div>
         <div class="deica-card-actions">
           <button class="deica-link-btn deica-edit-btn" type="button" data-id="${deicaEscape(row.id)}">Edit</button>
+          <button class="deica-link-btn deica-delete-btn" type="button" data-id="${deicaEscape(row.id)}" style="color:#ef4444">Delete</button>
         </div>
       </div>`;
   }).join('');
@@ -3289,8 +3474,10 @@ function bindDEICAEvents() {
   modal?.querySelector('#deica-cancel-btn')?.addEventListener('click', closeDEICAModal);
   modal?.querySelector('#deica-save-btn')?.addEventListener('click', saveDEICADecision);
   document.getElementById('deica-list')?.addEventListener('click', (event) => {
-    const button = event.target?.closest?.('.deica-edit-btn');
-    if (button?.dataset?.id) editDEICA(button.dataset.id);
+    const editBtn = event.target?.closest?.('.deica-edit-btn');
+    if (editBtn?.dataset?.id) { editDEICA(editBtn.dataset.id); return; }
+    const delBtn = event.target?.closest?.('.deica-delete-btn');
+    if (delBtn?.dataset?.id) deleteDEICA(delBtn.dataset.id);
   });
   modal?.addEventListener('click', (event) => {
     if (event.target?.id === 'deica-modal') closeDEICAModal();
@@ -3430,6 +3617,29 @@ function editDEICA(id) {
 }
 
 window.editDEICA = editDEICA;
+
+async function deleteDEICA(id) {
+  if (!confirm('Delete this DPIA screening? This cannot be undone.')) return;
+
+  // Remove from localStorage immediately so the UI is responsive.
+  const rows = readDEICAScreenings().filter(r => String(r.id) !== String(id));
+  saveDEICAScreenings(rows);
+
+  // Best-effort delete from Supabase.
+  const supabase = getSupabaseClient();
+  if (supabase && isSupabaseConfigured()) {
+    const { error } = await supabase.from('dpia_screenings').delete().eq('id', id);
+    if (error) {
+      JARVIS_LOG.error('DEICA', 'Delete', error);
+      showToast('Deleted locally; cloud sync failed', 'warning');
+    }
+  }
+
+  renderDEICA();
+  showToast('Screening deleted', 'success');
+}
+
+window.deleteDEICA = deleteDEICA;
 
 async function loadCrossBorderFromSupabase() {
   const supabase = getSupabaseClient();

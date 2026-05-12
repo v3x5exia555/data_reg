@@ -1,76 +1,157 @@
-<div id="page-dashboard" class="page-shell active">
-  <div class="dash-greeting">Hi, <span id="dash-name">Demo</span> 👋</div>
-  <div class="dash-date" id="dash-date">Here's where your compliance stands today.</div>
-  <div class="dash-top-grid">
-    <div class="card score-card">
-      <div class="score-label">Compliance score</div>
-      <div class="score-number" id="score-display">0%</div>
-      <div class="score-bar-bg">
-        <div class="score-bar" id="score-bar"></div>
+<div id="page-dashboard" class="page-shell active dashboard-shell">
+  <header class="dashboard-hero">
+    <div>
+      <div class="dashboard-kicker">
+        <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+        PDPA accountability overview
       </div>
-      <div class="score-footer">
-        <span id="tasks-done-label">0 of 12 tasks done</span>
-        <span class="badge badge-red" id="risk-badge">High risk</span>
-      </div>
+      <h1>Welcome, <span id="dash-company-title">Acme Pte Ltd</span></h1>
+      <p class="page-sub" id="dash-date">Here's where your compliance stands today.</p>
     </div>
-    <div class="card quick-card">
-      <h3>Quick actions</h3>
-      <div class="qa-item" onclick="showPage('checklist',document.getElementById('nav-checklist'))">Continue
-        checklist <span class="qa-arrow">→</span></div>
-      <div class="qa-item" onclick="openModal('modal-record')">Add data record <span class="qa-arrow">→</span>
-      </div>
-      <div class="qa-item" onclick="showPage('audit',document.getElementById('nav-audit'))">Generate report <span
-          class="qa-arrow">→</span></div>
+    <span class="dashboard-company-badge" id="dash-company-badge">Acme Pte Ltd</span>
+  </header>
+
+  <div id="dpo-warning" class="dashboard-warning" hidden>
+    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+    <div>
+      <strong>No DPO assigned.</strong>
+      <span>A DPO is required before any DPIA can be properly executed.</span>
     </div>
+    <button type="button" onclick="showPage('dpo',document.getElementById('nav-dpo'))">Assign DPO</button>
   </div>
-  <div class="stats-row">
-    <div class="card stat-card">
-      <div class="stat-icon green">✅</div>
+
+  <section class="dashboard-metric-grid">
+    <article class="dashboard-metric-card">
+      <div class="metric-top"><span>DPO status</span><i class="fa-solid fa-user-check" aria-hidden="true"></i></div>
+      <div class="metric-value" id="dpo-status-value">Missing</div>
+      <div class="metric-sub" id="dpo-status-sub">Assign now</div>
+    </article>
+    <article class="dashboard-metric-card">
+      <div class="metric-top"><span>DPIAs required</span><i class="fa-solid fa-clipboard-check" aria-hidden="true"></i></div>
+      <div class="metric-value" id="dpia-required-count">0</div>
+      <div class="metric-sub">from screenings</div>
+    </article>
+    <article class="dashboard-metric-card">
+      <div class="metric-top"><span>High residual risk</span><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></div>
+      <div class="metric-value" id="high-risk-count">0</div>
+      <div class="metric-sub">needs management decision</div>
+    </article>
+    <article class="dashboard-metric-card">
+      <div class="metric-top"><span>Expiring soon</span><i class="fa-regular fa-clock" aria-hidden="true"></i></div>
+      <div class="metric-value" id="expiring-soon-count">0</div>
+      <div class="metric-sub">within 90 days</div>
+    </article>
+  </section>
+
+  <section class="dashboard-metric-grid">
+    <article class="dashboard-metric-card">
+      <div class="metric-top"><span>Compliance score</span><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></div>
+      <div class="metric-value" id="score-display">0%</div>
+      <div class="dash-progress"><span id="score-bar"></span></div>
+      <div class="metric-sub" id="tasks-done-label">0 of 12 tasks done</div>
+    </article>
+    <article class="dashboard-metric-card">
+      <div class="metric-top"><span>Training coverage</span><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i></div>
+      <div class="metric-value" id="training-coverage-value">0%</div>
+      <div class="dash-progress"><span id="training-coverage-bar"></span></div>
+      <div class="metric-sub" id="training-last-date">No training yet</div>
+    </article>
+    <article class="dashboard-metric-card">
+      <div class="metric-top"><span>Open mitigations</span><i class="fa-solid fa-diagram-project" aria-hidden="true"></i></div>
+      <div class="metric-value" id="open-mitigations-count">0</div>
+      <div class="metric-sub">from DPIA controls</div>
+    </article>
+    <article class="dashboard-metric-card">
+      <div class="metric-top"><span>Risk level</span><i class="fa-solid fa-chart-line" aria-hidden="true"></i></div>
+      <div class="metric-value" id="dashboard-risk-level">High</div>
+      <span class="badge badge-red" id="risk-badge">High risk</span>
+    </article>
+  </section>
+
+  <section class="dashboard-main-grid">
+    <article class="dashboard-panel">
+      <div class="dashboard-panel-head">
+        <h2>Alerts</h2>
+        <span id="alert-count">0 active</span>
+      </div>
+      <ul id="dashboard-alerts" class="dashboard-alert-list"></ul>
+    </article>
+
+    <article class="dashboard-panel">
+      <div class="dashboard-panel-head">
+        <h2>Quick actions</h2>
+      </div>
+      <div class="dashboard-action-grid">
+        <button type="button" onclick="showPage('dpiapage',document.getElementById('nav-dpiapage'))">
+          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+          Run DPIA screening
+        </button>
+        <button type="button" onclick="showPage('deica',document.getElementById('nav-deica'))">
+          <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
+          Open DEICA workflow
+        </button>
+        <button type="button" onclick="openModal('modal-record')">
+          <i class="fa-solid fa-database" aria-hidden="true"></i>
+          Add data record
+        </button>
+        <button type="button" onclick="showPage('audit',document.getElementById('nav-audit'))">
+          <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+          Generate report
+        </button>
+      </div>
+    </article>
+  </section>
+
+  <section class="dashboard-main-grid dashboard-secondary-grid">
+    <article class="dashboard-panel">
+      <div class="dashboard-panel-head">
+        <h2>At a glance</h2>
+      </div>
+      <div class="dashboard-glance-list">
+        <div><span>Data register records</span><strong id="dash-records-count">0</strong></div>
+        <div><span>Active DPO</span><strong id="dash-dpo-name">Not assigned</strong></div>
+        <div><span>Checklist completed</span><strong><span id="stat-completed">0</span> done</strong></div>
+        <div><span>Checklist pending</span><strong><span id="stat-pending">12</span> pending</strong></div>
+      </div>
+    </article>
+
+    <article class="dashboard-panel">
+      <div class="dashboard-panel-head">
+        <h2>User activity</h2>
+        <a href="#/audit" onclick="showPage('audit',document.getElementById('nav-audit'));return false;">View all</a>
+      </div>
+      <ul id="user-activity-list" class="activity-list dashboard-activity-list"></ul>
+    </article>
+  </section>
+
+  <section class="dashboard-panel dashboard-billing-panel">
+    <div class="dashboard-panel-head dashboard-billing-head">
       <div>
-        <div class="stat-number" id="stat-completed">0</div>
-        <div class="stat-label">Completed</div>
+        <h2>Subscription &amp; billing</h2>
+        <p>You're on the <strong>Pro</strong> plan.</p>
       </div>
+      <span class="badge badge-green">Active</span>
     </div>
-    <div class="card stat-card">
-      <div class="stat-icon amber">⏳</div>
+
+    <div class="dashboard-billing-grid">
+      <div><span>Current plan</span><strong>Pro</strong><small>$99/mo</small></div>
+      <div><span>Seats used</span><strong id="dashboard-seats-used">0 / 0</strong><small>Add seats from Access Control</small></div>
+      <div><span>Next billing</span><strong>12 Jun 2026</strong><small>Auto-renews</small></div>
+      <div><span>Usage this month</span><strong id="dashboard-usage-cost">$0.00</strong><small>Based on account activity</small></div>
+    </div>
+
+    <div class="dashboard-billing-footer">
+      <span>Projected this cycle: <strong id="dashboard-cycle-cost">$0.00</strong></span>
       <div>
-        <div class="stat-number" id="stat-pending">12</div>
-        <div class="stat-label">Pending</div>
+        <button type="button" onclick="showPage('access',document.getElementById('nav-access'))">
+          <i class="fa-solid fa-users" aria-hidden="true"></i>
+          Manage seats
+        </button>
+        <button type="button" class="primary" onclick="showPage('subscription',document.getElementById('nav-subscription'))">
+          <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+          Upgrade
+        </button>
       </div>
     </div>
-    <div class="card stat-card">
-      <div class="stat-icon red">⚠️</div>
-      <div>
-        <div class="stat-number">2</div>
-        <div class="stat-label">Overdue</div>
-      </div>
-    </div>
-  </div>
-  <div class="dash-bottom-grid">
-    <div class="card p-22">
-      <div class="card-head">
-        <h3>Alerts</h3><span class="count-badge">2</span>
-      </div>
-      <div class="alert-item warn">⚠️ Upload your Privacy Policy document</div>
-      <div class="alert-item error">🔴 2 overdue compliance tasks</div>
-    </div>
-    <div class="card p-22">
-      <div class="card-head">
-        <h3>At a glance</h3>
-      </div>
-      <div class="text-sm text-muted lh-16">
-        <p>Your data register has <strong id="dash-records-count">0</strong> records.</p>
-        <p>Active DPO: <strong id="dash-dpo-name">Demo DPO</strong></p>
-      </div>
-    </div>
-  </div>
-  <div class="card p-22" id="user-activity-card">
-    <div class="card-head">
-      <h3>User activity</h3>
-    </div>
-    <ul id="user-activity-list" class="activity-list"></ul>
-    <div class="text-sm" style="margin-top:12px">
-      <a href="#/audit" class="link" onclick="showPage('audit',document.getElementById('nav-audit'));return false;">View all activity →</a>
-    </div>
-  </div>
+  </section>
 </div>

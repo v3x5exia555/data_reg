@@ -118,12 +118,14 @@ async function createAccount(admin: ReturnType<typeof createClient>, body: Accou
     return json({ error: 'Auth user create failed', detail: authErr?.message }, code);
   }
 
-  const { error: profileInsErr } = await admin.from('user_profiles').insert({
+  // Upsert because migration 12's on_auth_user_created trigger already inserted a
+  // default 'user' profile when auth.admin.createUser() was called above.
+  const { error: profileInsErr } = await admin.from('user_profiles').upsert({
     id: authUser.user.id,
     email: body.email,
     role: 'Accountadmin',
     account_id: account.id,
-  });
+  }, { onConflict: 'id' });
   if (profileInsErr) {
     await admin.auth.admin.deleteUser(authUser.user.id);
     await admin.from('accounts').delete().eq('id', account.id);
@@ -183,12 +185,14 @@ async function createUser(admin: ReturnType<typeof createClient>, body: UserMode
     return json({ error: 'Auth user create failed', detail: authErr?.message }, code);
   }
 
-  const { error: profileInsErr } = await admin.from('user_profiles').insert({
+  // Upsert because migration 12's on_auth_user_created trigger already inserted a
+  // default 'user' profile when auth.admin.createUser() was called above.
+  const { error: profileInsErr } = await admin.from('user_profiles').upsert({
     id: authUser.user.id,
     email: body.email,
     role: 'user',
     account_id: body.account_id,
-  });
+  }, { onConflict: 'id' });
   if (profileInsErr) {
     await admin.auth.admin.deleteUser(authUser.user.id);
     return json({ error: 'Profile insert failed', detail: profileInsErr.message }, 500);
