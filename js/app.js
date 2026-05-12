@@ -4693,36 +4693,35 @@ function addNewRole() {
   loadNavPermissions();
 }
 
-function loadNavPermissionsFromDB(role) {
+async function loadNavPermissionsFromDB(role) {
   const supabase = getSupabaseClient();
-  if (!supabase || !isSupabaseConfigured() || !state.user.id) return Promise.resolve();
+  if (!supabase || !isSupabaseConfigured() || !state.user.id) return;
 
-  return supabase
+  const { data, error } = await supabase
     .from('nav_permissions')
     .select('nav_item, is_visible')
     .eq('org_id', state.user.id)
-    .eq('access_level', role)
-    .then(({ data, error }) => {
-      if (!error && data && data.length > 0) {
-        if (!state.navPermissions) state.navPermissions = {};
-        state.navPermissions[role] = {};
-        data.forEach(item => {
-          state.navPermissions[role][item.nav_item] = item.is_visible;
-        });
-      }
+    .eq('access_level', role);
+
+  if (!error && data && data.length > 0) {
+    if (!state.navPermissions) state.navPermissions = {};
+    state.navPermissions[role] = {};
+    data.forEach(item => {
+      state.navPermissions[role][item.nav_item] = item.is_visible;
     });
+  }
 }
 
-function loadNavPermissions() {
+async function loadNavPermissions() {
   const select = document.getElementById('nav-role-select');
   const currentRole = select?.value || 'Accountadmin';
 
   const matrix = document.getElementById('nav-permissions-matrix');
   if (!matrix) return;
 
-  // Try to load from DB first
+  // Load from DB first (await it)
   if (state.user.id && state.navPermissions && !state.navPermissions[currentRole]) {
-    loadNavPermissionsFromDB(currentRole);
+    await loadNavPermissionsFromDB(currentRole);
   }
 
   const savedConfig = state.navPermissions?.[currentRole] || {};
@@ -4818,6 +4817,7 @@ async function saveNavConfig() {
   btn.disabled = false;
   btn.innerHTML = '💾 Save Permissions';
   showSuccess('Permissions saved to database!');
+  loadNavPermissions();
 }
 
 function applyNavPermissions() {
