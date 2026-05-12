@@ -39,9 +39,9 @@
   <div class="page-toolbar">
     <div class="search-box">
       <i class="fa-solid fa-search"></i>
-      <input type="text" id="dpiapage-search" placeholder="Search DPIAs…" oninput="renderDPIA(state.dpiaAssessments)">
+      <input type="text" id="dpiapage-search" placeholder="Search DPIAs…" oninput="renderDPIA(state.dpiaItems)">
     </div>
-    <button class="btn btn-primary" onclick="openModal('modal-dpia')">
+    <button class="btn btn-primary" onclick="resetDpiaForm(); openModal('modal-dpia')">
       <i class="fa-solid fa-plus"></i> New DPIA
     </button>
   </div>

@@ -150,7 +150,7 @@ const PAGES_TO_LOAD = [
   '00__dashboard', '01__checklist', '02__companies', '03__datasources',
   '04__dataregister', '05__consent', '06__access', '07__retention',
   '07__vendors', '08__dpo', '08__training', '09__datarequests', '10__breachlog',
-  '04__dpia', '11__deica', '06__crossborder', '15__documents',
+  '11__dpiapage', '11__deica', '06__crossborder', '15__documents',
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
@@ -3428,16 +3428,26 @@ function renderDPIA(dpiaItems) {
   if (!body) return;
   const list = dpiaItems || [];
 
+  const highCount = list.filter(item => item.risk_level === 'High').length;
+  const medCount = list.filter(item => item.risk_level === 'Medium').length;
+  const lowCount = list.filter(item => item.risk_level === 'Low').length;
+
+  const highEl = document.getElementById('dpia-high-count');
+  const medEl = document.getElementById('dpia-medium-count');
+  const lowEl = document.getElementById('dpia-low-count');
+  if (highEl) highEl.textContent = highCount;
+  if (medEl) medEl.textContent = medCount;
+  if (lowEl) lowEl.textContent = lowCount;
+
   const summaryEl = document.getElementById('dpia-summary');
   if (summaryEl) {
-    const highRisk = list.filter(item => item.risk_level === 'High').length;
     summaryEl.innerHTML = `
       <div class="vendor-stat-card"><div class="vendor-stat-label">Total DPIAs</div><div class="vendor-stat-value">${list.length}</div></div>
-      <div class="vendor-stat-card"><div class="vendor-stat-label">High Risk</div><div class="vendor-stat-value" style="color:#ef4444">${highRisk}</div></div>
+      <div class="vendor-stat-card"><div class="vendor-stat-label">High Risk</div><div class="vendor-stat-value" style="color:#ef4444">${highCount}</div></div>
     `;
   }
 
-  const q = (document.getElementById('dpia-search')?.value || '').toLowerCase();
+  const q = (document.getElementById('dpiapage-search')?.value || document.getElementById('dpia-search')?.value || '').toLowerCase();
   const filtered = q ? list.filter(item =>
     (item.activity_name||'').toLowerCase().includes(q) ||
     (item.description||'').toLowerCase().includes(q)
@@ -3470,6 +3480,18 @@ function renderDPIA(dpiaItems) {
         <button class="btn-edit" style="color:#ef4444;border-color:#ef4444;" onclick="deleteDPIA('${item.id}')">Delete</button>
       </td>
     </tr>`).join('')}</tbody></table></div>`;
+}
+
+function resetDpiaForm() {
+  state._editingDpiaId = null;
+  const modalHead = document.querySelector('#modal-dpia .modal-head h3');
+  if (modalHead) modalHead.textContent = 'New DPIA';
+  document.getElementById('dpia-name').value = '';
+  document.getElementById('dpia-description').value = '';
+  document.getElementById('dpia-mitigation').value = '';
+  document.getElementById('dpia-sensitive').checked = false;
+  document.getElementById('dpia-monitoring').checked = false;
+  document.getElementById('dpia-large-scale').checked = false;
 }
 
 function editDPIA(id) {
