@@ -9,7 +9,7 @@ DROP INDEX IF EXISTS idx_companies_account_id;
 ALTER TABLE public.companies DROP CONSTRAINT IF EXISTS companies_account_id_unique;
 
 INSERT INTO public.accounts (id, name, seat_limit, status)
-VALUES ('00000000-0000-0000-0000-000000000001', 'Default Account 1', 99, 'active')
+VALUES ('00000000-0000-0000-0000-000000000001', 'Default Account 1', 2, 'active')
 ON CONFLICT (id) DO NOTHING;
 
 DO $$
