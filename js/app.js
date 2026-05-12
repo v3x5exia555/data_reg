@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '38';
+const PAGE_ASSET_VERSION = '39';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -956,6 +956,7 @@ function showPage(pageId, navEl, noPush) {
 
   // Page-specific actions
   if (pageId === 'vendors' && typeof loadVendorsFromSupabase === 'function') loadVendorsFromSupabase();
+  if (pageId === 'access' && typeof loadAccessCompanySwitcher === 'function') loadAccessCompanySwitcher();
   if (pageId === 'access' && typeof loadSeatUsage === 'function') loadSeatUsage();
   if (pageId === 'accounts' && typeof loadAccounts === 'function') loadAccounts();
   if (pageId === 'people' && typeof loadAllPeople === 'function') loadAllPeople();
@@ -2102,8 +2103,113 @@ function getEffectiveAccountId() {
   return state.accountId || null;
 }
 
+async function loadAccessCompanySwitcher() {
+  const select = document.getElementById('access-company-select');
+  const field = document.getElementById('access-company-field');
+  if (!select || !field) return;
+
+  const supabase = getSupabaseClient();
+  let options = [];
+
+  if (supabase && isSupabaseConfigured() && state.role === 'Superadmin') {
+    let accounts = (typeof accountsCache !== 'undefined' && Array.isArray(accountsCache)) ? accountsCache : [];
+    if (!accounts.length) {
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('id, name, status')
+        .order('name');
+      if (error) {
+        console.error('Failed to load access company options:', error);
+      }
+      accounts = data || [];
+      if (typeof accountsCache !== 'undefined') accountsCache = accounts;
+    }
+    options = accounts.map(account => ({
+      value: account.id,
+      label: account.name || 'Untitled company',
+      disabled: account.status === 'suspended'
+    }));
+  } else if (supabase && isSupabaseConfigured() && getEffectiveAccountId()) {
+    const { data, error } = await supabase
+      .from('companies')
+      .select('id, name')
+      .eq('account_id', getEffectiveAccountId())
+      .order('name');
+    if (error) {
+      console.error('Failed to load company options:', error);
+    }
+    options = (data || []).map(company => ({
+      value: company.name,
+      label: company.name || 'Untitled company'
+    }));
+  }
+
+  if (!options.length) {
+    const fallbackName = getDisplayCompanyName();
+    options = fallbackName ? [{ value: fallbackName, label: fallbackName }] : [];
+  }
+
+  if (!options.length) {
+    select.innerHTML = '<option value="">No companies available</option>';
+    select.disabled = true;
+    return;
+  }
+
+  let currentValue = state.role === 'Superadmin'
+    ? (state.viewAsAccountId || '')
+    : (state.user?.company || state.company || options[0]?.value || '');
+  if (!options.some(option => String(option.value) === String(currentValue))) {
+    currentValue = state.role === 'Superadmin' ? '' : options[0]?.value || '';
+  }
+
+  select.disabled = false;
+  select.innerHTML = `${state.role === 'Superadmin' ? '<option value="">Select company...</option>' : ''}${
+    options.map(option => `
+      <option value="${escapeHtmlForDashboard(option.value)}" ${option.disabled ? 'disabled' : ''}>
+        ${escapeHtmlForDashboard(option.label)}${option.disabled ? ' (suspended)' : ''}
+      </option>
+    `).join('')
+  }`;
+  select.value = currentValue;
+}
+
+async function switchAccessCompany(value) {
+  if (!value) return;
+
+  const select = document.getElementById('access-company-select');
+  const selectedOption = select?.selectedOptions?.[0];
+  const companyName = selectedOption ? selectedOption.textContent.replace(/\s+\(suspended\)\s*$/, '').trim() : value;
+
+  if (state.role === 'Superadmin') {
+    state.viewAsAccountId = value;
+    localStorage.setItem('viewAsAccountId', value);
+    state._viewAsAccountName = { id: value, name: companyName };
+    updateActiveCompanyLabel(companyName);
+    if (typeof renderViewAsBanner === 'function') renderViewAsBanner();
+    if (typeof loadCompaniesFromSupabase === 'function') await loadCompaniesFromSupabase();
+  } else {
+    switchOrg(companyName);
+  }
+
+  await loadSeatUsage();
+  await renderTeam();
+  if (typeof loadNavPermissions === 'function') loadNavPermissions();
+  if (state.role === 'Superadmin') showToast(`Switched to ${companyName}`, 'success');
+}
+
 async function loadSeatUsage() {
-  if (state.role === 'Superadmin' && !state.viewAsAccountId) return; // not on a per-account view
+  const limitEl = document.getElementById('seat-limit');
+  const curEl = document.getElementById('seat-current');
+  const btn = document.getElementById('btn-add-user');
+  if (state.role === 'Superadmin' && !state.viewAsAccountId) {
+    if (limitEl) limitEl.textContent = '–';
+    if (curEl) curEl.textContent = '–';
+    if (btn) {
+      btn.disabled = true;
+      btn.title = 'Select a company first.';
+    }
+    return;
+  }
   const accountId = getEffectiveAccountId();
   if (!accountId) return;
   const supabase = getSupabaseClient();
@@ -2114,9 +2220,6 @@ async function loadSeatUsage() {
     .from('user_profiles').select('id', { count: 'exact', head: true }).eq('account_id', accountId);
   const limit = account?.seat_limit ?? 0;
   const current = count ?? 0;
-  const limitEl = document.getElementById('seat-limit');
-  const curEl = document.getElementById('seat-current');
-  const btn = document.getElementById('btn-add-user');
   if (limitEl) limitEl.textContent = limit;
   if (curEl) curEl.textContent = current;
   if (btn) {
@@ -2197,7 +2300,7 @@ async function addUserPrompt() {
 }
 
 document.addEventListener('click', (e) => {
-  if (e.target?.id === 'btn-add-user') {
+  if (e.target.closest('#btn-add-user')) {
     updateModalPermissions();
     openModal('modal-person');
   }
@@ -5009,6 +5112,11 @@ async function renderTeam() {
   const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.id;
   if (supabase && isSupabaseConfigured() && orgId) {
     const accountId = getEffectiveAccountId();
+    if (state.role === 'Superadmin' && !accountId) {
+      state.team = [];
+      body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><div style="font-size:42px;margin-bottom:12px;">🏢</div><div style="font-size:14px;font-weight:600;color:var(--text);">Select a company first</div><div style="font-size:13px;margin-top:4px;">Choose a company above to view and manage its team members.</div></div>';
+      return;
+    }
     if (state.role === 'Accountadmin' && !accountId) return;
     let query = supabase.from('team_members').select('*');
     if (accountId) query = query.eq('account_id', accountId);
