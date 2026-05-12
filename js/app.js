@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '35';
+const PAGE_ASSET_VERSION = '36';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -2189,7 +2189,10 @@ async function addUserPrompt() {
 }
 
 document.addEventListener('click', (e) => {
-  if (e.target?.id === 'btn-add-user') addUserPrompt();
+  if (e.target?.id === 'btn-add-user') {
+    updateModalPermissions();
+    openModal('modal-person');
+  }
 });
 
 function renderViewAsBanner() {
@@ -4860,10 +4863,20 @@ function updateModalPermissions() {
 
 async function savePerson() {
   const name   = document.getElementById('person-name').value.trim();
+  const email  = document.getElementById('person-email').value.trim().toLowerCase();
   const role   = document.getElementById('person-role').value.trim();
+  const password = document.getElementById('person-password').value;
   const access = document.getElementById('person-access').value;
   if (!name) {
     showToast('Please enter a name.', 'error');
+    return;
+  }
+  if (!isValidEmail(email)) {
+    showToast('Please enter a valid email.', 'error');
+    return;
+  }
+  if (!password || password.length < 8) {
+    showToast('Password must be at least 8 characters.', 'error');
     return;
   }
 
@@ -4879,35 +4892,107 @@ async function savePerson() {
 
   const supabase = getSupabaseClient();
   const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.id;
+  const accountId = getEffectiveAccountId();
+  let authUserId = null;
+
   if (supabase && isSupabaseConfigured() && orgId) {
-    const { data, error } = await supabase.from('team_members').insert([{
-      account_id: getEffectiveAccountId(),
-      name: name,
+    if (!accountId) {
+      showToast('No account selected. Please select a company/account first.', 'error');
+      return;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      showToast('Session expired. Please refresh and try again.', 'error');
+      return;
+    }
+
+    const supaUrl = (window.ENV?.SUPABASE_URL) || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+    const userRes = await fetch(`${supaUrl}/functions/v1/create-user`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'user', email, temp_password: password, account_id: accountId }),
+    });
+    const userOut = await userRes.json();
+    if (!userRes.ok) {
+      if (userRes.status === 402) showToast('Seat limit reached. Upgrade to add more users.', 'error');
+      else showToast(userOut.error || 'Failed to create login account', 'error');
+      return;
+    }
+    authUserId = userOut.user_id || null;
+
+    let { data, error } = await supabase.from('team_members').insert([{
+      account_id: accountId,
+      name,
+      email,
       role_department: role || 'Team member',
       access_level: access,
-      permissions: permissions
+      permissions
     }]).select().single();
+
+    if (error && /email/i.test(error.message || '')) {
+      ({ data, error } = await supabase.from('team_members').insert([{
+        account_id: accountId,
+        name,
+        role_department: role || 'Team member',
+        access_level: access,
+        permissions
+      }]).select().single());
+    }
 
     if (error) {
       console.error('Save error:', error);
-      showToast('Failed to save team member', 'error');
+      showToast('Login created, but team member row failed to save', 'warning');
     } else if (data) {
       state.team.push({
         id: data.id,
-        name, role: role || 'Team member', level: access, permissions
+        authUserId,
+        name,
+        email,
+        role: role || 'Team member',
+        level: access,
+        permissions
       });
-      showToast('Team member added!', 'success');
+      showToast(`Login created for ${email}`, 'success');
     }
   } else {
-    state.team.push({ id: 'local-' + Date.now(), name, role: role || 'Team member', level: access, permissions });
-    showToast('Team member added', 'success');
+    try {
+      await addLocalLoginUser({ name, email, password, access });
+    } catch (err) {
+      showToast(err.message || 'Failed to create local login', 'error');
+      return;
+    }
+    state.team.push({ id: 'local-' + Date.now(), name, email, role: role || 'Team member', level: access, permissions });
+    showToast(`Local login created for ${email}`, 'success');
   }
 
   saveState();
   renderTeam();
   closeModal('modal-person');
   document.getElementById('person-name').value = '';
+  document.getElementById('person-email').value = '';
   document.getElementById('person-role').value = '';
+  document.getElementById('person-password').value = '';
+}
+
+async function addLocalLoginUser({ name, email, password, access }) {
+  const users = JSON.parse(localStorage.getItem('datarex_users') || '[]');
+  if (users.some(u => String(u.email || '').toLowerCase() === email)) {
+    throw new Error('A local login with this email already exists');
+  }
+  const passwordHash = await hashPasswordForStorage(password);
+  users.push({
+    id: 'local-user-' + Date.now(),
+    name,
+    company: getDisplayCompanyName(),
+    email,
+    password_hash: passwordHash,
+    role: access,
+    industry: state.user?.industry || '',
+    size: state.user?.companySize || '',
+    regNo: state.user?.regNo || ''
+  });
+  localStorage.setItem('datarex_users', JSON.stringify(users));
 }
 
 async function renderTeam() {
@@ -4928,6 +5013,7 @@ async function renderTeam() {
       state.team = data.map(t => ({
         id: t.id,
         name: t.name,
+        email: t.email || '',
         role: t.role_department || 'Team member',
         level: t.access_level || 'user',
         permissions: t.permissions || {}
@@ -4956,6 +5042,7 @@ async function renderTeam() {
       <div class="access-info">
         <div class="access-name">${t.name} <span class="badge badge-blue">${t.level}</span></div>
         <div class="access-role">${t.role}</div>
+        ${t.email ? `<div class="access-role">${t.email}</div>` : ''}
         ${permsHtml}
       </div>
       <button class="btn btn-ghost" style="padding:8px 12px;font-size:13px;" onclick="removeTeamMember('${t.id}')">✕ Remove</button>`;
