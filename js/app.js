@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '39';
+const PAGE_ASSET_VERSION = '40';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -1132,7 +1132,7 @@ async function doLogin() {
   // Clear all per-account data caches so the new user starts with a clean slate
   const DATA_CACHE_KEYS = [
     'dpia_data', 'breach_log_data', 'cross_border_data', 'cases_data',
-    'dpia_screenings', 'optout_data', 'datarex_documents',
+    'dpia_screenings', 'optout_data',
     'dpo_data', 'vendor_data', 'activity_data', 'training_data'
   ];
   DATA_CACHE_KEYS.forEach(k => localStorage.removeItem(k));
