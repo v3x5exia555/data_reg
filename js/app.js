@@ -2300,7 +2300,8 @@ async function addUserPrompt() {
 }
 
 document.addEventListener('click', (e) => {
-  if (e.target.closest('#btn-add-user')) {
+  const addBtn = e.target.closest('#btn-add-user');
+  if (addBtn && !addBtn.disabled) {
     updateModalPermissions();
     openModal('modal-person');
   }
@@ -4968,7 +4969,9 @@ function setUserLevel(level) {
    ACCESS CONTROL
    ─────────────────────────────────────────────── */
 function updateModalPermissions() {
-  const level = document.getElementById('person-access').value;
+  const accessEl = document.getElementById('person-access');
+  if (!accessEl) { console.warn('updateModalPermissions: person-access element not found'); return; }
+  const level = accessEl.value;
   const checks = {
     'perm-dashboard': true,
     'perm-checklist': level === 'Accountadmin' || level === 'useradmin' || level === 'user',
