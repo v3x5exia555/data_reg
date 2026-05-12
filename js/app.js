@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '33';
+const PAGE_ASSET_VERSION = '34';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -3132,66 +3132,31 @@ function deleteBreach(index) {
 }
 
 async function saveDPIA() {
-  const name = document.getElementById('dpia-name').value;
+  const name = document.getElementById('dpia-name').value.trim();
   const description = document.getElementById('dpia-description').value;
   const sensitive = document.getElementById('dpia-sensitive').checked;
   const monitoring = document.getElementById('dpia-monitoring').checked;
-  const largeScale = document.getElementById('dpia-large-scale').checked;
   const mitigation = document.getElementById('dpia-mitigation').value;
+  const editingId = state._editingDpiaId || null;
 
   if (!name) {
-    JARVIS_LOG.error('DPIA', 'Validation failed', new Error('Project name is required'));
     showToast('Please enter a project name', 'warning');
     return;
   }
 
   const effectiveAccountId = getEffectiveAccountId();
   if (!effectiveAccountId) {
-    JARVIS_LOG.error('DPIA', 'Validation failed', new Error('No account linked'));
     showToast('Your account is not linked yet — please log out and log in again', 'warning');
     return;
   }
 
-  const dpiaData = {
-    id: 'local-' + Date.now(),
-    account_id: effectiveAccountId,
-    activity_name: name,
-    description: description,
-    processing_purpose: description.substring(0, 50),
-    is_necessary: true,
-    risk_level: sensitive ? 'High' : monitoring ? 'Medium' : 'Low',
-    mitigation_measures: mitigation,
-    status: 'Draft',
-    created_at: new Date().toISOString()
-  };
+  const riskLevel = sensitive ? 'High' : monitoring ? 'Medium' : 'Low';
 
-  JARVIS_LOG.submit('DPIA', 'Insert', { dpiaData });
-
-  // Optimistic local render so the UI is responsive while the DB write happens.
-  state.dpiaItems = readLocalList('dpia_data');
-  state.dpiaItems.unshift(dpiaData);
-  saveLocalList('dpia_data', state.dpiaItems);
-  renderDPIA(state.dpiaItems);
-
-  const supabase = getSupabaseClient();
-  let dbSaveOk = false;
-  if (supabase && isSupabaseConfigured()) {
-    const { id, ...dbDpiaData } = dpiaData;
-    const { error } = await supabase.from('dpia_assessments').insert([dbDpiaData]);
-    if (error) {
-      JARVIS_LOG.error('DPIA', 'Insert', error);
-      console.error('Save DPIA error:', error);
-      showToast('DPIA saved locally; Supabase save failed', 'warning');
-    } else {
-      JARVIS_LOG.success('DPIA', 'Insert', { activity_name: name });
-      dbSaveOk = true;
-    }
-  }
-
-  showSuccess('DPIA Assessment saved');
+  // --- Reset modal state ---
+  state._editingDpiaId = null;
+  const modalHead = document.querySelector('#modal-dpia .modal-head h3');
+  if (modalHead) modalHead.textContent = 'New DPIA';
   closeModal('modal-dpia');
-
-  // Clear form
   document.getElementById('dpia-name').value = '';
   document.getElementById('dpia-description').value = '';
   document.getElementById('dpia-mitigation').value = '';
@@ -3199,8 +3164,69 @@ async function saveDPIA() {
   document.getElementById('dpia-monitoring').checked = false;
   document.getElementById('dpia-large-scale').checked = false;
 
-  // If DB save succeeded, reload from DB so the list shows the real UUID row
-  // and we can clean the stale local-xxx entry from localStorage.
+  const supabase = getSupabaseClient();
+  let dbSaveOk = false;
+
+  if (editingId && !String(editingId).startsWith('local-')) {
+    // --- UPDATE existing DB record ---
+    const updates = {
+      activity_name: name,
+      description,
+      processing_purpose: description.substring(0, 50),
+      risk_level: riskLevel,
+      mitigation_measures: mitigation,
+    };
+    if (supabase && isSupabaseConfigured()) {
+      const { error } = await supabase.from('dpia_assessments').update(updates).eq('id', editingId);
+      if (error) {
+        JARVIS_LOG.error('DPIA', 'Update', error);
+        showToast('Update failed; changes saved locally only', 'warning');
+      } else {
+        JARVIS_LOG.success('DPIA', 'Update', { id: editingId });
+        dbSaveOk = true;
+      }
+    }
+    // Update local state
+    state.dpiaItems = (state.dpiaItems || []).map(d =>
+      String(d.id) === String(editingId) ? { ...d, ...updates } : d
+    );
+    saveLocalList('dpia_data', state.dpiaItems);
+    renderDPIA(state.dpiaItems);
+  } else {
+    // --- INSERT new record ---
+    const dpiaData = {
+      id: editingId || ('local-' + Date.now()),
+      account_id: effectiveAccountId,
+      activity_name: name,
+      description,
+      processing_purpose: description.substring(0, 50),
+      is_necessary: true,
+      risk_level: riskLevel,
+      mitigation_measures: mitigation,
+      status: 'Draft',
+      created_at: new Date().toISOString()
+    };
+    // Optimistic local render
+    state.dpiaItems = readLocalList('dpia_data');
+    state.dpiaItems.unshift(dpiaData);
+    saveLocalList('dpia_data', state.dpiaItems);
+    renderDPIA(state.dpiaItems);
+
+    if (supabase && isSupabaseConfigured()) {
+      const { id, ...dbDpiaData } = dpiaData;
+      const { error } = await supabase.from('dpia_assessments').insert([dbDpiaData]);
+      if (error) {
+        JARVIS_LOG.error('DPIA', 'Insert', error);
+        showToast('DPIA saved locally; cloud sync failed', 'warning');
+      } else {
+        JARVIS_LOG.success('DPIA', 'Insert', { activity_name: name });
+        dbSaveOk = true;
+      }
+    }
+  }
+
+  showSuccess('DPIA Assessment saved');
+
   if (dbSaveOk) {
     await loadDPIAFromSupabase();
   }
@@ -3228,18 +3254,38 @@ async function loadDPIAFromSupabase() {
       return;
     }
 
-    if (data) {
-      console.log(`[JARVIS] Fetching DPIAs... Success: ${data.length} records retrieved.`);
-      state.dpiaItems = data;
-      renderDPIA(data);
-      // DB is authoritative — remove stale local-xxx entries now that we have
-      // the real rows. Any locally-only record (no matching DB id) is dropped.
-      saveLocalList('dpia_data', data);
+    const remote = Array.isArray(data) ? data : [];
+    if (remote.length === 0) {
+      console.log('[JARVIS] DPIA: Supabase returned 0 rows; keeping local data.');
+      state.dpiaItems = localData;
+      renderDPIA(localData);
+      return;
     }
+
+    console.log(`[JARVIS] Fetching DPIAs... Success: ${remote.length} records retrieved.`);
+    const remoteKeys = new Set(remote.map(getDpiaMergeKey));
+    const remoteIds = new Set(remote.map(r => String(r.id || '')).filter(Boolean));
+    const localOnly = (localData || []).filter(item => {
+      const id = String(item.id || '');
+      if (id && remoteIds.has(id)) return false;
+      return !remoteKeys.has(getDpiaMergeKey(item));
+    });
+    const merged = [...remote, ...localOnly];
+    state.dpiaItems = merged;
+    renderDPIA(merged);
+    saveLocalList('dpia_data', merged);
   } catch (err) {
     console.error('[JARVIS] DPIA Exception:', err);
     // Keep the local render — don't wipe on exception.
   }
+}
+
+function getDpiaMergeKey(item = {}) {
+  return [
+    item.account_id || '',
+    String(item.activity_name || '').trim().toLowerCase(),
+    item.created_at || ''
+  ].join('|');
 }
 
 function renderDPIA(dpiaItems) {
@@ -3275,7 +3321,7 @@ function renderDPIA(dpiaItems) {
         <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Description</th>
         <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Risk</th>
         <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em;">Date</th>
-        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em; width:100px;">Actions</th>
+        <th style="background:#f8fafc; color:#64748b; font-weight:700; text-transform:uppercase; font-size:10px; letter-spacing:0.08em; width:140px;">Actions</th>
       </tr>
     </thead>
     <tbody>${filtered.map(item => `
@@ -3284,23 +3330,57 @@ function renderDPIA(dpiaItems) {
       <td class="td-muted">${item.description || '—'}</td>
       <td><span class="status-badge ${riskClass[item.risk_level] || 'status-inactive'}">${item.risk_level || '—'}</span></td>
       <td class="td-muted co-date">${item.created_at ? new Date(item.created_at).toLocaleDateString() : '—'}</td>
-      <td><button class="btn-edit" onclick="viewDPIADetails('${item.id}')">View</button></td>
+      <td style="display:flex;gap:6px;">
+        <button class="btn-edit" onclick="editDPIA('${item.id}')">Edit</button>
+        <button class="btn-edit" style="color:#ef4444;border-color:#ef4444;" onclick="deleteDPIA('${item.id}')">Delete</button>
+      </td>
     </tr>`).join('')}</tbody></table></div>`;
 }
 
-function viewDPIADetails(id) {
+function editDPIA(id) {
   const item = (state.dpiaItems || []).find(d => String(d.id) === String(id));
-  if (!item) {
-    showToast('DPIA details not found', 'warning');
-    return;
-  }
-  alert([
-    `Activity: ${item.activity_name || '-'}`,
-    `Risk: ${item.risk_level || '-'}`,
-    `Description: ${item.description || '-'}`,
-    `Mitigation: ${item.mitigation_measures || '-'}`
-  ].join('\n'));
+  if (!item) { showToast('DPIA not found', 'warning'); return; }
+
+  // Pre-fill modal fields
+  document.getElementById('dpia-name').value = item.activity_name || '';
+  document.getElementById('dpia-description').value = item.description || '';
+  document.getElementById('dpia-mitigation').value = item.mitigation_measures || '';
+  document.getElementById('dpia-sensitive').checked  = item.risk_level === 'High';
+  document.getElementById('dpia-monitoring').checked = item.risk_level === 'Medium';
+  document.getElementById('dpia-large-scale').checked = false;
+
+  // Mark as edit mode and update modal title
+  state._editingDpiaId = String(id);
+  const modalHead = document.querySelector('#modal-dpia .modal-head h3');
+  if (modalHead) modalHead.textContent = 'Edit DPIA';
+
+  openModal('modal-dpia');
 }
+window.editDPIA = editDPIA;
+
+async function deleteDPIA(id) {
+  if (!confirm('Delete this DPIA assessment? This cannot be undone.')) return;
+
+  // Remove locally
+  state.dpiaItems = (state.dpiaItems || []).filter(d => String(d.id) !== String(id));
+  saveLocalList('dpia_data', state.dpiaItems);
+  renderDPIA(state.dpiaItems);
+
+  // Remove from DB (skip local-xxx ids — they were never persisted)
+  if (!String(id).startsWith('local-')) {
+    const supabase = getSupabaseClient();
+    if (supabase && isSupabaseConfigured()) {
+      const { error } = await supabase.from('dpia_assessments').delete().eq('id', id);
+      if (error) {
+        JARVIS_LOG.error('DPIA', 'Delete', error);
+        showToast('Deleted locally; cloud sync failed', 'warning');
+        return;
+      }
+    }
+  }
+  showToast('DPIA deleted', 'success');
+}
+window.deleteDPIA = deleteDPIA;
 
 /* ───────────────────────────────────────────────
    DEICA / DPIA WORKFLOW
