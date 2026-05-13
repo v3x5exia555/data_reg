@@ -935,6 +935,7 @@ function closeSidebar() {
 
 // Pages that are always restricted from certain roles, regardless of nav config.
 const ROLE_HARD_BLOCKS = {
+  Accountadmin:  new Set(['companies', 'accounts', 'people']),
   user:          new Set(['access', 'companies', 'accounts', 'people']),
   security_user: new Set(['companies', 'accounts', 'people']),
   useradmin:     new Set(['companies', 'accounts', 'people']),
