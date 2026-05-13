@@ -4894,24 +4894,22 @@ async function loadNavPermissionsFromDB(role) {
   const supabase = getSupabaseClient();
   if (!supabase || !isSupabaseConfigured()) return;
 
-  // Permissions are stored per-account so the admin's settings apply to all
-  // users in that account. Fall back to user id for legacy local-mode rows.
-  const scopeId = getEffectiveAccountId() || state.accountId || state.user.id;
-  if (!scopeId) return;
+  const accountId = getEffectiveAccountId() || state.accountId;
+  if (!accountId) return;
 
   const { data, error } = await supabase
     .from('nav_permissions')
     .select('nav_item, is_visible')
-    .eq('org_id', scopeId)
+    .eq('account_id', accountId)
     .eq('access_level', role);
 
-  if (!error && data && data.length > 0) {
-    if (!state.navPermissions) state.navPermissions = {};
-    state.navPermissions[role] = {};
-    data.forEach(item => {
-      state.navPermissions[role][item.nav_item] = item.is_visible;
-    });
-  }
+  if (error) { console.warn('[navPerms] load error:', error.message); return; }
+
+  if (!state.navPermissions) state.navPermissions = {};
+  state.navPermissions[role] = {};
+  (data || []).forEach(item => {
+    state.navPermissions[role][item.nav_item] = item.is_visible;
+  });
 }
 
 async function loadNavPermissions() {
@@ -4921,10 +4919,8 @@ async function loadNavPermissions() {
   const matrix = document.getElementById('nav-permissions-matrix');
   if (!matrix) return;
 
-  // Load from DB first (await it)
-  if (state.user.id && state.navPermissions && !state.navPermissions[currentRole]) {
-    await loadNavPermissionsFromDB(currentRole);
-  }
+  // Always reload from DB when the matrix is opened so toggles reflect saved state
+  await loadNavPermissionsFromDB(currentRole);
 
   const savedConfig = state.navPermissions?.[currentRole] || {};
 
@@ -4997,10 +4993,15 @@ async function saveNavConfig() {
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured() && state.user.id) {
     try {
-      // Use account_id as the scope key so settings apply to all users in the account
-      const scopeId = getEffectiveAccountId() || state.accountId || state.user.id;
+      const accountId = getEffectiveAccountId() || state.accountId;
+      if (!accountId) {
+        showToast('No account selected — cannot save permissions.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '💾 Save Permissions';
+        return;
+      }
       const records = NAV_ITEMS.map(item => ({
-        org_id: scopeId,
+        account_id: accountId,
         access_level: currentRole,
         nav_item: item.id,
         is_visible: config[item.id] !== false
@@ -5008,7 +5009,7 @@ async function saveNavConfig() {
 
       const { error } = await supabase
         .from('nav_permissions')
-        .upsert(records, { onConflict: 'org_id,access_level,nav_item' });
+        .upsert(records, { onConflict: 'account_id,access_level,nav_item' });
 
       if (error) {
         console.error('Failed to save permissions:', error);
