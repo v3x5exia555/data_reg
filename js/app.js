@@ -466,7 +466,7 @@ function initAuthListener() {
       state.user = { name: '', company: '', email: '' };
       // Wipe per-account data caches on sign-out so they don't bleed into the next session
       ['dpia_data','breach_log_data','cross_border_data','cases_data',
-       'dpia_screenings','optout_data','datarex_documents',
+       'dpia_screenings','optout_data',
        'dpo_data','vendor_data','activity_data','training_data'
       ].forEach(k => localStorage.removeItem(k));
       saveState();
