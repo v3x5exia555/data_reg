@@ -429,6 +429,22 @@ function initAuthListener() {
       // Only auto-launch on session restore (screen-app already visible).
       // doLogin() handles the launchApp call for explicit password logins.
       if (document.getElementById('screen-app')?.classList.contains('active')) {
+        // Re-fetch profile if role lost (e.g. page refresh before fix took effect)
+        if (!state.role && supabase) {
+          try {
+            const { data: p } = await supabase.from('user_profiles').select('role, account_id').eq('id', session.user.id).single();
+            if (p) {
+              state.role = p.role;
+              state.accountId = p.account_id;
+              state.viewAsAccountId = p.role === 'Superadmin' ? (localStorage.getItem('viewAsAccountId') || null) : null;
+              saveState();
+            }
+          } catch (e) { console.warn('[SIGNED_IN] profile re-fetch failed:', e); }
+        }
+        // Load nav permissions for current role so sidebar shows/hides correctly on restore
+        if (state.role && typeof loadNavPermissionsFromDB === 'function') {
+          await loadNavPermissionsFromDB(state.role).catch(() => {});
+        }
         launchApp(session.user);
       }
     } else if (event === 'SIGNED_OUT') {
@@ -917,13 +933,28 @@ function closeSidebar() {
   document.getElementById('sidebar-backdrop')?.classList.remove('open');
 }
 
+// Pages that are always restricted from certain roles, regardless of nav config.
+const ROLE_HARD_BLOCKS = {
+  user:          new Set(['access', 'companies', 'accounts', 'people']),
+  security_user: new Set(['companies', 'accounts', 'people']),
+  useradmin:     new Set(['companies', 'accounts', 'people']),
+};
+
 function showPage(pageId, navEl, noPush) {
   const pageAliases = { dpia: 'dpiapage', 'dpia-workflow': 'deica', deica_workflow: 'deica' };
   pageId = pageAliases[pageId] || pageId;
   console.log('showPage called:', pageId);
 
-  const userLevel = state.currentUserLevel || 'Accountadmin';
-  const savedConfig = state.navPermissions?.[userLevel];
+  // Hard role guard — enforced by actual Supabase role, not the demo currentUserLevel
+  const activeRole = state.role || state.currentUserLevel || 'Accountadmin';
+  if ((ROLE_HARD_BLOCKS[activeRole] || new Set()).has(pageId)) {
+    showToast("You don't have permission to access this page.", 'error');
+    showPage('dashboard');
+    return;
+  }
+
+  // Configurable nav permissions check (admin-configurable per role)
+  const savedConfig = state.navPermissions?.[activeRole];
   if (savedConfig && savedConfig[pageId] === false) {
     showToast('Access denied', 'error');
     showPage('dashboard');
@@ -1257,6 +1288,10 @@ async function doLogin() {
         saveState(); // persist role/accountId immediately so page-refresh restores them
         if (profile.role === 'user' && !profile.account_id) {
           console.warn('[AUTH] Profile has role=user and no account_id — Edge Function may not have run correctly');
+        }
+        // Pre-load nav permissions for this role so applyNavPermissions() works on first render
+        if (typeof loadNavPermissionsFromDB === 'function') {
+          await loadNavPermissionsFromDB(profile.role).catch(() => {});
         }
       } else {
         console.error('[AUTH] Profile query failed:', profileErr?.message || 'no row returned');
@@ -4857,12 +4892,17 @@ function addNewRole() {
 
 async function loadNavPermissionsFromDB(role) {
   const supabase = getSupabaseClient();
-  if (!supabase || !isSupabaseConfigured() || !state.user.id) return;
+  if (!supabase || !isSupabaseConfigured()) return;
+
+  // Permissions are stored per-account so the admin's settings apply to all
+  // users in that account. Fall back to user id for legacy local-mode rows.
+  const scopeId = getEffectiveAccountId() || state.accountId || state.user.id;
+  if (!scopeId) return;
 
   const { data, error } = await supabase
     .from('nav_permissions')
     .select('nav_item, is_visible')
-    .eq('org_id', state.user.id)
+    .eq('org_id', scopeId)
     .eq('access_level', role);
 
   if (!error && data && data.length > 0) {
@@ -4957,8 +4997,10 @@ async function saveNavConfig() {
   const supabase = getSupabaseClient();
   if (supabase && isSupabaseConfigured() && state.user.id) {
     try {
+      // Use account_id as the scope key so settings apply to all users in the account
+      const scopeId = getEffectiveAccountId() || state.accountId || state.user.id;
       const records = NAV_ITEMS.map(item => ({
-        org_id: state.user.id,
+        org_id: scopeId,
         access_level: currentRole,
         nav_item: item.id,
         is_visible: config[item.id] !== false
@@ -4983,15 +5025,15 @@ async function saveNavConfig() {
 }
 
 function applyNavPermissions() {
-  const userLevel = state.currentUserLevel || 'Accountadmin';
-  const savedConfig = state.navPermissions?.[userLevel];
-
-  const hasConfig = savedConfig && Object.keys(savedConfig).length > 0;
+  const activeRole  = state.role || state.currentUserLevel || 'Accountadmin';
+  const savedConfig = state.navPermissions?.[activeRole];
+  const hardBlocked = ROLE_HARD_BLOCKS[activeRole] || new Set();
 
   NAV_ITEMS.forEach(item => {
     const navEl = document.getElementById('nav-' + item.id);
     if (navEl) {
-      navEl.style.display = (savedConfig && savedConfig[item.id] === false) ? 'none' : '';
+      const blocked = hardBlocked.has(item.id) || (savedConfig && savedConfig[item.id] === false);
+      navEl.style.display = blocked ? 'none' : '';
     }
   });
 }
