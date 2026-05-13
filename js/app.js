@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '42';
+const PAGE_ASSET_VERSION = '43';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -308,6 +308,17 @@ function getDisplayCompanyName(preferredName = '') {
   } catch (_) { /* best effort */ }
 
   return candidates.find(name => name && name !== 'Select Company') || 'Acme Pte Ltd';
+}
+
+function getRoleDisplayName(role = state.role || state.currentUserLevel) {
+  const labels = {
+    Superadmin: 'Super Admin',
+    Accountadmin: 'Accountadmin',
+    security_user: 'Security User',
+    useradmin: 'Useradmin',
+    user: 'User'
+  };
+  return labels[role] || state.user?.name || 'User';
 }
 
 function updateActiveCompanyLabel(preferredName = '') {
@@ -1583,7 +1594,7 @@ function launchApp(user) {
 
   const firstName = state.user.name ? state.user.name.split(' ')[0] : 'Demo';
   const sidebarName = document.getElementById('sidebar-name');
-  if (sidebarName) sidebarName.textContent = state.user.name;
+  if (sidebarName) sidebarName.textContent = getRoleDisplayName();
 
   const sidebarOrg = document.getElementById('sidebar-org');
   if (sidebarOrg) sidebarOrg.textContent = getDisplayCompanyName();

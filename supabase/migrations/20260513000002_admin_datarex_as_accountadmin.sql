@@ -41,6 +41,8 @@ BEGIN
   INSERT INTO public.user_profiles (id, email, first_name, last_name, role, account_id, status)
   VALUES (new_uid, target_email, 'Admin', 'Datarex', 'Accountadmin', default_account, 'active')
   ON CONFLICT (id) DO UPDATE SET
+    first_name = 'Accountadmin',
+    last_name  = '',
     role       = 'Accountadmin',
     account_id = default_account,
     status     = 'active',
