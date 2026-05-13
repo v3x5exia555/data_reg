@@ -32,8 +32,11 @@ interface UserModeBody {
 interface ManageUserBody {
   mode: 'manage-user';
   user_id: string;
-  action: 'reset-password' | 'activate' | 'deactivate';
+  action: 'reset-password' | 'activate' | 'deactivate' | 'delete' | 'update';
   new_password?: string;
+  new_role?: string;
+  new_first_name?: string;
+  new_last_name?: string;
 }
 type Body = AccountModeBody | UserModeBody | ManageUserBody;
 
@@ -251,6 +254,28 @@ async function manageUser(admin: ReturnType<typeof createClient>, body: ManageUs
       await admin.auth.admin.updateUserById(user_id, { ban_duration: '876600h' });
       return json({ error: 'DB update failed', detail: dbErr.message }, 500);
     }
+    return json({ ok: true }, 200);
+  }
+
+  if (action === 'delete') {
+    await admin.from('user_profiles').delete().eq('id', user_id);
+    const { error: authErr } = await admin.auth.admin.deleteUser(user_id);
+    if (authErr) return json({ error: authErr.message }, 500);
+    return json({ ok: true }, 200);
+  }
+
+  if (action === 'update') {
+    const VALID_ROLES = ['Accountadmin', 'security_user', 'useradmin', 'user'];
+    const updates: Record<string, unknown> = {};
+    if (body.new_role) {
+      if (!VALID_ROLES.includes(body.new_role)) return json({ error: 'Invalid role' }, 400);
+      updates.role = body.new_role;
+    }
+    if (body.new_first_name !== undefined) updates.first_name = body.new_first_name;
+    if (body.new_last_name  !== undefined) updates.last_name  = body.new_last_name;
+    if (Object.keys(updates).length === 0) return json({ error: 'Nothing to update' }, 400);
+    const { error } = await admin.from('user_profiles').update(updates).eq('id', user_id);
+    if (error) return json({ error: error.message }, 500);
     return json({ ok: true }, 200);
   }
 

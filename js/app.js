@@ -154,7 +154,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people'
 ];
-const PAGE_ASSET_VERSION = '40';
+const PAGE_ASSET_VERSION = '42';
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -257,6 +257,11 @@ function loadState() {
       if (parsed.documents) state.documents = parsed.documents;
       if (parsed.currentUserLevel) state.currentUserLevel = parsed.currentUserLevel;
       if (parsed.navPermissions) state.navPermissions = parsed.navPermissions;
+      // Restore multi-tenant role/account so page-refresh doesn't wipe them
+      if (parsed.role)      state.role      = parsed.role;
+      if (parsed.accountId) state.accountId = parsed.accountId;
+      if (parsed.viewAsAccountId) state.viewAsAccountId = parsed.viewAsAccountId;
+      else if (parsed.role === 'Superadmin') state.viewAsAccountId = localStorage.getItem('viewAsAccountId') || null;
     } catch (e) {
       console.error('Failed to parse saved state', e);
     }
@@ -1249,6 +1254,7 @@ async function doLogin() {
         if (profile.role !== 'Superadmin') localStorage.removeItem('viewAsAccountId');
         console.log(`[AUTH] Login OK — role: ${profile.role} | accountId: ${profile.account_id || 'none'}`);
         JARVIS_LOG.success('Auth', 'Profile loaded', { role: profile.role, accountId: profile.account_id });
+        saveState(); // persist role/accountId immediately so page-refresh restores them
         if (profile.role === 'user' && !profile.account_id) {
           console.warn('[AUTH] Profile has role=user and no account_id — Edge Function may not have run correctly');
         }
@@ -2198,16 +2204,16 @@ async function switchAccessCompany(value) {
 }
 
 async function loadSeatUsage() {
-  const limitEl = document.getElementById('seat-limit');
-  const curEl = document.getElementById('seat-current');
-  const btn = document.getElementById('btn-add-user');
+  const limitEl  = document.getElementById('seat-limit');
+  const curEl    = document.getElementById('seat-current');
+  const btn      = document.getElementById('btn-add-user');
+  const editBtn  = document.getElementById('btn-edit-seats');
+
   if (state.role === 'Superadmin' && !state.viewAsAccountId) {
     if (limitEl) limitEl.textContent = '–';
-    if (curEl) curEl.textContent = '–';
-    if (btn) {
-      btn.disabled = true;
-      btn.title = 'Select a company first.';
-    }
+    if (curEl)   curEl.textContent   = '–';
+    if (editBtn) editBtn.style.display = 'none';
+    if (btn) { btn.disabled = true; btn.title = 'Select a company first.'; }
     return;
   }
   const accountId = getEffectiveAccountId();
@@ -2218,14 +2224,45 @@ async function loadSeatUsage() {
     .from('accounts').select('seat_limit').eq('id', accountId).single();
   const { count } = await supabase
     .from('user_profiles').select('id', { count: 'exact', head: true }).eq('account_id', accountId);
-  const limit = account?.seat_limit ?? 0;
+  const limit   = account?.seat_limit ?? 0;
   const current = count ?? 0;
   if (limitEl) limitEl.textContent = limit;
-  if (curEl) curEl.textContent = current;
+  if (curEl)   curEl.textContent   = current;
+  if (editBtn) editBtn.style.display = (state.role === 'Accountadmin' || state.role === 'Superadmin') ? 'inline' : 'none';
   if (btn) {
     btn.disabled = current >= limit;
-    btn.title = btn.disabled ? 'Upgrade to add more seats. Contact support.' : '';
+    btn.title    = btn.disabled ? 'Seat limit reached — increase seats to add more users.' : '';
   }
+}
+
+async function editSeatLimit() {
+  const accountId = getEffectiveAccountId();
+  if (!accountId) { showToast('No account selected', 'error'); return; }
+  const supabase = getSupabaseClient();
+  if (!supabase)  { showToast('Not connected', 'error'); return; }
+
+  const { data: account } = await supabase
+    .from('accounts').select('seat_limit').eq('id', accountId).single();
+  const { count } = await supabase
+    .from('user_profiles').select('id', { count: 'exact', head: true }).eq('account_id', accountId);
+  const currentLimit = account?.seat_limit ?? 0;
+  const currentCount = count ?? 0;
+
+  const input = window.prompt(
+    `Current seats: ${currentCount} used / ${currentLimit} total.\nEnter new seat limit (minimum ${currentCount}):`,
+    String(currentLimit)
+  );
+  if (input === null) return;
+  const newLimit = parseInt(input, 10);
+  if (isNaN(newLimit) || newLimit < 1) { showToast('Please enter a valid number.', 'error'); return; }
+  if (newLimit < currentCount) { showToast(`Cannot set limit below current usage (${currentCount}).`, 'error'); return; }
+
+  const { error } = await supabase
+    .from('accounts').update({ seat_limit: newLimit }).eq('id', accountId);
+  if (error) { showToast('Failed to update seat limit: ' + error.message, 'error'); return; }
+
+  showToast(`Seat limit updated to ${newLimit}`, 'success');
+  await loadSeatUsage();
 }
 
 async function loadDashboardActivity() {
@@ -4984,6 +5021,78 @@ function updateModalPermissions() {
     const el = document.getElementById(id);
     if (el) el.checked = val;
   }
+  _updatePersonModalStatus();
+}
+
+async function _updatePersonModalStatus() {
+  const statusEl = document.getElementById('person-modal-status');
+  if (!statusEl) return;
+
+  const accountId = getEffectiveAccountId();
+  const supabase  = getSupabaseClient();
+
+  // Check session
+  let session = null;
+  if (supabase) {
+    const res = await supabase.auth.getSession();
+    session = res?.data?.session || null;
+  }
+
+  const email = state.user?.email || state.email || '(unknown)';
+  const role  = state.role || '(unknown)';
+
+  if (!supabase || !isSupabaseConfigured()) {
+    statusEl.style.display = 'block';
+    statusEl.style.background = '#fef9c3';
+    statusEl.style.color = '#713f12';
+    statusEl.style.border = '1px solid #fde047';
+    statusEl.innerHTML = '<b>Local mode</b> — No Supabase configured. Login will be saved locally only.';
+    return;
+  }
+
+  if (!session) {
+    statusEl.style.display = 'block';
+    statusEl.style.background = '#fee2e2';
+    statusEl.style.color = '#991b1b';
+    statusEl.style.border = '1px solid #fca5a5';
+    statusEl.innerHTML = '<b>Session expired.</b> Please <a href="#/login" onclick="showPage(\'auth__login\');closeModal(\'modal-person\')" style="color:#991b1b;font-weight:600">log out and log back in</a> to continue.';
+    return;
+  }
+
+  if (!accountId) {
+    const msg = role === 'Superadmin'
+      ? '<b>Superadmin:</b> Select a company from the dropdown at the top of this page before adding users.'
+      : '<b>No account linked.</b> Please log out and log back in.';
+    statusEl.style.display = 'block';
+    statusEl.style.background = '#fee2e2';
+    statusEl.style.color = '#991b1b';
+    statusEl.style.border = '1px solid #fca5a5';
+    statusEl.innerHTML = msg;
+    return;
+  }
+
+  statusEl.style.display = 'block';
+  statusEl.style.background = '#f0fdf4';
+  statusEl.style.color = '#166534';
+  statusEl.style.border = '1px solid #86efac';
+  statusEl.innerHTML = `<b>Ready</b> — logged in as <b>${email}</b> (${role}). New login will be added to this account.`;
+}
+
+function _setPersonStatus(msg, type) {
+  const el = document.getElementById('person-modal-status');
+  if (!el) return;
+  const styles = {
+    error:   { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' },
+    success: { bg: '#f0fdf4', color: '#166534', border: '#86efac' },
+    loading: { bg: '#eff6ff', color: '#1e40af', border: '#93c5fd' },
+    warn:    { bg: '#fef9c3', color: '#713f12', border: '#fde047' },
+  };
+  const s = styles[type] || styles.warn;
+  el.style.display = 'block';
+  el.style.background = s.bg;
+  el.style.color = s.color;
+  el.style.border = `1px solid ${s.border}`;
+  el.innerHTML = msg;
 }
 
 async function savePerson() {
@@ -4991,6 +5100,7 @@ async function savePerson() {
     await _savePersonImpl();
   } catch (err) {
     console.error('[savePerson] Unexpected error:', err);
+    _setPersonStatus('Unexpected error: ' + (err.message || String(err)), 'error');
     showToast('Unexpected error: ' + (err.message || String(err)), 'error');
   }
 }
@@ -5002,59 +5112,87 @@ async function _savePersonImpl() {
   const password = document.getElementById('person-password').value;
   const access   = (document.getElementById('person-access')?.value || 'user');
 
-  if (!name) { showToast('Please enter a name.', 'error'); return; }
-  if (!isValidEmail(email)) { showToast('Please enter a valid email.', 'error'); return; }
-  if (!password || password.length < 8) { showToast('Password must be at least 8 characters.', 'error'); return; }
+  if (!name)    { _setPersonStatus('Please enter a name.', 'error'); showToast('Please enter a name.', 'error'); return; }
+  if (!isValidEmail(email)) { _setPersonStatus('Please enter a valid email address.', 'error'); showToast('Please enter a valid email.', 'error'); return; }
+  if (!password || password.length < 8) { _setPersonStatus('Password must be at least 8 characters.', 'error'); showToast('Password must be at least 8 characters.', 'error'); return; }
 
   const permissions = {
-    Dashboard: true,
-    Checklist: true,
-    DataRegister: true,
-    DataSources: false,
-    Consent: false,
-    Retention: false,
+    Dashboard: true, Checklist: true, DataRegister: true,
+    DataSources: false, Consent: false, Retention: false,
   };
 
-  const supabase   = getSupabaseClient();
-  const accountId  = getEffectiveAccountId();
+  const supabase  = getSupabaseClient();
+  const accountId = getEffectiveAccountId();
 
   console.log('[savePerson] role=', state.role, 'accountId=', accountId, 'supabase=', !!supabase, 'configured=', isSupabaseConfigured());
 
   if (!supabase || !isSupabaseConfigured()) {
-    // Local fallback (no Supabase configured)
     try { await addLocalLoginUser({ name, email, password, access }); }
-    catch (err) { showToast(err.message || 'Failed to create local login', 'error'); return; }
+    catch (err) { _setPersonStatus(err.message || 'Failed to create local login', 'error'); return; }
     state.team.push({ id: 'local-' + Date.now(), name, email, role: role || 'Team member', level: access, permissions });
     showToast(`Local login created for ${email}`, 'success');
     saveState(); renderTeam(); closeModal('modal-person');
-    document.getElementById('person-name').value = '';
-    document.getElementById('person-email').value = '';
-    document.getElementById('person-role').value = '';
-    document.getElementById('person-password').value = '';
     return;
   }
 
-  if (!accountId) {
-    showToast('No account linked to your profile — please log out and log in again.', 'error');
+  // If state.role/accountId are null (e.g. after page refresh before re-login), try re-fetching
+  // the profile from the database using the live Supabase session.
+  if (!state.role || !getEffectiveAccountId()) {
+    _setPersonStatus('Refreshing session…', 'loading');
+    try {
+      const sessionCheck = await supabase.auth.getSession();
+      const liveSession = sessionCheck?.data?.session;
+      if (liveSession?.user?.id) {
+        const { data: freshProfile } = await supabase
+          .from('user_profiles')
+          .select('role, account_id')
+          .eq('id', liveSession.user.id)
+          .single();
+        if (freshProfile) {
+          state.role      = freshProfile.role;
+          state.accountId = freshProfile.account_id;
+          state.viewAsAccountId = freshProfile.role === 'Superadmin'
+            ? (localStorage.getItem('viewAsAccountId') || null)
+            : null;
+          saveState();
+          console.log('[savePerson] Re-fetched profile — role:', state.role, 'accountId:', state.accountId);
+        }
+      }
+    } catch (e) { console.warn('[savePerson] Profile re-fetch failed:', e); }
+  }
+
+  const effectiveAccountId = getEffectiveAccountId();
+  if (!effectiveAccountId) {
+    const msg = state.role === 'Superadmin'
+      ? 'No company selected — choose one from the dropdown at the top of the Access page.'
+      : `No account linked (role: "${state.role}", accountId: "${state.accountId}", viewAs: "${state.viewAsAccountId}"). Please log out and log back in.`;
+    _setPersonStatus(msg, 'error');
+    showToast(msg, 'error');
     return;
   }
 
   const sessionRes = await supabase.auth.getSession();
   const session = sessionRes?.data?.session;
-  if (!session) { showToast('Session expired. Please refresh and try again.', 'error'); return; }
+  if (!session) {
+    _setPersonStatus('Session expired — please log out and log back in.', 'error');
+    showToast('Session expired. Please refresh and try again.', 'error');
+    return;
+  }
 
   const supaUrl = (window.ENV?.SUPABASE_URL) || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
-  console.log('[savePerson] calling Edge Function | accountId=', accountId, 'email=', email);
+  _setPersonStatus('Creating login… please wait.', 'loading');
+  console.log('[savePerson] calling Edge Function | accountId=', effectiveAccountId, 'email=', email);
 
   let userRes, userOut;
   try {
     userRes = await fetch(`${supaUrl}/functions/v1/create-user`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'user', email, temp_password: password, account_id: accountId, role: access }),
+      body: JSON.stringify({ mode: 'user', email, temp_password: password, account_id: effectiveAccountId, role: access }),
     });
     userOut = await userRes.json();
   } catch (fetchErr) {
+    _setPersonStatus('Network error: ' + (fetchErr.message || 'could not reach server'), 'error');
     showToast('Network error contacting server: ' + (fetchErr.message || 'unknown'), 'error');
     return;
   }
@@ -5062,44 +5200,28 @@ async function _savePersonImpl() {
   console.log('[savePerson] Edge Function response | status=', userRes.status, 'body=', userOut);
 
   if (!userRes.ok) {
-    if (userRes.status === 402) showToast('Seat limit reached. Upgrade to add more users.', 'error');
-    else showToast(userOut.error || 'Failed to create login account', 'error');
+    const errMsg = userRes.status === 402
+      ? 'Seat limit reached — upgrade to add more users.'
+      : (userOut.error || userOut.detail || `Server error ${userRes.status}`);
+    _setPersonStatus(errMsg, 'error');
+    showToast(errMsg, 'error');
     return;
   }
 
-  const authUserId = userOut.user_id || null;
-
-  let { data, error } = await supabase.from('team_members').insert([{
-    account_id: accountId,
+  // team_members is optional metadata — user_profiles is the source of truth for the list
+  await supabase.from('team_members').insert([{
+    account_id: effectiveAccountId,
     name,
-    email,
     role_department: role || 'Team member',
     access_level: access,
     permissions,
   }]).select().single();
 
-  if (error && /email/i.test(error.message || '')) {
-    ({ data, error } = await supabase.from('team_members').insert([{
-      account_id: accountId,
-      name,
-      role_department: role || 'Team member',
-      access_level: access,
-      permissions,
-    }]).select().single());
-  }
-
-  if (error) {
-    console.error('[savePerson] team_members insert error:', error);
-    showToast('Login created, but team record failed: ' + (error.message || ''), 'warning');
-  } else {
-    if (data) {
-      state.team.push({ id: data.id, authUserId, name, email, role: role || 'Team member', level: access, permissions });
-    }
-    showToast(`Login created for ${email}`, 'success');
-  }
-
+  showToast(`Login created for ${email}`, 'success');
+  _setPersonStatus(`Login created for ${email}`, 'success');
   saveState();
-  renderTeam();
+  await renderTeam();
+  await loadSeatUsage();
   closeModal('modal-person');
   document.getElementById('person-name').value = '';
   document.getElementById('person-email').value = '';
@@ -5127,62 +5249,70 @@ async function addLocalLoginUser({ name, email, password, access }) {
   localStorage.setItem('datarex_users', JSON.stringify(users));
 }
 
+let _renderTeamGen = 0;
 async function renderTeam() {
+  const gen = ++_renderTeamGen;          // every call gets a unique generation stamp
+
   const body = document.getElementById('access-body');
   if (!body) return;
   body.innerHTML = '';
 
-  const supabase = getSupabaseClient();
-  const orgId = (typeof getCurrentOrgId === 'function') ? getCurrentOrgId() : state.user?.id;
-  if (supabase && isSupabaseConfigured() && orgId) {
-    const accountId = getEffectiveAccountId();
-    if (state.role === 'Superadmin' && !accountId) {
-      state.team = [];
-      body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><div style="font-size:42px;margin-bottom:12px;">🏢</div><div style="font-size:14px;font-weight:600;color:var(--text);">Select a company first</div><div style="font-size:13px;margin-top:4px;">Choose a company above to view and manage its team members.</div></div>';
-      return;
-    }
-    if (state.role === 'Accountadmin' && !accountId) return;
-    let query = supabase.from('team_members').select('*');
-    if (accountId) query = query.eq('account_id', accountId);
-    const { data, error } = await query.order('created_at', { ascending: false });
+  const supabase  = getSupabaseClient();
+  const accountId = getEffectiveAccountId();
+
+  if (state.role === 'Superadmin' && !accountId) {
+    if (gen !== _renderTeamGen) return;  // a newer render started — bail out
+    state.team = [];
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><div style="font-size:42px;margin-bottom:12px;">🏢</div><div style="font-size:14px;font-weight:600;color:var(--text);">Select a company first</div><div style="font-size:13px;margin-top:4px;">Choose a company above to view and manage its team members.</div></div>';
+    return;
+  }
+
+  if (supabase && isSupabaseConfigured() && accountId) {
+    // Read from user_profiles — the authoritative list of who has login access
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id, email, first_name, last_name, role, status, created_at')
+      .eq('account_id', accountId)
+      .order('created_at', { ascending: false });
+
+    if (gen !== _renderTeamGen) return;  // a newer render started while we awaited — bail out
 
     if (!error && data) {
-      state.team = data.map(t => ({
-        id: t.id,
-        name: t.name,
-        email: t.email || '',
-        role: t.role_department || 'Team member',
-        level: t.access_level || 'user',
-        permissions: t.permissions || {}
+      state.team = data.map(p => ({
+        id: p.id,
+        name: [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email || 'Unknown',
+        email: p.email || '',
+        role: p.role || 'user',
+        level: p.role || 'user',
+        status: p.status || 'active',
       }));
     }
   }
 
   state.team = (state.team || []).map((t, i) => ({ ...t, id: t.id || `local-team-${i}` }));
 
+  body.innerHTML = '';   // clear any content added by a prior render that snuck through
   state.team.forEach(t => {
     const div = document.createElement('div');
     div.className = 'access-item';
-
-    let permsHtml = '';
-    if (t.permissions) {
-      const activePerms = Object.entries(t.permissions).filter(([k, v]) => v).map(([k, v]) => k);
-      if (activePerms.length > 0) {
-        permsHtml = `<div class="access-perms">
-          ${activePerms.map(p => `<span class="access-perm-tag">${p}</span>`).join('')}
-        </div>`;
-      }
-    }
-
+    const isSuspended = t.status === 'suspended';
+    const statusBadge = isSuspended
+      ? '<span class="badge" style="background:#fee2e2;color:#991b1b;margin-left:6px;">Suspended</span>'
+      : '';
     div.innerHTML = `
-      <div class="access-avatar">${t.name[0].toUpperCase()}</div>
+      <div class="access-avatar" style="${isSuspended ? 'opacity:0.5' : ''}">${(t.name[0] || '?').toUpperCase()}</div>
       <div class="access-info">
-        <div class="access-name">${t.name} <span class="badge badge-blue">${t.level}</span></div>
-        <div class="access-role">${t.role}</div>
-        ${t.email ? `<div class="access-role">${t.email}</div>` : ''}
-        ${permsHtml}
+        <div class="access-name">${t.name} <span class="badge badge-blue">${t.level}</span>${statusBadge}</div>
+        <div class="access-role">${t.email}</div>
       </div>
-      <button class="btn btn-ghost" style="padding:8px 12px;font-size:13px;" onclick="removeTeamMember('${t.id}')">✕ Remove</button>`;
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn btn-ghost" style="padding:6px 10px;font-size:12px;" onclick="openEditTeamMember('${t.id}')" title="Edit">✏️ Edit</button>
+        ${isSuspended
+          ? `<button class="btn btn-ghost" style="padding:6px 10px;font-size:12px;" onclick="activateTeamMember('${t.id}')">✓ Activate</button>`
+          : `<button class="btn btn-ghost" style="padding:6px 10px;font-size:12px;" onclick="deactivateTeamMember('${t.id}')">✕ Deactivate</button>`
+        }
+        <button class="btn btn-ghost" style="padding:6px 10px;font-size:12px;color:#dc2626;" onclick="deleteTeamMember('${t.id}','${(t.name||'').replace(/'/g,"\\'")}')">🗑 Delete</button>
+      </div>`;
     body.appendChild(div);
   });
 
@@ -5191,23 +5321,135 @@ async function renderTeam() {
   }
 }
 
-async function removeTeamMember(id) {
-  if (!confirm('Remove this team member?')) return;
+async function deactivateTeamMember(userId) {
+  if (!confirm('Deactivate this user? They will no longer be able to log in.')) return;
+  const supabase = getSupabaseClient();
+  const sessionRes = await supabase.auth.getSession();
+  const session = sessionRes?.data?.session;
+  if (!session) { showToast('Session expired', 'error'); return; }
+  const supaUrl = window.ENV?.SUPABASE_URL || '';
+  const res = await fetch(`${supaUrl}/functions/v1/create-user`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'manage-user', user_id: userId, action: 'deactivate' }),
+  });
+  const out = await res.json();
+  if (!res.ok) { showToast(out.error || 'Failed to deactivate user', 'error'); return; }
+  showToast('User deactivated', 'success');
+  await renderTeam();
+  await loadSeatUsage();
+}
+
+async function activateTeamMember(userId) {
+  if (!confirm('Reactivate this user?')) return;
+  const supabase = getSupabaseClient();
+  const sessionRes = await supabase.auth.getSession();
+  const session = sessionRes?.data?.session;
+  if (!session) { showToast('Session expired', 'error'); return; }
+  const supaUrl = window.ENV?.SUPABASE_URL || '';
+  const res = await fetch(`${supaUrl}/functions/v1/create-user`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'manage-user', user_id: userId, action: 'activate' }),
+  });
+  const out = await res.json();
+  if (!res.ok) { showToast(out.error || 'Failed to activate user', 'error'); return; }
+  showToast('User activated', 'success');
+  await renderTeam();
+  await loadSeatUsage();
+}
+
+async function deleteTeamMember(userId, name) {
+  if (!confirm(`Delete ${name || 'this user'}? This permanently removes their login and cannot be undone.`)) return;
+  const supabase = getSupabaseClient();
+  const sessionRes = await supabase.auth.getSession();
+  const session = sessionRes?.data?.session;
+  if (!session) { showToast('Session expired', 'error'); return; }
+  const supaUrl = window.ENV?.SUPABASE_URL || '';
+  const res = await fetch(`${supaUrl}/functions/v1/create-user`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'manage-user', user_id: userId, action: 'delete' }),
+  });
+  const out = await res.json();
+  if (!res.ok) { showToast(out.error || 'Failed to delete user', 'error'); return; }
+  showToast(`${name || 'User'} deleted`, 'success');
+  await renderTeam();
+  await loadSeatUsage();
+}
+
+function openEditTeamMember(userId) {
+  const member = (state.team || []).find(t => t.id === userId);
+  if (!member) { showToast('Member not found', 'error'); return; }
+
+  document.getElementById('edit-member-id').value    = userId;
+  document.getElementById('edit-member-email').value = member.email || '';
+  document.getElementById('edit-member-password').value = '';
+  document.getElementById('edit-member-status').style.display = 'none';
+
+  // Split name into first / last best-effort
+  const parts = (member.name || '').split(' ');
+  document.getElementById('edit-member-first').value = parts[0] || '';
+  document.getElementById('edit-member-last').value  = parts.slice(1).join(' ') || '';
+
+  const roleSelect = document.getElementById('edit-member-role');
+  if (roleSelect) roleSelect.value = member.role || 'user';
+
+  openModal('modal-edit-member');
+}
+
+async function saveEditTeamMember() {
+  const userId    = document.getElementById('edit-member-id').value;
+  const firstName = document.getElementById('edit-member-first').value.trim();
+  const lastName  = document.getElementById('edit-member-last').value.trim();
+  const newRole   = document.getElementById('edit-member-role').value;
+  const newPw     = document.getElementById('edit-member-password').value;
+  const statusEl  = document.getElementById('edit-member-status');
+
+  const setStatus = (msg, type) => {
+    const styles = { error: '#fee2e2:#991b1b:#fca5a5', success: '#f0fdf4:#166534:#86efac', loading: '#eff6ff:#1e40af:#93c5fd' };
+    const [bg, color, border] = (styles[type] || styles.error).split(':');
+    statusEl.style.cssText = `display:block;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;background:${bg};color:${color};border:1px solid ${border}`;
+    statusEl.innerHTML = msg;
+  };
+
+  if (!firstName) { setStatus('First name is required.', 'error'); return; }
+  if (newPw && newPw.length < 8) { setStatus('Password must be at least 8 characters.', 'error'); return; }
 
   const supabase = getSupabaseClient();
-  if (supabase && isSupabaseConfigured() && id && !String(id).startsWith('local-')) {
-    const { error } = await supabase.from('team_members').delete().eq('id', id);
-    if (error) {
-      console.error('Delete team member failed:', error);
-      showToast('Failed to remove team member', 'error');
-      return;
-    }
+  const sessionRes = await supabase.auth.getSession();
+  const session = sessionRes?.data?.session;
+  if (!session) { setStatus('Session expired — please log out and log back in.', 'error'); return; }
+
+  const supaUrl = window.ENV?.SUPABASE_URL || '';
+  setStatus('Saving…', 'loading');
+
+  // Update profile (name + role)
+  const res = await fetch(`${supaUrl}/functions/v1/create-user`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      mode: 'manage-user', user_id: userId, action: 'update',
+      new_first_name: firstName, new_last_name: lastName, new_role: newRole,
+    }),
+  });
+  const out = await res.json();
+  if (!res.ok) { setStatus(out.error || `Server error ${res.status}`, 'error'); return; }
+
+  // Optional password reset
+  if (newPw) {
+    const pwRes = await fetch(`${supaUrl}/functions/v1/create-user`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'manage-user', user_id: userId, action: 'reset-password', new_password: newPw }),
+    });
+    const pwOut = await pwRes.json();
+    if (!pwRes.ok) { setStatus('Profile saved but password reset failed: ' + (pwOut.error || 'unknown'), 'error'); return; }
   }
 
-  state.team = (state.team || []).filter(t => String(t.id) !== String(id));
-  saveState();
-  renderTeam();
-  showToast('Team member removed', 'success');
+  setStatus('Saved!', 'success');
+  await renderTeam();
+  setTimeout(() => closeModal('modal-edit-member'), 900);
 }
 
 /* ───────────────────────────────────────────────

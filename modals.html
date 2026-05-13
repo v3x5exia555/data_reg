@@ -84,6 +84,7 @@
       <button class="modal-close" type="button" onclick="closeModal('modal-person')" aria-label="Close">✕</button>
     </div>
     <div class="person-modal-body">
+      <div id="person-modal-status" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5"></div>
       <div class="person-login-note">
         <span class="person-login-icon"><i class="fa-solid fa-user-shield" aria-hidden="true"></i></span>
         <div>
@@ -108,6 +109,47 @@
       <button class="btn-save" type="button" onclick="savePerson()">
         <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
         Create login
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Edit Team Member -->
+<div class="modal-overlay" id="modal-edit-member">
+  <div class="modal person-modal" role="dialog" aria-labelledby="edit-member-title">
+    <div class="modal-head person-modal-head">
+      <div>
+        <span class="modal-kicker">Access control</span>
+        <h3 id="edit-member-title">Edit team member</h3>
+        <p>Update name, role, or access level. Email cannot be changed.</p>
+      </div>
+      <button class="modal-close" type="button" onclick="closeModal('modal-edit-member')" aria-label="Close">✕</button>
+    </div>
+    <div class="person-modal-body">
+      <div id="edit-member-status" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5"></div>
+      <input type="hidden" id="edit-member-id">
+      <div class="person-form-grid">
+        <div class="form-group"><label>First name</label><input class="form-input no-icon" id="edit-member-first" placeholder="First name"></div>
+        <div class="form-group"><label>Last name</label><input class="form-input no-icon" id="edit-member-last" placeholder="Last name"></div>
+        <div class="form-group"><label>Email</label><input class="form-input no-icon" id="edit-member-email" disabled style="opacity:0.6;cursor:not-allowed"></div>
+        <div class="form-group"><label>Access level</label>
+          <select class="form-input no-icon" id="edit-member-role">
+            <option value="user">User</option>
+            <option value="useradmin">Useradmin</option>
+            <option value="security_user">Security User</option>
+            <option value="Accountadmin">Accountadmin</option>
+          </select>
+        </div>
+        <div class="form-group person-password-field"><label>New password <span style="font-weight:400;color:var(--muted)">(leave blank to keep current)</span></label>
+          <input class="form-input no-icon" id="edit-member-password" type="password" autocomplete="new-password" placeholder="Min 8 characters">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer person-modal-footer">
+      <button class="btn-cancel" type="button" onclick="closeModal('modal-edit-member')">Cancel</button>
+      <button class="btn-save" type="button" onclick="saveEditTeamMember()">
+        <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+        Save changes
       </button>
     </div>
   </div>
