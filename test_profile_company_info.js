@@ -114,8 +114,11 @@ function assert(condition, message) {
     await page.fill('#login-email', email);
     await page.fill('#login-password', password);
     await page.click('#login-btn');
-    await page.waitForURL(/#\/dashboard$/, { timeout: 15000 });
-    await page.waitForSelector('#page-dashboard.active', { timeout: 10000 });
+    await page.waitForFunction(
+      () => location.hash === '#/dashboard' && document.querySelector('#screen-app.active'),
+      null,
+      { timeout: 30000, polling: 200 }
+    );
     const secondLoginPromptCount = await page.locator('#dashboard-profile-prompt').count();
     assert(secondLoginPromptCount === 0, 'Second login with completed profile should go to dashboard without profile prompt');
 

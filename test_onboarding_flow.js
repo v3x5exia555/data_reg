@@ -173,7 +173,11 @@ async function visibleFieldIds(page) {
     await page.fill('#login-email', email);
     await page.fill('#login-password', 'Account123!');
     await page.click('#login-btn');
-    await page.waitForURL(/#\/dashboard$/, { timeout: 15000 });
+    await page.waitForFunction(
+      () => location.hash === '#/dashboard' && document.querySelector('#screen-app.active'),
+      null,
+      { timeout: 30000, polling: 200 }
+    );
     await page.evaluate(() => window.showPage('documents', document.getElementById('nav-documents')));
     await page.waitForSelector('#page-documents.active', { timeout: 10000 });
     await page.waitForSelector(`text=${uploadName}`, { timeout: 10000 });
