@@ -705,11 +705,14 @@ function showToast(message, type = 'info') {
   `;
   document.body.appendChild(toast);
 
+  // Warnings/errors need more time to read (e.g. "contact support" messages).
+  // Info/success keep 4s to feel snappy.
+  const dwellMs = (type === 'warning' || type === 'error') ? 8000 : 4000;
   setTimeout(() => toast.classList.add('show'), 10);
   setTimeout(() => {
     toast.classList.remove('show');
     setTimeout(() => toast.remove(), 300);
-  }, 4000);
+  }, dwellMs);
 }
 
 function showSuccess(msg) { showToast(msg, 'success'); }

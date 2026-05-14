@@ -246,7 +246,7 @@ function renderDPOTable(records = []) {
       <td style="padding:16px; color:#64748b;">${r.appointment_date || '—'}</td>
       <td style="padding:16px;"><span class="badge badge-success" style="background:#dcfce7; color:#166534; padding:4px 8px; border-radius:4px; font-size:11px;">Active</span></td>
       <td style="padding:16px; text-align:right;">
-        <button class="btn-edit" onclick="this.disabled=true; deleteDPOLocal(${i})" style="padding:6px 12px; font-size:12px; border:1px solid #fee2e2; border-radius:6px; background:#fef2f2; color:#ef4444; cursor:pointer;">Delete</button>
+        <button class="btn-edit" onclick="deleteDPOLocal(${i})" style="padding:6px 12px; font-size:12px; border:1px solid #fee2e2; border-radius:6px; background:#fef2f2; color:#ef4444; cursor:pointer;">Delete</button>
       </td>
     </tr>
   `).join('');
@@ -377,10 +377,11 @@ function handleDPOFileUpload(input) {
 }
 
 async function deleteDPOLocal(index) {
-  if (!confirm("Delete this DPO record?")) return;
-
   const record = (state.dpoRecords || [])[index];
   if (!record) return;
+
+  const label = record.name || record.email || 'this record';
+  if (!confirm(`Delete DPO record for "${label}"?\n\nThis cannot be undone.`)) return;
 
   // Tombstone the ID so the record can't resurrect from a Supabase fetch
   // if the server DELETE is blocked by RLS or otherwise fails.
