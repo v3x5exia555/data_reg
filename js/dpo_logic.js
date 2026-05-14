@@ -354,10 +354,47 @@ function handleDPOFileUpload(input) {
   setDPOUploadState('complete', file);
 }
 
-function deleteDPOLocal(index) {
-  if (confirm("Delete this DPO record?")) {
-    state.dpoRecords.splice(index, 1);
-    cacheDPORecords(state.dpoRecords);
-    renderDPOTable(state.dpoRecords);
+async function deleteDPOLocal(index) {
+  if (!confirm("Delete this DPO record?")) return;
+
+  const record = (state.dpoRecords || [])[index];
+  if (!record) return;
+
+  state.dpoRecords = (state.dpoRecords || []).filter((_, i) => i !== index);
+
+  // Clear legacy state.dpo if it matches the deleted record
+  if (state.dpo && (
+    state.dpo.id === record.id ||
+    (record.email && state.dpo.email === record.email && state.dpo.name === record.name)
+  )) {
+    state.dpo = null;
   }
+
+  // Clear datarex_dpo localStorage if it matches the deleted record
+  const legacyDpo = parseDPOSafe('datarex_dpo', null);
+  if (legacyDpo && (
+    legacyDpo.id === record.id ||
+    (record.email && legacyDpo.email === record.email && legacyDpo.name === record.name)
+  )) {
+    localStorage.removeItem('datarex_dpo');
+  }
+
+  cacheDPORecords(state.dpoRecords);
+  renderDPOTable(state.dpoRecords);
+
+  // Delete from Supabase when the record has a server-assigned ID
+  const supabase = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
+  if (supabase && typeof isSupabaseConfigured === 'function' && isSupabaseConfigured() &&
+      record.id && !String(record.id).startsWith('local-')) {
+    try {
+      const { error } = await supabase.from('dpo').delete().eq('id', record.id);
+      if (error) throw error;
+      console.log('[JARVIS] DPO deleted from Supabase:', record.id);
+    } catch (err) {
+      console.error('[JARVIS] DPO Supabase Delete Error', err);
+      if (typeof showToast === 'function') showToast('DPO deleted locally; remote delete failed', 'warning');
+    }
+  }
+
+  if (typeof showToast === 'function') showToast('DPO record deleted', 'success');
 }
