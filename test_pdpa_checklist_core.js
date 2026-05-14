@@ -56,7 +56,8 @@ function assert(condition, message) {
     await page.fill('#login-email', email);
     await page.fill('#login-password', password);
     await page.click('#login-btn');
-    await page.waitForURL(/#\/dashboard$/, { timeout: 15000 });
+    await page.waitForURL(/#\/dashboard$/, { timeout: 30000 });
+    await page.waitForSelector('#page-dashboard.active', { timeout: 10000 });
     await page.evaluate(() => window.showPage('checklist', document.getElementById('nav-checklist')));
     await page.waitForURL(/#\/checklist$/, { timeout: 10000 });
     await page.waitForSelector('#page-checklist.active', { timeout: 10000 });

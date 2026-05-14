@@ -79,4 +79,73 @@
       <button class="btn btn-outline" type="button" onclick="showPage('dashboard', document.getElementById('nav-dashboard'))">Back to dashboard</button>
     </div>
   </section>
+
+  <section class="profile-panel">
+    <div class="profile-panel-head">
+      <div>
+        <h2>Malaysia PDPA applicability</h2>
+        <p>These answers generate the checklist obligations, evidence requirements, and weighted score.</p>
+      </div>
+    </div>
+
+    <div class="profile-form-grid">
+      <label class="profile-field">
+        <span>Processing Role</span>
+        <select id="profile-processing-role" class="form-input">
+          <option value="">Select role</option>
+          <option value="Data Controller">Data Controller</option>
+          <option value="Data Processor">Data Processor</option>
+          <option value="Both">Both</option>
+        </select>
+      </label>
+
+      <label class="profile-field">
+        <span>Sensitive Personal Data</span>
+        <select id="profile-sensitive-data" class="form-input">
+          <option value="no">No</option>
+          <option value="yes">Yes</option>
+        </select>
+      </label>
+
+      <label class="profile-field">
+        <span>Cross-Border Transfer</span>
+        <select id="profile-cross-border" class="form-input">
+          <option value="no">No</option>
+          <option value="yes">Yes</option>
+        </select>
+      </label>
+
+      <label class="profile-field">
+        <span>Uses Vendors / Processors</span>
+        <select id="profile-vendors" class="form-input">
+          <option value="no">No</option>
+          <option value="yes">Yes</option>
+        </select>
+      </label>
+
+      <label class="profile-field">
+        <span>Regular / Systematic Monitoring</span>
+        <select id="profile-systematic-monitoring" class="form-input">
+          <option value="no">No</option>
+          <option value="yes">Yes</option>
+        </select>
+      </label>
+
+      <label class="profile-field">
+        <span>Data Subject Volume</span>
+        <select id="profile-data-subject-volume" class="form-input">
+          <option value="under-20000">Under 20,000</option>
+          <option value="20000+">20,000 or more</option>
+        </select>
+      </label>
+
+      <label class="profile-field">
+        <span>Sensitive / Financial Data Volume</span>
+        <select id="profile-sensitive-subject-volume" class="form-input">
+          <option value="under-10000">Under 10,000</option>
+          <option value="10000+">10,000 or more</option>
+        </select>
+      </label>
+    </div>
+  </section>
 </div>
