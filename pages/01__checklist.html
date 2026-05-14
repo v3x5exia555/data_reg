@@ -5,9 +5,18 @@
       <div class="page-sub">Track required PDPA controls, owners, due dates, notes, and evidence.</div>
     </div>
     <div class="gap-10 ml-auto">
+      <button class="btn btn-primary" id="generate-checklist-btn" onclick="generateComplianceChecklist()">Generate Checklist</button>
       <button class="btn btn-outline" onclick="toggleAllChecklist(true)">Select all</button>
       <button class="btn btn-outline" onclick="toggleAllChecklist(false)">Unselect</button>
     </div>
+  </div>
+  <div class="card generated-checklist-card" id="generated-checklist-card">
+    <div>
+      <div class="generated-checklist-title">Generated compliance rules</div>
+      <div class="generated-checklist-sub" id="generated-checklist-meta">Not generated yet</div>
+    </div>
+    <div id="generated-rule-summary" class="generated-rule-summary"></div>
+    <div class="generated-evidence-count" id="generated-evidence-count">0 evidence item(s) required</div>
   </div>
   <div class="card prog-wrap">
     <div class="prog-top"><span id="prog-label">0 of 0 done</span><span id="prog-pct">0%</span></div>

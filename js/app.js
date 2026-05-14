@@ -108,6 +108,7 @@ const state = {
   },
   checks: {},
   checklistMeta: {},
+  generatedChecklist: null,
   records: [
     { type:'Name, email, phone', purpose:'Respond to enquiries', storage:'Website DB, email inbox', access:'Admin, sales team', retention:6, consent:true, note:'' },
     { type:'Patient medical record', purpose:'Medical treatment', storage:'Clinic management system', access:'Doctors, clinic admin', retention:84, consent:true, note:'Sensitive — restricted access' },
@@ -148,7 +149,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people', '23__profile'
 ];
-const PAGE_ASSET_VERSION = '46';
+const PAGE_ASSET_VERSION = '47';
 
 const REGULATED_INDUSTRIES = [
   'Communications',
@@ -167,6 +168,10 @@ const REGULATED_INDUSTRIES = [
 ];
 
 const COMPANY_SIZE_OPTIONS = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+'];
+const COMPLIANCE_YES_NO = ['yes', 'no'];
+const PROCESSING_ROLE_OPTIONS = ['Data Controller', 'Data Processor', 'Both'];
+const DATA_SUBJECT_VOLUME_OPTIONS = ['under-20000', '20000+'];
+const SENSITIVE_SUBJECT_VOLUME_OPTIONS = ['under-10000', '10000+'];
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -260,6 +265,7 @@ function loadState() {
       }
       if (parsed.bizType) state.bizType = parsed.bizType;
       if (parsed.checks) Object.assign(state.checks, parsed.checks);
+      if (parsed.generatedChecklist) state.generatedChecklist = parsed.generatedChecklist;
       if (parsed.checklistMeta && Object.keys(parsed.checklistMeta).length) state.checklistMeta = parsed.checklistMeta;
       else {
         const savedChecklistMeta = localStorage.getItem('datarex_checklist_meta');
@@ -343,6 +349,13 @@ function setInputValue(id, value) {
   if (el) el.value = value || '';
 }
 
+function setSelectValue(id, value, fallback = '') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const optionValues = Array.from(el.options || []).map(option => option.value);
+  el.value = optionValues.includes(value) ? value : fallback;
+}
+
 function renderCompanyProfileFields(prefix) {
   setInputValue(`${prefix}-company`, state.user?.company || state.company || '');
   setInputValue(`${prefix}-country`, state.user?.country || '');
@@ -369,11 +382,26 @@ function renderCompanyProfileFields(prefix) {
       })
     ].join('');
   }
+
+  setSelectValue(`${prefix}-processing-role`, state.user?.processingRole || '', '');
+  setSelectValue(`${prefix}-sensitive-data`, state.user?.sensitiveData || 'no', 'no');
+  setSelectValue(`${prefix}-cross-border`, state.user?.crossBorderTransfer || 'no', 'no');
+  setSelectValue(`${prefix}-vendors`, state.user?.usesVendors || 'no', 'no');
+  setSelectValue(`${prefix}-systematic-monitoring`, state.user?.systematicMonitoring || 'no', 'no');
+  setSelectValue(`${prefix}-data-subject-volume`, state.user?.dataSubjectVolume || 'under-20000', 'under-20000');
+  setSelectValue(`${prefix}-sensitive-subject-volume`, state.user?.sensitiveSubjectVolume || 'under-10000', 'under-10000');
 }
 
 function readCompanyProfileFields(prefix) {
   const val = id => (document.getElementById(`${prefix}-${id}`)?.value || '').trim();
   const companySizeRaw = val('company-size') || '1-10';
+  const processingRoleRaw = val('processing-role');
+  const sensitiveDataRaw = val('sensitive-data') || 'no';
+  const crossBorderRaw = val('cross-border') || 'no';
+  const vendorsRaw = val('vendors') || 'no';
+  const monitoringRaw = val('systematic-monitoring') || 'no';
+  const dataSubjectVolumeRaw = val('data-subject-volume') || 'under-20000';
+  const sensitiveSubjectVolumeRaw = val('sensitive-subject-volume') || 'under-10000';
   return {
     company: val('company'),
     industry: val('industry'),
@@ -383,7 +411,14 @@ function readCompanyProfileFields(prefix) {
     ssmNumber: val('ssm-number'),
     website: val('website'),
     contactNumber: val('contact-number'),
-    businessAddress: val('business-address')
+    businessAddress: val('business-address'),
+    processingRole: PROCESSING_ROLE_OPTIONS.includes(processingRoleRaw) ? processingRoleRaw : '',
+    sensitiveData: COMPLIANCE_YES_NO.includes(sensitiveDataRaw) ? sensitiveDataRaw : 'no',
+    crossBorderTransfer: COMPLIANCE_YES_NO.includes(crossBorderRaw) ? crossBorderRaw : 'no',
+    usesVendors: COMPLIANCE_YES_NO.includes(vendorsRaw) ? vendorsRaw : 'no',
+    systematicMonitoring: COMPLIANCE_YES_NO.includes(monitoringRaw) ? monitoringRaw : 'no',
+    dataSubjectVolume: DATA_SUBJECT_VOLUME_OPTIONS.includes(dataSubjectVolumeRaw) ? dataSubjectVolumeRaw : 'under-20000',
+    sensitiveSubjectVolume: SENSITIVE_SUBJECT_VOLUME_OPTIONS.includes(sensitiveSubjectVolumeRaw) ? sensitiveSubjectVolumeRaw : 'under-10000'
   };
 }
 
@@ -421,6 +456,13 @@ function applyCompanyProfile(profile) {
     website: profile.website,
     contactNumber: profile.contactNumber,
     businessAddress: profile.businessAddress,
+    processingRole: profile.processingRole,
+    sensitiveData: profile.sensitiveData,
+    crossBorderTransfer: profile.crossBorderTransfer,
+    usesVendors: profile.usesVendors,
+    systematicMonitoring: profile.systematicMonitoring,
+    dataSubjectVolume: profile.dataSubjectVolume,
+    sensitiveSubjectVolume: profile.sensitiveSubjectVolume,
     profileCompleted: true
   };
   state.company = profile.company;
@@ -483,6 +525,13 @@ function persistCurrentUserProfile() {
       match.website = state.user.website || '';
       match.contactNumber = state.user.contactNumber || '';
       match.businessAddress = state.user.businessAddress || '';
+      match.processingRole = state.user.processingRole || '';
+      match.sensitiveData = state.user.sensitiveData || 'no';
+      match.crossBorderTransfer = state.user.crossBorderTransfer || 'no';
+      match.usesVendors = state.user.usesVendors || 'no';
+      match.systematicMonitoring = state.user.systematicMonitoring || 'no';
+      match.dataSubjectVolume = state.user.dataSubjectVolume || 'under-20000';
+      match.sensitiveSubjectVolume = state.user.sensitiveSubjectVolume || 'under-10000';
       match.profileCompleted = !isCompanyProfileIncomplete();
       localStorage.setItem('datarex_users', JSON.stringify(users));
     }
@@ -943,6 +992,65 @@ const CHECKLIST = [
     { id:'evidence-vault', q:'Evidence is stored for completed checklist items', hint:'Attach or reference proof for completed compliance controls.', evidence:'Evidence repository' },
     { id:'management-report', q:'Management/audit report can be produced', hint:'Prepare a report summarizing status, gaps, owners, and evidence.', evidence:'Management report' }
   ]}
+];
+
+const COMPLIANCE_RULE_DEFINITIONS = [
+  {
+    id: 'malaysia-pdpa',
+    label: 'Malaysia PDPA',
+    applies: profile => String(profile.country || '').toLowerCase() === 'malaysia',
+    itemIds: ['profile-complete', 'privacy-notice-created', 'privacy-notice-published', 'data-register-created', 'retention-schedule', 'access-controls'],
+    criticalIds: ['privacy-notice-created', 'data-register-created'],
+    evidenceRequiredIds: ['privacy-notice-created', 'data-register-created', 'retention-schedule', 'access-controls']
+  },
+  {
+    id: 'regulated-industry',
+    label: 'Regulated industry',
+    applies: profile => REGULATED_INDUSTRIES.includes(profile.industry),
+    itemIds: ['industry-code-reviewed', 'management-report'],
+    criticalIds: ['industry-code-reviewed'],
+    evidenceRequiredIds: ['industry-code-reviewed']
+  },
+  {
+    id: 'dpo-required',
+    label: 'DPO required',
+    applies: profile => profile.dataSubjectVolume === '20000+' || profile.sensitiveSubjectVolume === '10000+' || profile.systematicMonitoring === 'yes',
+    itemIds: ['dpo-appointed', 'dpo-contact-published', 'staff-training'],
+    criticalIds: ['dpo-appointed', 'dpo-contact-published'],
+    evidenceRequiredIds: ['dpo-appointed', 'dpo-contact-published']
+  },
+  {
+    id: 'sensitive-data',
+    label: 'Sensitive personal data',
+    applies: profile => profile.sensitiveData === 'yes',
+    itemIds: ['purpose-legal-basis-mapped', 'high-risk-processing-reviewed', 'access-controls', 'security-review'],
+    criticalIds: ['purpose-legal-basis-mapped', 'access-controls'],
+    evidenceRequiredIds: ['purpose-legal-basis-mapped', 'high-risk-processing-reviewed', 'access-controls', 'security-review']
+  },
+  {
+    id: 'cross-border-transfer',
+    label: 'Cross-border transfer',
+    applies: profile => profile.crossBorderTransfer === 'yes',
+    itemIds: ['transfer-register', 'transfer-safeguards'],
+    criticalIds: ['transfer-safeguards'],
+    evidenceRequiredIds: ['transfer-register', 'transfer-safeguards']
+  },
+  {
+    id: 'vendor-use',
+    label: 'Vendor / processor use',
+    applies: profile => profile.usesVendors === 'yes',
+    itemIds: ['processor-register', 'processor-contracts'],
+    criticalIds: ['processor-contracts'],
+    evidenceRequiredIds: ['processor-register', 'processor-contracts']
+  },
+  {
+    id: 'breach-readiness',
+    label: 'Breach notification readiness',
+    applies: profile => String(profile.country || '').toLowerCase() === 'malaysia',
+    itemIds: ['breach-response-plan', 'breach-notification-template'],
+    criticalIds: ['breach-response-plan'],
+    evidenceRequiredIds: ['breach-response-plan', 'breach-notification-template']
+  }
 ];
 
 const CONSENT_DATA = [
@@ -1884,6 +1992,8 @@ window.demoLogin = demoLogin;
 window.doLogin = doLogin;
 window.saveProfileCompanyInfo = saveProfileCompanyInfo;
 window.updateChecklistMeta = updateChecklistMeta;
+window.generateComplianceChecklist = generateComplianceChecklist;
+window.evaluateComplianceRules = evaluateComplianceRules;
 window.renderChecklist = renderChecklist;
 window.toggleOrgDropdown = toggleOrgDropdown;
 window.openCompaniesTab = openCompaniesTab;
@@ -2059,7 +2169,7 @@ function renderDashboardOverview({ recordsCount, dpoName }) {
     recordsCount,
     missingConsent: (state.records || []).filter(r => !Boolean(r.consent || r.consent_obtained)).length,
     highRisk,
-    pendingTasks: getChecklistItemIds().filter(id => state.checks[id] !== true).length,
+    pendingTasks: getPendingChecklistCount(),
     trainingExpiring: countExpiringTraining(state.trainingRecords || [], 60),
     overdueRequests: getOverdueRequestCount()
   });
@@ -2150,10 +2260,10 @@ function formatDashboardDate(raw) {
    SCORE & STATS
    ─────────────────────────────────────────────── */
 function updateScore() {
-  const checklistIds = getChecklistItemIds();
-  const total = checklistIds.length;
-  const done  = checklistIds.filter(id => state.checks[id]).length;
-  const pct   = Math.round((done / total) * 100);
+  const scoring = getWeightedChecklistScore();
+  const total = scoring.totalItems;
+  const done  = scoring.doneItems;
+  const pct   = scoring.pct;
 
   const scoreDisplay = document.getElementById('score-display');
   if (scoreDisplay) scoreDisplay.textContent = pct + '%';
@@ -2213,6 +2323,117 @@ function getChecklistItemIds() {
   return CHECKLIST.flatMap(section => section.items.map(item => item.id));
 }
 
+function getCompanyComplianceProfile() {
+  return {
+    country: state.user?.country || '',
+    industry: state.user?.industry || '',
+    processingRole: state.user?.processingRole || '',
+    sensitiveData: state.user?.sensitiveData || 'no',
+    crossBorderTransfer: state.user?.crossBorderTransfer || 'no',
+    usesVendors: state.user?.usesVendors || 'no',
+    systematicMonitoring: state.user?.systematicMonitoring || 'no',
+    dataSubjectVolume: state.user?.dataSubjectVolume || 'under-20000',
+    sensitiveSubjectVolume: state.user?.sensitiveSubjectVolume || 'under-10000'
+  };
+}
+
+function evaluateComplianceRules(profile = getCompanyComplianceProfile()) {
+  const itemRules = {};
+  const rules = COMPLIANCE_RULE_DEFINITIONS.filter(rule => rule.applies(profile)).map(rule => {
+    rule.itemIds.forEach(itemId => {
+      const existing = itemRules[itemId] || {
+        applicable: true,
+        critical: false,
+        evidenceRequired: false,
+        weight: 2,
+        rules: []
+      };
+      existing.rules.push(rule.label);
+      existing.critical = existing.critical || rule.criticalIds.includes(itemId);
+      existing.evidenceRequired = existing.evidenceRequired || rule.evidenceRequiredIds.includes(itemId);
+      existing.weight = existing.critical ? 3 : Math.max(existing.weight, 2);
+      itemRules[itemId] = existing;
+    });
+    return { id: rule.id, label: rule.label };
+  });
+  return { rules, itemRules };
+}
+
+function generateComplianceChecklist() {
+  const profile = getCompanyComplianceProfile();
+  const evaluation = evaluateComplianceRules(profile);
+  state.generatedChecklist = {
+    generatedAt: new Date().toISOString(),
+    country: profile.country,
+    industry: profile.industry,
+    rules: evaluation.rules,
+    itemRules: evaluation.itemRules
+  };
+  saveState();
+  renderChecklist();
+  updateScore();
+  showToast('Checklist generated from company profile.', 'success');
+}
+
+function getGeneratedChecklist() {
+  if (state.generatedChecklist) return state.generatedChecklist;
+  const profile = getCompanyComplianceProfile();
+  const evaluation = evaluateComplianceRules(profile);
+  return {
+    generatedAt: '',
+    country: profile.country,
+    industry: profile.industry,
+    rules: evaluation.rules,
+    itemRules: evaluation.itemRules
+  };
+}
+
+function getChecklistItemRule(itemId) {
+  return getGeneratedChecklist().itemRules?.[itemId] || {
+    applicable: false,
+    critical: false,
+    evidenceRequired: false,
+    weight: 1,
+    rules: []
+  };
+}
+
+function getWeightedChecklistScore() {
+  const checklistIds = getChecklistItemIds();
+  let totalWeight = 0;
+  let doneWeight = 0;
+  let doneItems = 0;
+  checklistIds.forEach(id => {
+    const rule = getChecklistItemRule(id);
+    const weight = rule.weight || 1;
+    const meta = getChecklistMeta(id);
+    const isDone = state.checks[id] === true || meta.status === 'Done';
+    const hasEvidence = String(meta.evidence || '').trim().length > 0;
+    const countsAsDone = isDone && (!rule.evidenceRequired || hasEvidence);
+    totalWeight += weight;
+    if (countsAsDone) {
+      doneWeight += weight;
+      doneItems += 1;
+    }
+  });
+  return {
+    doneItems,
+    totalItems: checklistIds.length,
+    doneWeight,
+    totalWeight,
+    pct: totalWeight ? Math.round((doneWeight / totalWeight) * 100) : 0
+  };
+}
+
+function getPendingChecklistCount() {
+  return getChecklistItemIds().filter(id => {
+    const rule = getChecklistItemRule(id);
+    const meta = getChecklistMeta(id);
+    const hasEvidence = String(meta.evidence || '').trim().length > 0;
+    return state.checks[id] !== true || (rule.evidenceRequired && !hasEvidence);
+  }).length;
+}
+
 function getChecklistMeta(itemId) {
   if (!state.checklistMeta) state.checklistMeta = {};
   if (!state.checklistMeta[itemId]) {
@@ -2230,7 +2451,21 @@ function getChecklistMeta(itemId) {
 
 function updateChecklistMeta(itemId, patch) {
   const meta = getChecklistMeta(itemId);
-  state.checklistMeta[itemId] = { ...meta, ...patch };
+  const next = { ...meta, ...patch };
+  const rule = getChecklistItemRule(itemId);
+  if (next.status === 'Done' && rule.evidenceRequired && !String(next.evidence || '').trim()) {
+    next.status = 'In Progress';
+    state.checklistMeta[itemId] = next;
+    state.checks[itemId] = false;
+    saveState();
+    updateScore();
+    showToast('Evidence is required before this item can be marked Done.', 'error');
+    const itemEl = document.querySelector(`.check-item[data-item-id="${itemId}"]`);
+    const select = itemEl?.querySelector('.check-status-select');
+    if (select) select.value = next.status;
+    return;
+  }
+  state.checklistMeta[itemId] = next;
   state.checks[itemId] = state.checklistMeta[itemId].status === 'Done';
   saveState();
   updateScore();
@@ -2243,6 +2478,31 @@ function updateChecklistMeta(itemId, patch) {
         ? '<svg width="13" height="13" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'
         : '';
     }
+  }
+}
+
+function renderGeneratedChecklistSummary() {
+  const generated = getGeneratedChecklist();
+  const meta = document.getElementById('generated-checklist-meta');
+  const summary = document.getElementById('generated-rule-summary');
+  const evidenceCount = document.getElementById('generated-evidence-count');
+  if (meta) {
+    meta.textContent = generated.generatedAt
+      ? `Generated ${formatDashboardDate(generated.generatedAt)} for ${generated.country || 'selected country'} · ${generated.industry || 'selected industry'}`
+      : 'Previewing rules from current profile. Click Generate Checklist to save this version.';
+  }
+  if (summary) {
+    summary.innerHTML = generated.rules?.length
+      ? generated.rules.map(rule => `<span class="rule-chip">${escapeHtmlForDashboard(rule.label)}</span>`).join('')
+      : '<span class="rule-chip muted">No Malaysia PDPA rules selected yet</span>';
+  }
+  if (evidenceCount) {
+    const missing = getChecklistItemIds().filter(id => {
+      const rule = getChecklistItemRule(id);
+      const meta = getChecklistMeta(id);
+      return rule.evidenceRequired && !String(meta.evidence || '').trim();
+    }).length;
+    evidenceCount.textContent = `${missing} evidence item(s) required`;
   }
 }
 
@@ -2276,6 +2536,8 @@ async function renderChecklist() {
 
   if (myGen !== _checklistRenderGen) return;
 
+  renderGeneratedChecklistSummary();
+
   CHECKLIST.forEach(section => {
     const done  = section.items.filter(i => state.checks[i.id]).length;
     const total = section.items.length;
@@ -2286,6 +2548,12 @@ async function renderChecklist() {
     section.items.forEach(item => {
       const checked = state.checks[item.id];
       const meta = getChecklistMeta(item.id);
+      const rule = getChecklistItemRule(item.id);
+      const badges = [
+        rule.critical ? '<span class="check-rule-badge critical">Critical</span>' : '',
+        rule.evidenceRequired ? '<span class="check-rule-badge evidence">Evidence required</span>' : '',
+        rule.applicable ? '<span class="check-rule-badge applicable">Generated</span>' : ''
+      ].filter(Boolean).join('');
       const el = document.createElement('div');
       el.className = 'check-item' + (checked ? ' done' : '');
       el.dataset.itemId = item.id;
@@ -2295,9 +2563,10 @@ async function renderChecklist() {
             ${checked ? '<svg width="13" height="13" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
           </button>
           <div class="check-text">
-            <h4>${escapeHtmlForDashboard(item.q)}</h4>
+            <h4>${escapeHtmlForDashboard(item.q)} ${badges}</h4>
             <p>${escapeHtmlForDashboard(item.hint || '')}</p>
             ${item.evidence ? `<span class="check-evidence-hint">Suggested evidence: ${escapeHtmlForDashboard(item.evidence)}</span>` : ''}
+            ${rule.rules?.length ? `<span class="check-rule-source">Applies because: ${escapeHtmlForDashboard(rule.rules.join(', '))}</span>` : ''}
           </div>
         </div>
         <div class="check-meta-grid">
@@ -2330,6 +2599,17 @@ async function renderChecklist() {
         </div>`;
       el.querySelector('.checkbox')?.addEventListener('click', async (evt) => {
         evt.stopPropagation();
+        const rule = getChecklistItemRule(item.id);
+        const meta = getChecklistMeta(item.id);
+        if (!state.checks[item.id] && rule.evidenceRequired && !String(meta.evidence || '').trim()) {
+          state.checklistMeta[item.id] = { ...meta, status: 'In Progress' };
+          state.checks[item.id] = false;
+          saveState();
+          showToast('Evidence is required before this item can be marked Done.', 'error');
+          renderChecklist();
+          updateScore();
+          return;
+        }
         state.checks[item.id] = !state.checks[item.id];
         const nextStatus = state.checks[item.id] ? 'Done' : 'Not Started';
         state.checklistMeta[item.id] = { ...getChecklistMeta(item.id), status: nextStatus };
