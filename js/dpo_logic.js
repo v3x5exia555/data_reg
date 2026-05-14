@@ -246,7 +246,7 @@ function renderDPOTable(records = []) {
       <td style="padding:16px; color:#64748b;">${r.appointment_date || '—'}</td>
       <td style="padding:16px;"><span class="badge badge-success" style="background:#dcfce7; color:#166534; padding:4px 8px; border-radius:4px; font-size:11px;">Active</span></td>
       <td style="padding:16px; text-align:right;">
-        <button class="btn-edit" onclick="deleteDPOLocal(${i})" style="padding:6px 12px; font-size:12px; border:1px solid #fee2e2; border-radius:6px; background:#fef2f2; color:#ef4444; cursor:pointer;">Delete</button>
+        <button class="btn-edit" onclick="this.disabled=true; deleteDPOLocal(${i})" style="padding:6px 12px; font-size:12px; border:1px solid #fee2e2; border-radius:6px; background:#fef2f2; color:#ef4444; cursor:pointer;">Delete</button>
       </td>
     </tr>
   `).join('');
@@ -408,19 +408,33 @@ async function deleteDPOLocal(index) {
   cacheDPORecords(state.dpoRecords);
   renderDPOTable(state.dpoRecords);
 
-  // Delete from Supabase when the record has a server-assigned ID
+  // Delete from Supabase when the record has a server-assigned ID.
+  // Use .select() so we can detect RLS-blocked deletes (returns [] silently)
+  // and surface them via a warning toast instead of lying to the user.
   const supabase = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
   if (supabase && typeof isSupabaseConfigured === 'function' && isSupabaseConfigured() &&
       record.id && !String(record.id).startsWith('local-')) {
     try {
-      const { error } = await supabase.from('dpo').delete().eq('id', record.id);
+      const { data, error } = await supabase.from('dpo').delete().eq('id', record.id).select();
       if (error) throw error;
-      console.log('[JARVIS] DPO deleted from Supabase:', record.id);
+      if (!data || data.length === 0) {
+        console.error('[JARVIS] DPO Supabase Delete returned 0 rows — likely RLS denial', {
+          id: record.id,
+          user_id: record.user_id,
+          account_id: record.account_id || 'n/a'
+        });
+        if (typeof showToast === 'function') {
+          showToast('Removed from your view. Server delete failed — contact support if you see this record again.', 'warning');
+        }
+      } else {
+        console.log('[JARVIS] DPO deleted from Supabase:', record.id);
+        if (typeof showToast === 'function') showToast('DPO record deleted', 'success');
+      }
     } catch (err) {
       console.error('[JARVIS] DPO Supabase Delete Error', err);
       if (typeof showToast === 'function') showToast('DPO deleted locally; remote delete failed', 'warning');
     }
+  } else {
+    if (typeof showToast === 'function') showToast('DPO record deleted', 'success');
   }
-
-  if (typeof showToast === 'function') showToast('DPO record deleted', 'success');
 }
