@@ -13,44 +13,71 @@
 
     <div class="onboard-body">
       <div class="onboard-content">
-        <h2>Tell us about your business</h2>
-        <p>This helps us customize your compliance checklist. You can change this later.</p>
+        <h2>Complete your company profile</h2>
+        <p>This helps DataRex tailor PDPA guidance to your regulated sector. You can edit this later from Profile.</p>
 
-        <div class="option-grid">
-          <div class="option-card" onclick="selectBiz('Ecommerce', this)">
-            <div class="option-icon">🛒</div>
-            <div class="option-text">
-              <h4>E-Commerce</h4>
-              <p>Online store, delivery, payments</p>
+        <div id="onboard-save-status" class="profile-save-status" hidden></div>
+
+        <div class="profile-form-grid onboarding-profile-grid">
+          <label class="profile-field">
+            <span>Company Name</span>
+            <input id="onboard-profile-company" class="form-input" type="text" placeholder="e.g. Regulated Test Sdn Bhd" autocomplete="organization">
+          </label>
+
+          <label class="profile-field">
+            <span>Industry / Business Type</span>
+            <select id="onboard-profile-industry" class="form-input"></select>
+          </label>
+
+          <label class="profile-field">
+            <span>Company Size</span>
+            <div class="profile-select-control">
+              <select id="onboard-profile-company-size" class="form-input profile-select">
+                <option value="1-10">1 - 10</option>
+                <option value="11-50">11 - 50</option>
+                <option value="51-200">51 - 200</option>
+                <option value="201-500">201 - 500</option>
+                <option value="501-1000">501 - 1000</option>
+                <option value="1000+">1000+</option>
+              </select>
+              <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
             </div>
-          </div>
-          <div class="option-card" onclick="selectBiz('Healthcare', this)">
-            <div class="option-icon">🏥</div>
-            <div class="option-text">
-              <h4>Healthcare</h4>
-              <p>Patient data, medical records</p>
-            </div>
-          </div>
-          <div class="option-card" onclick="selectBiz('Finance', this)">
-            <div class="option-icon">💰</div>
-            <div class="option-text">
-              <h4>Finance / Fintech</h4>
-              <p>Banking, KYC, transactions</p>
-            </div>
-          </div>
-          <div class="option-card" onclick="selectBiz('General', this)">
-            <div class="option-icon">🏢</div>
-            <div class="option-text">
-              <h4>General B2B/B2C</h4>
-              <p>Marketing, CRM, general ops</p>
-            </div>
-          </div>
+          </label>
+
+          <label class="profile-field">
+            <span>Country</span>
+            <input id="onboard-profile-country" class="form-input" type="text" placeholder="e.g. Malaysia" autocomplete="country-name">
+          </label>
+
+          <label class="profile-field">
+            <span>Official Email</span>
+            <input id="onboard-profile-official-email" class="form-input" type="email" placeholder="privacy@company.com" autocomplete="email">
+          </label>
+
+          <label class="profile-field">
+            <span>SSM Registration Number <small>Optional</small></span>
+            <input id="onboard-profile-ssm-number" class="form-input" type="text" placeholder="e.g. 202401000001">
+          </label>
+
+          <label class="profile-field">
+            <span>Website <small>Optional</small></span>
+            <input id="onboard-profile-website" class="form-input" type="url" placeholder="https://company.com" autocomplete="url">
+          </label>
+
+          <label class="profile-field">
+            <span>Contact Number <small>Optional</small></span>
+            <input id="onboard-profile-contact-number" class="form-input" type="tel" placeholder="+60312345678" autocomplete="tel">
+          </label>
+
+          <label class="profile-field profile-field-full">
+            <span>Business Address <small>Optional</small></span>
+            <textarea id="onboard-profile-business-address" class="form-input" rows="3" placeholder="Business address"></textarea>
+          </label>
         </div>
 
-        <div class="onboard-hint">💡 Healthcare and Finance industries have additional PDPA requirements in Malaysia.</div>
-
-        <div class="onboard-actions">
-          <button class="btn btn-primary" id="finish-onboard">Finish setup →</button>
+        <div class="onboard-actions" style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
+          <button class="btn btn-primary" id="finish-onboard" style="width: 100%;">Save and go to dashboard →</button>
+          <a href="javascript:void(0)" id="skip-onboard" style="color: var(--text-muted); text-decoration: underline; font-size: 0.9em;">I'll do this later</a>
         </div>
       </div>
     </div>
