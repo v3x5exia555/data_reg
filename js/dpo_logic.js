@@ -14,6 +14,28 @@ function parseDPOSafe(key, fallback) {
   }
 }
 
+// Tombstones: deleted DPO IDs persist locally so records can't resurrect
+// from Supabase fetches when the server-side DELETE is blocked by RLS.
+function getDeletedDPOIds() {
+  const list = parseDPOSafe('dpo_deleted_ids', []);
+  return Array.isArray(list) ? list : [];
+}
+
+function addDeletedDPOId(id) {
+  if (!id) return;
+  const ids = getDeletedDPOIds();
+  if (!ids.includes(id)) {
+    ids.push(id);
+    localStorage.setItem('dpo_deleted_ids', JSON.stringify(ids));
+  }
+}
+
+function filterTombstoned(records = []) {
+  const deletedIds = getDeletedDPOIds();
+  if (!deletedIds.length) return records;
+  return records.filter(r => !deletedIds.includes(r.id));
+}
+
 function normalizeDPORecord(record = {}) {
   return {
     id: record.id || `local-${Date.now()}`,
@@ -57,7 +79,7 @@ function getLocalDPORecords() {
   if (state.dpo && typeof state.dpo === 'object') records.push(state.dpo);
   if (Array.isArray(state.dpoRecords)) records.push(...state.dpoRecords);
 
-  return mergeDPORecords(records);
+  return filterTombstoned(mergeDPORecords(records));
 }
 
 function cacheDPORecords(records = []) {
@@ -145,17 +167,17 @@ async function loadDPOFromSupabase() {
 
       if (error) throw error;
 
-      const remoteData = mergeDPORecords(data || []);
+      const remoteData = filterTombstoned(mergeDPORecords(data || []));
       const currentCompany = state.user?.company || state.company || '';
       const currentUserId = state.user?.id || '';
       const preferredRemote = remoteData.filter(record =>
         (currentCompany && record.company_id === currentCompany) ||
         (currentUserId && record.user_id === currentUserId)
       );
-      const displayData = mergeDPORecords([
+      const displayData = filterTombstoned(mergeDPORecords([
         ...(preferredRemote.length ? preferredRemote : remoteData),
         ...localData
-      ]);
+      ]));
 
       console.log(`[JARVIS] FETCH SUCCESS: ${displayData.length} DPO records available.`);
       state.dpoRecords = displayData;
@@ -359,6 +381,10 @@ async function deleteDPOLocal(index) {
 
   const record = (state.dpoRecords || [])[index];
   if (!record) return;
+
+  // Tombstone the ID so the record can't resurrect from a Supabase fetch
+  // if the server DELETE is blocked by RLS or otherwise fails.
+  if (record.id) addDeletedDPOId(record.id);
 
   state.dpoRecords = (state.dpoRecords || []).filter((_, i) => i !== index);
 

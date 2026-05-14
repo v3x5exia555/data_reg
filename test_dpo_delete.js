@@ -194,6 +194,87 @@ async function goToDPOWithRecord(page, record) {
       await page.close();
     }
 
+    // ── TEST 4: Tombstone survives Supabase returning the deleted record ───
+    // Real-world bug: Supabase DELETE silently fails (e.g. RLS blocks it).
+    // Next loadDPOFromSupabase() fetches the record again and re-caches it.
+    // Tombstone mechanism must filter it out client-side.
+    {
+      const page = await browser.newPage();
+      page.on('pageerror', e => pageErrors.push(e.message));
+
+      // Simulate Supabase returning the record (DELETE silently failed)
+      const ghostRecord = {
+        id: 'ghost-supabase-record-001',
+        user_id: 'dpo-del-test',
+        company_id: 'DelTest Sdn Bhd',
+        name: 'Ghost DPO',
+        email: 'ghost@dpo.test',
+        appointment_date: '2026-04-01',
+        training_status: 'pending',
+        status: 'Active',
+        created_at: new Date().toISOString()
+      };
+      await page.route(/supabase\.co.*\/rest\/v1\/dpo/, (route) => {
+        const url = route.request().url();
+        const method = route.request().method();
+        // GET requests: return the ghost record (simulates RLS-blocked DELETE)
+        if (method === 'GET' || (method === 'POST' && url.includes('select'))) {
+          route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([ghostRecord]) });
+        } else {
+          route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+        }
+      });
+
+      await loginOnly(page);
+
+      await page.evaluate((rec) => {
+        localStorage.setItem('dpo_data', JSON.stringify([rec]));
+        localStorage.setItem('datarex_dpo', JSON.stringify(rec));
+        window.confirm = () => true;
+      }, ghostRecord);
+
+      await page.evaluate(() => window.showPage('dpo', document.getElementById('nav-dpo')));
+      await page.waitForURL(/#\/dpo$/, { timeout: 10000 });
+      await page.waitForSelector('#page-dpo.active', { timeout: 10000 });
+      await page.waitForFunction(
+        (name) => document.getElementById('dpo-table-body')?.innerText?.includes(name),
+        ghostRecord.name,
+        { timeout: 10000 }
+      );
+
+      // Delete the record
+      await page.locator('#dpo-table-body .btn-edit').first().click();
+      await page.waitForTimeout(500);
+
+      // Navigate away and back — Supabase will still return the ghost record,
+      // but the tombstone should filter it out
+      await page.evaluate(() => window.showPage('dashboard', document.getElementById('nav-dashboard')));
+      await page.waitForURL(/#\/dashboard$/, { timeout: 10000 });
+
+      await page.evaluate(() => window.showPage('dpo', document.getElementById('nav-dpo')));
+      await page.waitForURL(/#\/dpo$/, { timeout: 10000 });
+      await page.waitForSelector('#page-dpo.active', { timeout: 10000 });
+      await page.waitForTimeout(2000); // let loadDPOFromSupabase fetch + render
+
+      const tableTextAfterNav = await page.locator('#dpo-table-body').innerText();
+      assert(
+        !tableTextAfterNav.includes('Ghost DPO'),
+        `Ghost DPO record reappeared from Supabase after delete + nav — tombstone did not filter it.\nTable: "${tableTextAfterNav}"`
+      );
+
+      // Verify tombstone was recorded
+      const tombstones = await page.evaluate(() =>
+        JSON.parse(localStorage.getItem('dpo_deleted_ids') || '[]')
+      );
+      assert(
+        tombstones.includes('ghost-supabase-record-001'),
+        `Tombstone list should contain deleted ID, got: ${JSON.stringify(tombstones)}`
+      );
+      console.log('PASS tombstone prevents record resurrection from Supabase');
+
+      await page.close();
+    }
+
     assert(pageErrors.length === 0, `Browser errors: ${pageErrors.join(' | ')}`);
     console.log('ALL DPO DELETE TESTS PASSED');
   } finally {
