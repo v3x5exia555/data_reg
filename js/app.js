@@ -499,7 +499,6 @@ function saveProfileCompanyInfo() {
   updateActiveCompanyLabel(profile.company);
   const sidebarOrg = document.getElementById('sidebar-org');
   if (sidebarOrg) sidebarOrg.textContent = profile.company;
-  renderDashboardProfilePrompt();
   renderDashboardOverview({
     recordsCount: Number(document.getElementById('dash-records-count')?.textContent || 0),
     dpoName: getDashboardDpoName()
@@ -1244,7 +1243,6 @@ function showPage(pageId, navEl, noPush) {
   if (pageId === 'documents') renderDocuments();
   if (pageId === 'dashboard') loadDashboardFromSupabase();
   if (pageId === 'dashboard' && typeof loadDashboardActivity === 'function') loadDashboardActivity();
-  if (pageId === 'dashboard' && typeof renderDashboardProfilePrompt === 'function') renderDashboardProfilePrompt();
   if (pageId === 'profile' && typeof renderProfilePage === 'function') renderProfilePage();
   // Static pages (no data hooks): datasources, monitoring
 
@@ -1997,6 +1995,23 @@ function renderDashboardOverview({ recordsCount, dpoName }) {
   setDashboardText('dashboard-usage-cost', `$${usageCost.toFixed(2)}`);
   setDashboardText('dashboard-cycle-cost', `$${usageCost.toFixed(2)}`);
 
+  const reminderContainer = document.getElementById('onboarding-reminder-container');
+  if (reminderContainer) {
+    if (!state.user?.profileCompleted) {
+      reminderContainer.innerHTML = `
+        <div style="background: white; border: 1px solid #e5e7eb; border-left: 4px solid #3b82f6; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="flex: 1;">
+            <h3 style="margin: 0 0 5px 0; color: #111827; font-size: 1.1em;">Finish your setup</h3>
+            <p style="margin: 0; color: #6b7280; font-size: 0.95em;">Complete your company profile to get tailored PDPA guidance for your regulated sector.</p>
+          </div>
+          <button class="btn btn-primary" onclick="showPage('profile')" style="margin-left: 20px; white-space: nowrap;">Complete Profile</button>
+        </div>
+      `;
+    } else {
+      reminderContainer.innerHTML = '';
+    }
+  }
+
   renderDashboardAlerts({
     hasDpo,
     recordsCount,
@@ -2006,39 +2021,6 @@ function renderDashboardOverview({ recordsCount, dpoName }) {
     trainingExpiring: countExpiringTraining(state.trainingRecords || [], 60),
     overdueRequests: getOverdueRequestCount()
   });
-  renderDashboardProfilePrompt();
-}
-
-function renderDashboardProfilePrompt() {
-  const dashboardPage = document.getElementById('page-dashboard');
-  if (!dashboardPage) return;
-  const existing = document.getElementById('dashboard-profile-prompt');
-  if (!isCompanyProfileIncomplete()) {
-    if (existing) existing.remove();
-    return;
-  }
-  if (existing) return;
-
-  const prompt = document.createElement('section');
-  prompt.id = 'dashboard-profile-prompt';
-  prompt.className = 'dashboard-profile-prompt';
-  prompt.innerHTML = `
-    <div class="dashboard-profile-icon">
-      <i class="fa-solid fa-building-user" aria-hidden="true"></i>
-    </div>
-    <div class="dashboard-profile-copy">
-      <strong>Complete your company profile</strong>
-      <span>Add your company name and regulated industry so DataRex can tailor PDPA guidance.</span>
-    </div>
-    <button class="btn btn-primary" type="button" onclick="showPage('profile', document.getElementById('nav-profile'))">Complete profile</button>
-  `;
-
-  const hero = dashboardPage.querySelector('.dashboard-hero');
-  if (hero?.nextSibling) {
-    dashboardPage.insertBefore(prompt, hero.nextSibling);
-  } else {
-    dashboardPage.prepend(prompt);
-  }
 }
 
 function setDashboardText(id, value) {
