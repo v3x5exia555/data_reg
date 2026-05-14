@@ -152,9 +152,27 @@ const PAGES_TO_LOAD = [
   '07__vendors', '08__dpo', '08__training', '09__datarequests', '10__breachlog',
   '11__dpiapage', '11__deica', '06__crossborder', '15__documents',
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
-  '20__accounts', '22__people'
+  '20__accounts', '22__people', '23__profile'
 ];
-const PAGE_ASSET_VERSION = '43';
+const PAGE_ASSET_VERSION = '45';
+
+const REGULATED_INDUSTRIES = [
+  'Communications',
+  'Banking & Financial Institutions',
+  'Insurance & Takaful',
+  'Health / Healthcare',
+  'Tourism & Hospitality',
+  'Transportation',
+  'Education',
+  'Direct Selling',
+  'Services',
+  'Real Estate',
+  'Utilities',
+  'Pawnbroking',
+  'Money Services Business'
+];
+
+const COMPANY_SIZE_OPTIONS = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+'];
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -304,10 +322,202 @@ function getDisplayCompanyName(preferredName = '') {
     const localUsers = JSON.parse(localStorage.getItem('datarex_users') || '[]');
     const currentEmail = state.user?.email;
     const currentUser = currentEmail ? localUsers.find(u => u.email === currentEmail) : null;
-    candidates.push(currentUser?.company, localUsers[0]?.company);
+    candidates.push(currentUser?.company);
   } catch (_) { /* best effort */ }
 
-  return candidates.find(name => name && name !== 'Select Company') || 'Acme Pte Ltd';
+  return candidates.find(name => name && name !== 'Select Company') || 'Your Company';
+}
+
+function isCompanyProfileIncomplete() {
+  const company = String(state.user?.company || state.company || '').trim();
+  const industry = String(state.user?.industry || '').trim();
+  const country = String(state.user?.country || '').trim();
+  const officialEmail = String(state.user?.officialEmail || '').trim();
+  return !company || !industry || !country || !isValidEmail(officialEmail);
+}
+
+function setInputValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value || '';
+}
+
+function renderCompanyProfileFields(prefix) {
+  setInputValue(`${prefix}-company`, state.user?.company || state.company || '');
+  setInputValue(`${prefix}-country`, state.user?.country || '');
+  setInputValue(`${prefix}-official-email`, state.user?.officialEmail || '');
+  setInputValue(`${prefix}-ssm-number`, state.user?.ssmNumber || state.user?.regNo || '');
+  setInputValue(`${prefix}-website`, state.user?.website || '');
+  setInputValue(`${prefix}-contact-number`, state.user?.contactNumber || '');
+  setInputValue(`${prefix}-business-address`, state.user?.businessAddress || '');
+
+  const sizeInput = document.getElementById(`${prefix}-company-size`);
+  if (sizeInput) {
+    const currentSize = state.user?.companySize || state.user?.size || '1-10';
+    sizeInput.value = COMPANY_SIZE_OPTIONS.includes(currentSize) ? currentSize : '1-10';
+  }
+
+  const industrySelect = document.getElementById(`${prefix}-industry`);
+  if (industrySelect) {
+    const currentIndustry = state.user?.industry || '';
+    industrySelect.innerHTML = [
+      '<option value="">Select industry / business type</option>',
+      ...REGULATED_INDUSTRIES.map(industry => {
+        const selected = industry === currentIndustry ? ' selected' : '';
+        return `<option value="${escapeHtmlForDashboard(industry)}"${selected}>${escapeHtmlForDashboard(industry)}</option>`;
+      })
+    ].join('');
+  }
+}
+
+function readCompanyProfileFields(prefix) {
+  const val = id => (document.getElementById(`${prefix}-${id}`)?.value || '').trim();
+  const companySizeRaw = val('company-size') || '1-10';
+  return {
+    company: val('company'),
+    industry: val('industry'),
+    companySize: COMPANY_SIZE_OPTIONS.includes(companySizeRaw) ? companySizeRaw : '1-10',
+    country: val('country'),
+    officialEmail: val('official-email'),
+    ssmNumber: val('ssm-number'),
+    website: val('website'),
+    contactNumber: val('contact-number'),
+    businessAddress: val('business-address')
+  };
+}
+
+function validateCompanyProfile(profile, statusId) {
+  if (!profile.company) {
+    setCompanyProfileStatus(statusId, 'Company name is required.', 'error');
+    return false;
+  }
+  if (!REGULATED_INDUSTRIES.includes(profile.industry)) {
+    setCompanyProfileStatus(statusId, 'Select an industry / business type.', 'error');
+    return false;
+  }
+  if (!profile.country) {
+    setCompanyProfileStatus(statusId, 'Country is required.', 'error');
+    return false;
+  }
+  if (!isValidEmail(profile.officialEmail)) {
+    setCompanyProfileStatus(statusId, 'Official email is required.', 'error');
+    return false;
+  }
+  return true;
+}
+
+function applyCompanyProfile(profile) {
+  state.user = {
+    ...state.user,
+    company: profile.company,
+    industry: profile.industry,
+    companySize: profile.companySize,
+    size: profile.companySize,
+    country: profile.country,
+    officialEmail: profile.officialEmail,
+    ssmNumber: profile.ssmNumber,
+    regNo: profile.ssmNumber,
+    website: profile.website,
+    contactNumber: profile.contactNumber,
+    businessAddress: profile.businessAddress,
+    profileCompleted: true
+  };
+  state.company = profile.company;
+}
+
+function renderProfilePage() {
+  const page = document.getElementById('page-profile');
+  if (!page) return;
+
+  const status = document.getElementById('profile-save-status');
+  renderCompanyProfileFields('profile');
+  if (status) {
+    status.hidden = true;
+    status.textContent = '';
+    status.className = 'profile-save-status';
+  }
+}
+
+function renderOnboardingProfilePage() {
+  const screen = document.getElementById('screen-onboarding');
+  if (!screen) return;
+
+  const status = document.getElementById('onboard-save-status');
+  renderCompanyProfileFields('onboard-profile');
+  if (status) {
+    status.hidden = true;
+    status.textContent = '';
+    status.className = 'profile-save-status';
+  }
+}
+
+function setCompanyProfileStatus(statusId, message, type = 'error') {
+  const status = document.getElementById(statusId);
+  if (!status) return;
+  status.hidden = false;
+  status.textContent = message;
+  status.className = `profile-save-status ${type}`;
+}
+
+function setProfileSaveStatus(message, type = 'error') {
+  setCompanyProfileStatus('profile-save-status', message, type);
+}
+
+function persistCurrentUserProfile() {
+  const email = state.user?.email;
+  if (!email) return;
+  try {
+    const users = JSON.parse(localStorage.getItem('datarex_users') || '[]');
+    const match = users.find(user => String(user.email || '').toLowerCase() === String(email).toLowerCase());
+    if (match) {
+      match.name = state.user.name || match.name || email.split('@')[0];
+      match.company = state.user.company || '';
+      match.industry = state.user.industry || '';
+      match.size = state.user.companySize || '1-10';
+      match.companySize = state.user.companySize || '1-10';
+      match.country = state.user.country || '';
+      match.officialEmail = state.user.officialEmail || '';
+      match.ssmNumber = state.user.ssmNumber || '';
+      match.regNo = state.user.regNo || state.user.ssmNumber || match.regNo || '';
+      match.website = state.user.website || '';
+      match.contactNumber = state.user.contactNumber || '';
+      match.businessAddress = state.user.businessAddress || '';
+      match.profileCompleted = !isCompanyProfileIncomplete();
+      localStorage.setItem('datarex_users', JSON.stringify(users));
+    }
+  } catch (err) {
+    console.warn('Failed to persist profile to local user store', err);
+  }
+}
+
+function saveProfileCompanyInfo() {
+  const profile = readCompanyProfileFields('profile');
+  if (!validateCompanyProfile(profile, 'profile-save-status')) return;
+
+  applyCompanyProfile(profile);
+  saveState();
+  persistCurrentUserProfile();
+  updateActiveCompanyLabel(profile.company);
+  const sidebarOrg = document.getElementById('sidebar-org');
+  if (sidebarOrg) sidebarOrg.textContent = profile.company;
+  renderDashboardProfilePrompt();
+  renderDashboardOverview({
+    recordsCount: Number(document.getElementById('dash-records-count')?.textContent || 0),
+    dpoName: getDashboardDpoName()
+  });
+  setProfileSaveStatus('Profile saved.', 'success');
+  showToast('Profile saved.', 'success');
+}
+
+function saveOnboardingCompanyInfo() {
+  const profile = readCompanyProfileFields('onboard-profile');
+  if (!validateCompanyProfile(profile, 'onboard-save-status')) return false;
+
+  applyCompanyProfile(profile);
+  state.isLoggedIn = true;
+  saveState();
+  persistCurrentUserProfile();
+  setCompanyProfileStatus('onboard-save-status', 'Profile saved.', 'success');
+  return true;
 }
 
 function getRoleDisplayName(role = state.role || state.currentUserLevel) {
@@ -923,6 +1133,9 @@ function goTo(screenId, noPush) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const target = document.getElementById(screenId);
   if (target) target.classList.add('active');
+  if (screenId === 'screen-onboarding' && typeof renderOnboardingProfilePage === 'function') {
+    renderOnboardingProfilePage();
+  }
   window.scrollTo(0, 0);
 
   if (!noPush) {
@@ -1031,6 +1244,8 @@ function showPage(pageId, navEl, noPush) {
   if (pageId === 'documents') renderDocuments();
   if (pageId === 'dashboard') loadDashboardFromSupabase();
   if (pageId === 'dashboard' && typeof loadDashboardActivity === 'function') loadDashboardActivity();
+  if (pageId === 'dashboard' && typeof renderDashboardProfilePrompt === 'function') renderDashboardProfilePrompt();
+  if (pageId === 'profile' && typeof renderProfilePage === 'function') renderProfilePage();
   // Static pages (no data hooks): datasources, monitoring
 
   // Admin-only elements
@@ -1156,6 +1371,17 @@ function clearSession() {
   saveState();
 }
 
+async function getCurrentSupabaseSession() {
+  const supabase = getSupabaseClient();
+  if (!supabase || !isSupabaseConfigured()) return null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data?.session || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 /* ───────────────────────────────────────────────
    AUTH: LOGIN
    ─────────────────────────────────────────────── */
@@ -1197,6 +1423,7 @@ async function doLogin() {
 
   try {
     let data = null;
+    let authenticatedWithSupabase = false;
 
     // 1. Try Supabase Auth first (requires env.js to have populated window.ENV)
     if (isSupabaseConfigured()) {
@@ -1214,6 +1441,7 @@ async function doLogin() {
               company: authData.user.user_metadata?.company || '',
               id: authData.user.id
             };
+            authenticatedWithSupabase = true;
             console.log('Login SUCCESS (Supabase Auth):', data.email);
           }
         }
@@ -1264,10 +1492,18 @@ async function doLogin() {
     if (data) {
       state.user = {
         name: data.name || data.company || 'User',
-        company: data.company || 'My Company',
+        company: data.company || '',
         email: email,
-        industry: data.industry,
-        companySize: data.size,
+        industry: data.industry || '',
+        companySize: data.companySize || data.size || '1-10',
+        size: data.companySize || data.size || '1-10',
+        country: data.country || '',
+        officialEmail: data.officialEmail || '',
+        ssmNumber: data.ssmNumber || data.regNo || '',
+        website: data.website || '',
+        contactNumber: data.contactNumber || '',
+        businessAddress: data.businessAddress || '',
+        profileCompleted: Boolean(data.profileCompleted),
         regNo: data.regNo || '',
         id: data.id || 'user-' + Date.now()
       };
@@ -1276,7 +1512,7 @@ async function doLogin() {
 
     // Populate multi-tenant state from user_profiles
     const supabase = getSupabaseClient();
-    if (supabase && state.user?.id) {
+    if (authenticatedWithSupabase && supabase && state.user?.id) {
       const { data: profile, error: profileErr } = await supabase
         .from('user_profiles')
         .select('role, account_id, first_name, last_name')
@@ -1312,7 +1548,7 @@ async function doLogin() {
     }
 
     // Check account status (Accountadmin/user only — Superadmin has no account).
-    if (state.role !== 'Superadmin' && state.accountId) {
+    if (authenticatedWithSupabase && state.role !== 'Superadmin' && state.accountId) {
       const { data: acct } = await supabase.from('accounts').select('status,name').eq('id', state.accountId).single();
       if (acct?.name) {
         state.user.company = acct.name;
@@ -1348,8 +1584,11 @@ async function doLogin() {
       if (state.role === 'Superadmin') {
         if (typeof navigateTo === 'function') navigateTo('accounts');
         else if (typeof showPage === 'function') showPage('accounts');
+      } else if (isCompanyProfileIncomplete()) {
+        showPage('profile', document.getElementById('nav-profile'), true);
+        history.replaceState(null, '', '#/profile');
       }
-      // Accountadmin / user fall through — launchApp already lands on dashboard.
+      // Completed Accountadmin / user profiles fall through — launchApp already lands on dashboard.
     }, 1200);
     console.log('=== LOGIN DEBUG END (SUCCESS) ===');
   } catch (error) {
@@ -1380,10 +1619,12 @@ async function doLogout() {
 /* ───────────────────────────────────────────────
    ONBOARDING
    ─────────────────────────────────────────────── */
-function selectBiz(el) {
+function selectBiz(typeOrEl, maybeEl) {
+  const el = maybeEl || typeOrEl;
+  if (!el || !el.classList) return;
   document.querySelectorAll('#biz-options .option-card').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
-  state.bizType = el.querySelector('h4').textContent;
+  state.bizType = typeof typeOrEl === 'string' ? typeOrEl : el.querySelector('h4')?.textContent || '';
   saveState();
 }
 
@@ -1404,17 +1645,28 @@ function backOnboard1() {
 }
 
 function finishOnboard() {
-  const selected = document.querySelectorAll('#src-options .option-card.selected');
-  state.dataSources = Array.from(selected).map(el => el.querySelector('h4').textContent);
-  state.isLoggedIn = true;
-  saveState();
-
-  // Switch to app screen first so summary is visible
-  goTo('screen-app', true);
-  showSummary();
+  if (!saveOnboardingCompanyInfo()) return;
+  goToDashboard();
 }
 
+function skipOnboarding() {
+  state.user = {
+    ...state.user,
+    profileCompleted: false,
+    profileSkipped: true
+  };
+  state.isLoggedIn = true;
+  saveState();
+  persistCurrentUserProfile();
+  goToDashboard();
+}
+window.skipOnboarding = skipOnboarding;
+
 function showSummary() {
+  const dashboardPage = document.getElementById('page-dashboard');
+  if (dashboardPage && !window.__datarexDashboardHtml && !dashboardPage.querySelector('.summary-screen')) {
+    window.__datarexDashboardHtml = dashboardPage.innerHTML;
+  }
   const u = state.user || {};
   const industryIcons = {
     'Healthcare': '🏥', 'Finance': '💰', 'Ecommerce': '🛒',
@@ -1465,11 +1717,17 @@ function showSummary() {
     </div>
   `;
 
-  document.getElementById('page-dashboard').innerHTML = html;
+  if (dashboardPage) dashboardPage.innerHTML = html;
 }
 
 function goToDashboard() {
+  const dashboardPage = document.getElementById('page-dashboard');
+  if (dashboardPage?.querySelector('.summary-screen') && window.__datarexDashboardHtml) {
+    dashboardPage.innerHTML = window.__datarexDashboardHtml;
+  }
+  goTo('screen-app', true);
   showPage('dashboard', null, true);
+  history.replaceState(null, '', '#/dashboard');
   showToast('Welcome to your dashboard!', 'success');
 }
 
@@ -1480,33 +1738,23 @@ async function doRegister() {
   // Read all fields up front and clear any prior inline error rows so the
   // form mirrors login's validation UX (red inline message under the
   // offending field plus a toast).
-  const fieldIds = [
-    'register-name', 'register-email', 'register-company',
-    'register-industry', 'register-size',
-    'register-password', 'register-confirm'
-  ];
+  const fieldIds = ['register-email', 'register-password'];
   clearErrors(...fieldIds);
   const val = (id) => (document.getElementById(id)?.value ?? '');
-  const name = val('register-name').trim();
-  const company = val('register-company').trim();
   const email = val('register-email').trim();
   const pw = val('register-password');
-  const pwConfirm = val('register-confirm');
-  const industry = val('register-industry');
-  const size = val('register-size');
-  const regNo = val('register-reg-no').trim();
+  const name = email.split('@')[0] || 'User';
+  const company = '';
+  const industry = '';
+  const size = '1-10';
+  const regNo = '';
 
   const fail = (fieldId, message) => {
     showError(fieldId);
     showToast(message, 'error');
   };
-  if (!name)     { return fail('register-name',     'Please enter your name'); }
   if (!email || !isValidEmail(email)) { return fail('register-email', 'Please enter a valid email'); }
-  if (!company)  { return fail('register-company',  'Please enter company name'); }
-  if (!industry) { return fail('register-industry', 'Please select your industry'); }
-  if (!size)     { return fail('register-size',     'Please select company size'); }
   if (!pw || pw.length < 6) { return fail('register-password', 'Password must be at least 6 characters'); }
-  if (pw !== pwConfirm)     { return fail('register-confirm',  'Passwords do not match'); }
 
   // Save user data to localStorage for login validation
   const users = JSON.parse(localStorage.getItem('datarex_users') || '[]');
@@ -1519,7 +1767,24 @@ async function doRegister() {
     : '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
   // Persist the id on the user record so doLogin's localStorage fallback
   // returns the same id on every subsequent login.
-  users.push({ id: newId, name, company, email, password_hash: pwHash, industry, size, regNo });
+  users.push({
+    id: newId,
+    name,
+    company,
+    email,
+    password_hash: pwHash,
+    industry,
+    size,
+    companySize: size,
+    country: '',
+    officialEmail: '',
+    ssmNumber: '',
+    regNo,
+    website: '',
+    contactNumber: '',
+    businessAddress: '',
+    profileCompleted: false
+  });
   localStorage.setItem('datarex_users', JSON.stringify(users));
 
   // Set current user
@@ -1529,7 +1794,15 @@ async function doRegister() {
     email: email,
     industry: industry,
     companySize: size,
+    size: size,
+    country: '',
+    officialEmail: '',
+    ssmNumber: '',
     regNo: regNo,
+    website: '',
+    contactNumber: '',
+    businessAddress: '',
+    profileCompleted: false,
     id: newId
   };
   state.isLoggedIn = true;
@@ -1571,6 +1844,7 @@ function demoLogin()     {
 
 window.demoLogin = demoLogin;
 window.doLogin = doLogin;
+window.saveProfileCompanyInfo = saveProfileCompanyInfo;
 window.toggleOrgDropdown = toggleOrgDropdown;
 window.openCompaniesTab = openCompaniesTab;
 window.switchOrg = switchOrg;
@@ -1594,7 +1868,7 @@ function launchApp(user) {
 
   const firstName = state.user.name ? state.user.name.split(' ')[0] : 'Demo';
   const sidebarName = document.getElementById('sidebar-name');
-  if (sidebarName) sidebarName.textContent = getRoleDisplayName();
+  if (sidebarName) sidebarName.textContent = state.user.name || state.user.email || getRoleDisplayName();
 
   const sidebarOrg = document.getElementById('sidebar-org');
   if (sidebarOrg) sidebarOrg.textContent = getDisplayCompanyName();
@@ -1625,7 +1899,7 @@ function launchApp(user) {
   goTo('screen-app', true);
 
   const hash = window.location.hash.replace('#/', '');
-  if (hash && !['login', 'onboarding', 'app', 'landing'].includes(hash)) {
+  if (hash && !['login', 'register', 'onboarding', 'app', 'landing'].includes(hash)) {
     showPage(hash, null, true);
   } else {
     showPage('dashboard', null, true);
@@ -1732,6 +2006,39 @@ function renderDashboardOverview({ recordsCount, dpoName }) {
     trainingExpiring: countExpiringTraining(state.trainingRecords || [], 60),
     overdueRequests: getOverdueRequestCount()
   });
+  renderDashboardProfilePrompt();
+}
+
+function renderDashboardProfilePrompt() {
+  const dashboardPage = document.getElementById('page-dashboard');
+  if (!dashboardPage) return;
+  const existing = document.getElementById('dashboard-profile-prompt');
+  if (!isCompanyProfileIncomplete()) {
+    if (existing) existing.remove();
+    return;
+  }
+  if (existing) return;
+
+  const prompt = document.createElement('section');
+  prompt.id = 'dashboard-profile-prompt';
+  prompt.className = 'dashboard-profile-prompt';
+  prompt.innerHTML = `
+    <div class="dashboard-profile-icon">
+      <i class="fa-solid fa-building-user" aria-hidden="true"></i>
+    </div>
+    <div class="dashboard-profile-copy">
+      <strong>Complete your company profile</strong>
+      <span>Add your company name and regulated industry so DataRex can tailor PDPA guidance.</span>
+    </div>
+    <button class="btn btn-primary" type="button" onclick="showPage('profile', document.getElementById('nav-profile'))">Complete profile</button>
+  `;
+
+  const hero = dashboardPage.querySelector('.dashboard-hero');
+  if (hero?.nextSibling) {
+    dashboardPage.insertBefore(prompt, hero.nextSibling);
+  } else {
+    dashboardPage.prepend(prompt);
+  }
 }
 
 function setDashboardText(id, value) {
@@ -2316,12 +2623,12 @@ async function loadDashboardActivity() {
   const accountId = getEffectiveAccountId();
   const list = document.getElementById('user-activity-list');
   if (!accountId) {
-    if (list) list.innerHTML = '<li><span class="activity-action">No recent activity yet</span></li>';
+    if (list) list.innerHTML = '<li class="activity-empty">No recent activity yet</li>';
     return;
   }
   const supabase = getSupabaseClient();
   if (!supabase) {
-    if (list) list.innerHTML = '<li><span class="activity-action">No recent activity yet</span></li>';
+    if (list) list.innerHTML = '<li class="activity-empty">No recent activity yet</li>';
     return;
   }
   const { data, error } = await supabase
@@ -2333,16 +2640,32 @@ async function loadDashboardActivity() {
   if (error) { JARVIS_LOG.error('Dashboard', 'Activity load', error); return; }
   if (!list) return;
   if (!data?.length) {
-    list.innerHTML = '<li><span class="activity-action">No recent activity yet</span></li>';
+    list.innerHTML = '<li class="activity-empty">No recent activity yet</li>';
     return;
   }
-  list.innerHTML = (data || []).map(r => `
-    <li>
-      <span class="activity-user">${escapeHtmlForDashboard(r.user_email || 'someone')}</span>
-      <span class="activity-action">${escapeHtmlForDashboard(r.action)} · ${escapeHtmlForDashboard(r.component)}</span>
-      <span class="activity-time">${timeAgo(r.created_at)}</span>
+  list.innerHTML = (data || []).map(r => {
+    const action = String(r.action || 'Activity');
+    const component = String(r.component || 'System');
+    const tone = /success|created|updated|saved/i.test(action) ? 'success'
+      : /fail|error|denied/i.test(action) ? 'danger'
+        : 'neutral';
+    return `
+    <li class="activity-row">
+      <span class="activity-icon ${tone}">
+        <i class="fa-solid ${tone === 'danger' ? 'fa-triangle-exclamation' : 'fa-check'}" aria-hidden="true"></i>
+      </span>
+      <span class="activity-copy">
+        <span class="activity-title">
+          <span class="activity-user" title="${escapeHtmlForDashboard(r.user_email || 'someone')}">${escapeHtmlForDashboard(r.user_email || 'someone')}</span>
+          <span class="activity-status ${tone}">${escapeHtmlForDashboard(action)}</span>
+        </span>
+        <span class="activity-meta">
+          <span>${escapeHtmlForDashboard(component)}</span>
+          <span>${timeAgo(r.created_at)}</span>
+        </span>
+      </span>
     </li>
-  `).join('');
+  `}).join('');
 }
 
 function timeAgo(iso) {
@@ -4560,8 +4883,9 @@ async function renderDocuments() {
   const supabase = getSupabaseClient();
   const localDocs = readLocalDocuments().filter(docMatchesScope);
   let docs = localDocs;
+  const cloudSession = await getCurrentSupabaseSession();
 
-  if (supabase && isSupabaseConfigured() && state.user.id) {
+  if (supabase && isSupabaseConfigured() && cloudSession?.user?.id && state.user.id) {
     const filterCat = document.getElementById('doc-filter')?.value || '';
     const accountId = getEffectiveAccountId();
     let query = supabase
@@ -4738,11 +5062,12 @@ async function handleFileUpload() {
   const category = categorySelect.value;
   const uploaderName = state.user?.name || 'Current user';
   const { accountId, userId } = getDocumentScope();
+  const cloudSession = await getCurrentSupabaseSession();
   // Best-effort cloud sync. localStorage is always written. We attempt the
   // Supabase upload whenever there is a real session; if the user has no
   // user_profiles row and account_id is missing, the DB insert will throw
   // (NOT NULL) and the catch block keeps the file as a Local copy.
-  const canTrySync = Boolean(supabase && isSupabaseConfigured() && userId);
+  const canTrySync = Boolean(supabase && isSupabaseConfigured() && cloudSession?.user?.id && userId);
   let syncedCount = 0;
   let localOnlyCount = 0;
   const failures = [];
@@ -4927,6 +5252,7 @@ async function loadNavPermissionsFromDB(role) {
 async function loadNavPermissions() {
   const select = document.getElementById('nav-role-select');
   const currentRole = select?.value || 'Accountadmin';
+  const hardBlocked = ROLE_HARD_BLOCKS[currentRole] || new Set();
 
   const matrix = document.getElementById('nav-permissions-matrix');
   if (!matrix) return;
@@ -4956,7 +5282,7 @@ async function loadNavPermissions() {
 
   sections.forEach(section => {
     const items = NAV_ITEMS.filter(i => i.section === section);
-    const enabledCount = items.filter(i => savedConfig[i.id] !== false).length;
+    const enabledCount = items.filter(i => !hardBlocked.has(i.id) && savedConfig[i.id] !== false).length;
 
     html += `
       <div class="perm-section">
@@ -4964,16 +5290,17 @@ async function loadNavPermissions() {
         <div class="perm-grid">`;
 
     items.forEach(item => {
-      const isVisible = savedConfig[item.id] !== false;
+      const isLocked = hardBlocked.has(item.id);
+      const isVisible = !isLocked && savedConfig[item.id] !== false;
       const color = sectionColors[section] || 'blue';
       html += `
-        <div class="perm-card">
+        <div class="perm-card${isLocked ? ' is-locked' : ''}">
           <div class="perm-card-label">
             <span class="perm-card-icon ${color}">${sectionIcons[section] || '📁'}</span>
-            <span>${item.label}</span>
+            <span>${item.label}${isLocked ? ' <small style="color:var(--muted);font-weight:600;">Locked</small>' : ''}</span>
           </div>
           <label class="toggle-wrap">
-            <input type="checkbox" class="nav-perm-toggle" data-nav="${item.id}" ${isVisible ? 'checked' : ''}>
+            <input type="checkbox" class="nav-perm-toggle" data-nav="${item.id}" ${isVisible ? 'checked' : ''} ${isLocked ? 'disabled' : ''}>
             <span class="toggle-slider"></span>
           </label>
         </div>`;
@@ -4985,17 +5312,21 @@ async function loadNavPermissions() {
   matrix.innerHTML = html;
 }
 
-async function saveNavConfig() {
+async function saveNavConfig(evt) {
   const select = document.getElementById('nav-role-select');
   const currentRole = select?.value || 'Accountadmin';
+  const hardBlocked = ROLE_HARD_BLOCKS[currentRole] || new Set();
 
-  const btn = event.target;
-  btn.disabled = true;
-  btn.innerHTML = '⏳ Saving...';
+  const btn = evt?.target || document.querySelector('#page-access button[onclick*="saveNavConfig"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Saving...';
+  }
 
   const config = {};
-  document.querySelectorAll('.nav-perm-toggle').forEach(toggle => {
-    config[toggle.dataset.nav] = toggle.checked;
+  NAV_ITEMS.forEach(item => {
+    const toggle = document.querySelector(`.nav-perm-toggle[data-nav="${item.id}"]`);
+    config[item.id] = hardBlocked.has(item.id) ? false : Boolean(toggle?.checked);
   });
 
   if (!state.navPermissions) state.navPermissions = {};
@@ -5008,8 +5339,10 @@ async function saveNavConfig() {
       const accountId = getEffectiveAccountId() || state.accountId;
       if (!accountId) {
         showToast('No account selected — cannot save permissions.', 'error');
-        btn.disabled = false;
-        btn.innerHTML = '💾 Save Permissions';
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '💾 Save Permissions';
+        }
         return;
       }
       const records = NAV_ITEMS.map(item => ({
@@ -5025,16 +5358,33 @@ async function saveNavConfig() {
 
       if (error) {
         console.error('Failed to save permissions:', error);
+        showToast('Failed to save permissions: ' + error.message, 'error');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '💾 Save Permissions';
+        }
+        return;
       }
     } catch (err) {
       console.error('Save error:', err);
+      showToast('Failed to save permissions: ' + (err.message || String(err)), 'error');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '💾 Save Permissions';
+      }
+      return;
     }
   }
 
-  btn.disabled = false;
-  btn.innerHTML = '💾 Save Permissions';
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '💾 Save Permissions';
+  }
   showSuccess('Permissions saved to database!');
-  loadNavPermissions();
+  await loadNavPermissions();
+  if ((state.role || state.currentUserLevel || 'Accountadmin') === currentRole) {
+    applyNavPermissions();
+  }
 }
 
 function applyNavPermissions() {
@@ -5945,6 +6295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target.id === 'demo-btn' || e.target.closest('#demo-btn')) demoLogin();
     if (e.target.id === 'login-btn' || e.target.closest('#login-btn')) doLogin();
     if (e.target.id === 'finish-onboard' || e.target.closest('#finish-onboard')) finishOnboard();
+    if (e.target.id === 'skip-onboard' || e.target.closest('#skip-onboard')) skipOnboarding();
   });
 
   const dpoForm = document.getElementById('dpo-form');
