@@ -106,14 +106,8 @@ const state = {
     createdAt: null,
     expiresAt: null
   },
-  checks: {
-    'collect-personal': false, 'appoint-dpo': false,
-    'ask-consent': false, 'withdraw-consent': false,
-    'store-secure': false, 'control-access': false,
-    'delete-data': false, 'privacy-policy': false,
-    'policy-findable': false, 'breach-plan': false,
-    'records-confidential': false, 'explicit-consent-medical': false
-  },
+  checks: {},
+  checklistMeta: {},
   records: [
     { type:'Name, email, phone', purpose:'Respond to enquiries', storage:'Website DB, email inbox', access:'Admin, sales team', retention:6, consent:true, note:'' },
     { type:'Patient medical record', purpose:'Medical treatment', storage:'Clinic management system', access:'Doctors, clinic admin', retention:84, consent:true, note:'Sensitive — restricted access' },
@@ -154,7 +148,7 @@ const PAGES_TO_LOAD = [
   '16__audit', '17__alerts', '18__cases', '19__monitoring', '21__processing',
   '20__accounts', '22__people', '23__profile'
 ];
-const PAGE_ASSET_VERSION = '45';
+const PAGE_ASSET_VERSION = '46';
 
 const REGULATED_INDUSTRIES = [
   'Communications',
@@ -266,6 +260,11 @@ function loadState() {
       }
       if (parsed.bizType) state.bizType = parsed.bizType;
       if (parsed.checks) Object.assign(state.checks, parsed.checks);
+      if (parsed.checklistMeta && Object.keys(parsed.checklistMeta).length) state.checklistMeta = parsed.checklistMeta;
+      else {
+        const savedChecklistMeta = localStorage.getItem('datarex_checklist_meta');
+        if (savedChecklistMeta) state.checklistMeta = JSON.parse(savedChecklistMeta);
+      }
       if (parsed.records) state.records = parsed.records;
       else {
         const savedRecords = localStorage.getItem('datarex_records');
@@ -298,6 +297,9 @@ function saveState() {
   // several uploads.
   const { documents: _docs, ...rest } = state;
   localStorage.setItem('dataRexState', JSON.stringify(rest));
+  if (state.checklistMeta && Object.keys(state.checklistMeta).length) {
+    localStorage.setItem('datarex_checklist_meta', JSON.stringify(state.checklistMeta));
+  }
 }
 
 function getDisplayCompanyName(preferredName = '') {
@@ -881,27 +883,65 @@ async function apiFetch(endpoint, options = {}) {
    STATIC DATA
    ─────────────────────────────────────────────── */
 const CHECKLIST = [
-  { section:'Basics', items:[
-    { id:'collect-personal', q:'Do you collect personal data?', hint:'Personal data is any info that identifies a person — names, emails, IDs, photos.' },
-    { id:'appoint-dpo', q:'Have you appointed a DPO?', hint:'Every organisation handling personal data should have a Data Protection Officer.' }
+  { section:'Company Profile & Applicability', id:'profile-applicability', items:[
+    { id:'profile-complete', q:'Company profile is complete', hint:'Company name, industry, company size, country, and official email are filled.', evidence:'Completed profile record' },
+    { id:'industry-code-reviewed', q:'Applicable industry code/checklist has been reviewed', hint:'Confirm whether sector-specific PDPA requirements apply to the selected industry.', evidence:'Applicability review note' }
   ]},
-  { section:'Consent', items:[
-    { id:'ask-consent', q:'Do you ask for consent before collecting data?', hint:'Consent must be freely given, specific, informed, and unambiguous.' },
-    { id:'withdraw-consent', q:'Can people withdraw consent easily?', hint:'Provide a clear, simple way to opt out at any time.' }
+  { section:'DPO Appointment', id:'dpo-appointment', items:[
+    { id:'dpo-appointed', q:'DPO has been appointed', hint:'Assign a responsible person for personal data protection governance.', evidence:'DPO appointment record' },
+    { id:'dpo-contact-published', q:'DPO/contact channel is published', hint:'Publish a contact channel in the privacy notice or another official channel.', evidence:'Published notice or contact page' }
   ]},
-  { section:'Security', items:[
-    { id:'store-secure', q:'Is personal data stored securely?', hint:'Use encryption, backups, and access controls.' },
-    { id:'control-access', q:'Do you restrict who can access data?', hint:'Only staff with a legitimate reason should have access.' },
-    { id:'delete-data', q:'Do you delete data when no longer needed?', hint:'Set a retention schedule and stick to it.' }
+  { section:'Privacy Notice', id:'privacy-notice', items:[
+    { id:'privacy-notice-created', q:'Privacy notice exists', hint:'Create a notice explaining collection, purpose, disclosure, retention, and rights.', evidence:'Privacy notice document' },
+    { id:'privacy-notice-published', q:'Privacy notice is published and accessible', hint:'Make the notice easy to find from websites, forms, and customer touchpoints.', evidence:'Published URL or screenshot' }
   ]},
-  { section:'Transparency', items:[
-    { id:'privacy-policy', q:'Do you have a Privacy Policy?', hint:'It should explain what you collect, why, and how you protect it.' },
-    { id:'policy-findable', q:'Is your Privacy Policy easy to find?', hint:'Link it from your website footer and sign-up forms.' }
+  { section:'Consent Management', id:'consent-management', items:[
+    { id:'consent-captured', q:'Consent capture process is documented', hint:'Document when consent is needed and how it is captured.', evidence:'Consent form or system screenshot' },
+    { id:'withdrawal-process', q:'Withdrawal of consent process exists', hint:'Provide a practical way for individuals to withdraw consent.', evidence:'Withdrawal SOP or form' }
   ]},
-  { section:'Incident Response', items:[
-    { id:'breach-plan', q:'Do you have a data breach response plan?', hint:'Know who to notify and within what timeframe (72h for PDPA).' },
-    { id:'records-confidential', q:'Are physical records stored confidentially?', hint:'Lock paper documents; restrict access.' },
-    { id:'explicit-consent-medical', q:'Do you get explicit consent for sensitive data?', hint:'Medical, financial, and biometric data require higher consent standards.' }
+  { section:'Personal Data Inventory / Data Register', id:'data-inventory', items:[
+    { id:'data-register-created', q:'Personal data inventory/data register is created', hint:'List personal data categories, systems, purposes, storage, access, and retention.', evidence:'Completed data register' },
+    { id:'purpose-legal-basis-mapped', q:'Purpose and legal basis are mapped per data category', hint:'Each data category should have a documented purpose and processing basis.', evidence:'Purpose mapping record' }
+  ]},
+  { section:'Data Subject Rights', id:'data-subject-rights', items:[
+    { id:'rights-request-process', q:'Data subject request process is documented', hint:'Document how access, correction, withdrawal, and other requests are handled.', evidence:'DSR SOP' },
+    { id:'rights-request-log', q:'Data subject request log is maintained', hint:'Track request dates, owners, outcomes, and response evidence.', evidence:'Request log' }
+  ]},
+  { section:'Data Breach Notification', id:'breach-notification', items:[
+    { id:'breach-response-plan', q:'Data breach response plan exists', hint:'Define incident intake, escalation, assessment, notification, and remediation steps.', evidence:'Breach response plan' },
+    { id:'breach-notification-template', q:'Notification template and escalation path are ready', hint:'Prepare regulator/customer notification templates and internal escalation contacts.', evidence:'Notification template' }
+  ]},
+  { section:'DPIA / Risk Assessment', id:'dpia-risk', items:[
+    { id:'dpia-screening-process', q:'DPIA screening process exists', hint:'Screen new or changed processing activities for privacy risk.', evidence:'DPIA screening checklist' },
+    { id:'high-risk-processing-reviewed', q:'High-risk processing has been reviewed', hint:'Review sensitive, large-scale, automated, or high-impact processing.', evidence:'DPIA or risk assessment record' }
+  ]},
+  { section:'Data Protection by Design', id:'dpbd', items:[
+    { id:'privacy-by-design-checklist', q:'Data Protection by Design checklist is used for new projects', hint:'Build privacy checks into project and system launch workflows.', evidence:'Project privacy checklist' },
+    { id:'project-privacy-review', q:'Product/system privacy review evidence is retained', hint:'Keep review approvals and mitigation decisions for new systems.', evidence:'Review approval record' }
+  ]},
+  { section:'Cross-Border Transfer', id:'cross-border-transfer', items:[
+    { id:'transfer-register', q:'Cross-border transfer register exists', hint:'Track destination countries, recipients, purposes, and data categories.', evidence:'Transfer register' },
+    { id:'transfer-safeguards', q:'Transfer safeguards are documented', hint:'Document contracts, safeguards, or other controls for international transfers.', evidence:'Transfer safeguard record' }
+  ]},
+  { section:'Vendor / Data Processor Management', id:'vendor-management', items:[
+    { id:'processor-register', q:'Vendor/data processor register exists', hint:'List processors, processing purposes, data handled, and review status.', evidence:'Processor register' },
+    { id:'processor-contracts', q:'Processor contracts include data protection clauses', hint:'Ensure processor agreements include confidentiality, security, and data handling obligations.', evidence:'Contract clause evidence' }
+  ]},
+  { section:'Retention & Disposal', id:'retention-disposal', items:[
+    { id:'retention-schedule', q:'Retention schedule exists', hint:'Define how long each data category is retained.', evidence:'Retention schedule' },
+    { id:'disposal-process', q:'Secure disposal process is documented', hint:'Document how electronic and physical data are securely deleted or destroyed.', evidence:'Disposal SOP' }
+  ]},
+  { section:'Security Safeguards', id:'security-safeguards', items:[
+    { id:'access-controls', q:'Access controls are implemented', hint:'Restrict personal data access to authorized roles and users.', evidence:'Access control review' },
+    { id:'security-review', q:'Security safeguards are reviewed periodically', hint:'Review encryption, backups, logging, permissions, and incident controls.', evidence:'Security review record' }
+  ]},
+  { section:'Training & Awareness', id:'training-awareness', items:[
+    { id:'staff-training', q:'Staff PDPA training is completed', hint:'Train employees who handle personal data.', evidence:'Training completion record' },
+    { id:'training-evidence', q:'Training attendance/evidence is retained', hint:'Keep attendance records, materials, or completion certificates.', evidence:'Training evidence' }
+  ]},
+  { section:'Audit Evidence & Management Reporting', id:'audit-evidence-reporting', items:[
+    { id:'evidence-vault', q:'Evidence is stored for completed checklist items', hint:'Attach or reference proof for completed compliance controls.', evidence:'Evidence repository' },
+    { id:'management-report', q:'Management/audit report can be produced', hint:'Prepare a report summarizing status, gaps, owners, and evidence.', evidence:'Management report' }
   ]}
 ];
 
@@ -1582,7 +1622,7 @@ async function doLogin() {
       if (state.role === 'Superadmin') {
         if (typeof navigateTo === 'function') navigateTo('accounts');
         else if (typeof showPage === 'function') showPage('accounts');
-      } else if (isCompanyProfileIncomplete()) {
+      } else if (isCompanyProfileIncomplete() && !state.user?.profileSkipped) {
         showPage('profile', document.getElementById('nav-profile'), true);
         history.replaceState(null, '', '#/profile');
       }
@@ -1843,6 +1883,8 @@ function demoLogin()     {
 window.demoLogin = demoLogin;
 window.doLogin = doLogin;
 window.saveProfileCompanyInfo = saveProfileCompanyInfo;
+window.updateChecklistMeta = updateChecklistMeta;
+window.renderChecklist = renderChecklist;
 window.toggleOrgDropdown = toggleOrgDropdown;
 window.openCompaniesTab = openCompaniesTab;
 window.switchOrg = switchOrg;
@@ -2017,7 +2059,7 @@ function renderDashboardOverview({ recordsCount, dpoName }) {
     recordsCount,
     missingConsent: (state.records || []).filter(r => !Boolean(r.consent || r.consent_obtained)).length,
     highRisk,
-    pendingTasks: Math.max(Object.values(state.checks || {}).filter(v => !v).length, 0),
+    pendingTasks: getChecklistItemIds().filter(id => state.checks[id] !== true).length,
     trainingExpiring: countExpiringTraining(state.trainingRecords || [], 60),
     overdueRequests: getOverdueRequestCount()
   });
@@ -2108,8 +2150,9 @@ function formatDashboardDate(raw) {
    SCORE & STATS
    ─────────────────────────────────────────────── */
 function updateScore() {
-  const total = Object.keys(state.checks).length;
-  const done  = Object.values(state.checks).filter(Boolean).length;
+  const checklistIds = getChecklistItemIds();
+  const total = checklistIds.length;
+  const done  = checklistIds.filter(id => state.checks[id]).length;
   const pct   = Math.round((done / total) * 100);
 
   const scoreDisplay = document.getElementById('score-display');
@@ -2154,6 +2197,11 @@ function toggleAllChecklist(status) {
   CHECKLIST.forEach(section => {
     section.items.forEach(item => {
       state.checks[item.id] = status;
+      const meta = getChecklistMeta(item.id);
+      state.checklistMeta[item.id] = {
+        ...meta,
+        status: status ? 'Done' : 'Not Started'
+      };
     });
   });
   saveState();
@@ -2161,7 +2209,46 @@ function toggleAllChecklist(status) {
   updateScore();
 }
 
+function getChecklistItemIds() {
+  return CHECKLIST.flatMap(section => section.items.map(item => item.id));
+}
+
+function getChecklistMeta(itemId) {
+  if (!state.checklistMeta) state.checklistMeta = {};
+  if (!state.checklistMeta[itemId]) {
+    state.checklistMeta[itemId] = {
+      status: state.checks[itemId] ? 'Done' : 'Not Started',
+      owner: '',
+      dueDate: '',
+      notes: '',
+      evidence: '',
+      reviewedDate: ''
+    };
+  }
+  return state.checklistMeta[itemId];
+}
+
+function updateChecklistMeta(itemId, patch) {
+  const meta = getChecklistMeta(itemId);
+  state.checklistMeta[itemId] = { ...meta, ...patch };
+  state.checks[itemId] = state.checklistMeta[itemId].status === 'Done';
+  saveState();
+  updateScore();
+  const itemEl = document.querySelector(`.check-item[data-item-id="${itemId}"]`);
+  if (itemEl) {
+    itemEl.classList.toggle('done', Boolean(state.checks[itemId]));
+    const box = itemEl.querySelector('.checkbox');
+    if (box) {
+      box.innerHTML = state.checks[itemId]
+        ? '<svg width="13" height="13" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'
+        : '';
+    }
+  }
+}
+
+let _checklistRenderGen = 0;
 async function renderChecklist() {
+  const myGen = ++_checklistRenderGen;
   const body = document.getElementById('checklist-body');
   if (!body) return;
   body.innerHTML = '';
@@ -2173,12 +2260,21 @@ async function renderChecklist() {
       .select('*')
       .eq('user_id', state.user.id);
 
+    if (myGen !== _checklistRenderGen) return;
+
     if (!error && data) {
       data.forEach(item => {
         state.checks[item.item_id] = item.completed;
+        const meta = getChecklistMeta(item.item_id);
+        state.checklistMeta[item.item_id] = {
+          ...meta,
+          status: item.completed ? 'Done' : meta.status
+        };
       });
     }
   }
+
+  if (myGen !== _checklistRenderGen) return;
 
   CHECKLIST.forEach(section => {
     const done  = section.items.filter(i => state.checks[i.id]).length;
@@ -2189,15 +2285,54 @@ async function renderChecklist() {
 
     section.items.forEach(item => {
       const checked = state.checks[item.id];
+      const meta = getChecklistMeta(item.id);
       const el = document.createElement('div');
       el.className = 'check-item' + (checked ? ' done' : '');
+      el.dataset.itemId = item.id;
       el.innerHTML = `
-        <div class="checkbox">
-          ${checked ? '<svg width="13" height="13" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+        <div class="check-main">
+          <button class="checkbox" type="button" aria-label="Toggle ${escapeHtmlForDashboard(item.q)}">
+            ${checked ? '<svg width="13" height="13" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+          </button>
+          <div class="check-text">
+            <h4>${escapeHtmlForDashboard(item.q)}</h4>
+            <p>${escapeHtmlForDashboard(item.hint || '')}</p>
+            ${item.evidence ? `<span class="check-evidence-hint">Suggested evidence: ${escapeHtmlForDashboard(item.evidence)}</span>` : ''}
+          </div>
         </div>
-        <div class="check-text"><h4>${item.q}</h4><p>${item.hint}</p></div>`;
-      el.addEventListener('click', async () => {
+        <div class="check-meta-grid">
+          <label>
+            <span>Status</span>
+            <select class="check-status-select" onchange="updateChecklistMeta('${item.id}', { status: this.value })">
+              ${['Not Started', 'In Progress', 'Done', 'Not Applicable'].map(status => `<option value="${status}" ${meta.status === status ? 'selected' : ''}>${status}</option>`).join('')}
+            </select>
+          </label>
+          <label>
+            <span>Owner</span>
+            <input class="check-owner-input" type="text" value="${escapeHtmlForDashboard(meta.owner)}" placeholder="Owner" oninput="updateChecklistMeta('${item.id}', { owner: this.value })">
+          </label>
+          <label>
+            <span>Due Date</span>
+            <input class="check-due-date-input" type="date" value="${escapeHtmlForDashboard(meta.dueDate)}" onchange="updateChecklistMeta('${item.id}', { dueDate: this.value })">
+          </label>
+          <label>
+            <span>Last Reviewed</span>
+            <input class="check-reviewed-date-input" type="date" value="${escapeHtmlForDashboard(meta.reviewedDate)}" onchange="updateChecklistMeta('${item.id}', { reviewedDate: this.value })">
+          </label>
+          <label class="check-meta-wide">
+            <span>Evidence</span>
+            <input class="check-evidence-input" type="text" value="${escapeHtmlForDashboard(meta.evidence)}" placeholder="Document name, URL, or evidence reference" oninput="updateChecklistMeta('${item.id}', { evidence: this.value })">
+          </label>
+          <label class="check-meta-wide">
+            <span>Notes</span>
+            <textarea class="check-notes-input" rows="2" placeholder="Notes, gap, or next action" oninput="updateChecklistMeta('${item.id}', { notes: this.value })">${escapeHtmlForDashboard(meta.notes)}</textarea>
+          </label>
+        </div>`;
+      el.querySelector('.checkbox')?.addEventListener('click', async (evt) => {
+        evt.stopPropagation();
         state.checks[item.id] = !state.checks[item.id];
+        const nextStatus = state.checks[item.id] ? 'Done' : 'Not Started';
+        state.checklistMeta[item.id] = { ...getChecklistMeta(item.id), status: nextStatus };
         saveState();
         renderChecklist();
         updateScore();
@@ -6058,7 +6193,7 @@ async function renderAudit() {
 
   // Only count the items that exist in the current CHECKLIST so legacy keys
   // from older builds don't skew total/done.
-  const checklistIds = CHECKLIST.flatMap(s => s.items.map(i => i.id));
+  const checklistIds = getChecklistItemIds();
   const total = checklistIds.length;
   const done = checklistIds.filter(id => state.checks[id]).length;
   const pct = total ? Math.round((done / total) * 100) : 0;

@@ -1,0 +1,82 @@
+<div id="page-profile" class="page-shell profile-page">
+  <div class="profile-header">
+    <div>
+      <div class="page-title">Profile</div>
+      <div class="page-sub">Complete your company details so DataRex can tailor PDPA guidance to your regulated sector.</div>
+    </div>
+    <button class="btn btn-outline" type="button" onclick="showPage('dashboard', document.getElementById('nav-dashboard'))">Back to dashboard</button>
+  </div>
+
+  <section class="profile-panel">
+    <div class="profile-panel-head">
+      <div>
+        <h2>Company information</h2>
+        <p>Required company details help DataRex tailor PDPA guidance to your regulated sector.</p>
+      </div>
+    </div>
+
+    <div id="profile-save-status" class="profile-save-status" hidden></div>
+
+    <div class="profile-form-grid">
+      <label class="profile-field">
+        <span>Company Name</span>
+        <input id="profile-company" class="form-input" type="text" placeholder="e.g. Regulated Test Sdn Bhd" autocomplete="organization">
+      </label>
+
+      <label class="profile-field">
+        <span>Industry / Business Type</span>
+        <select id="profile-industry" class="form-input"></select>
+      </label>
+
+      <label class="profile-field">
+        <span>Company Size</span>
+        <div class="profile-select-control">
+          <select id="profile-company-size" class="form-input profile-select">
+            <option value="1-10">1 - 10</option>
+            <option value="11-50">11 - 50</option>
+            <option value="51-200">51 - 200</option>
+            <option value="201-500">201 - 500</option>
+            <option value="501-1000">501 - 1000</option>
+            <option value="1000+">1000+</option>
+          </select>
+          <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </div>
+      </label>
+
+      <label class="profile-field">
+        <span>Country</span>
+        <input id="profile-country" class="form-input" type="text" placeholder="e.g. Malaysia" autocomplete="country-name">
+      </label>
+
+      <label class="profile-field">
+        <span>Official Email</span>
+        <input id="profile-official-email" class="form-input" type="email" placeholder="privacy@company.com" autocomplete="email">
+      </label>
+
+      <label class="profile-field">
+        <span>SSM Registration Number <small>Optional</small></span>
+        <input id="profile-ssm-number" class="form-input" type="text" placeholder="e.g. 202401000001">
+      </label>
+
+      <label class="profile-field">
+        <span>Website <small>Optional</small></span>
+        <input id="profile-website" class="form-input" type="url" placeholder="https://company.com" autocomplete="url">
+      </label>
+
+      <label class="profile-field">
+        <span>Contact Number <small>Optional</small></span>
+        <input id="profile-contact-number" class="form-input" type="tel" placeholder="+60312345678" autocomplete="tel">
+      </label>
+
+      <label class="profile-field profile-field-full">
+        <span>Business Address <small>Optional</small></span>
+        <textarea id="profile-business-address" class="form-input" rows="3" placeholder="Business address"></textarea>
+      </label>
+    </div>
+
+    <div class="profile-actions">
+      <button class="btn btn-primary" id="profile-save-btn" type="button" onclick="saveProfileCompanyInfo()">Save profile</button>
+      <button class="btn btn-outline" type="button" onclick="showPage('dashboard', document.getElementById('nav-dashboard'))">Back to dashboard</button>
+    </div>
+  </section>
+</div>

@@ -15,7 +15,7 @@ with sync_playwright() as p:
     page.evaluate("demoLogin()")
     page.wait_for_selector("#screen-app", timeout=10000)
     page.wait_for_timeout(800)
-    page.click("#nav-documents"); page.wait_for_timeout(800)
+    page.evaluate("showPage('documents')"); page.wait_for_timeout(800)
 
     # Plant a "local" doc with dataUrl AND simulate a "synced" supabase
     # response with the same id (no dataUrl), then run mergeDocuments.

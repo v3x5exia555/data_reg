@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DataRex — PDPA Compliance Portal</title>
-  <link rel="stylesheet" href="css/style.css?v=26">
+  <link rel="stylesheet" href="css/style.css?v=27">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -242,6 +242,12 @@
               <div class="user-org" id="sidebar-org">Acme Pte Ltd</div>
             </div>
           </div>
+          <div class="nav-item sidebar-profile-link" id="nav-profile" onclick="showPage('profile', this)">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            Profile
+          </div>
           <button class="logout-btn" onclick="doLogout()">
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
@@ -275,6 +281,6 @@
   <script src="js/dpo_logic.js?v=14"></script>
   <script src="js/sample_data.js?v=1"></script>
 
-  <script src="js/app.js?v=63"></script>
+  <script src="js/app.js?v=65"></script>
 </body>
 </html>

@@ -43,7 +43,7 @@ with sync_playwright() as p:
     print(f"  length = {len(uid_first)}")
 
     # Upload a doc
-    page.click("#nav-documents")
+    page.evaluate("showPage('documents')")
     page.wait_for_timeout(800)
     with tempfile.NamedTemporaryFile(prefix="reg-", suffix=".pdf", delete=False) as f:
         f.write(b"%PDF-1.4 reg test\n"); tmp = f.name
@@ -74,7 +74,7 @@ with sync_playwright() as p:
     print(f"[after relogin] state.user.id = {uid_second}")
     print(f"  unstable? {uid_first != uid_second}")
 
-    page.click("#nav-documents")
+    page.evaluate("showPage('documents')")
     page.wait_for_timeout(1500)
     rows2 = page.query_selector_all("#documents-list table tbody tr")
     print(f"[relogin documents] rows={len(rows2)}")
@@ -104,7 +104,7 @@ with sync_playwright() as p:
         uid_third = page.evaluate("state.user.id")
         print(f"  after re-login: {uid_third}")
 
-    page.click("#nav-documents")
+    page.evaluate("showPage('documents')")
     page.wait_for_timeout(1500)
     rows3 = page.query_selector_all("#documents-list table tbody tr")
     print(f"[after reload+login] rows={len(rows3)}")

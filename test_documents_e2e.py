@@ -55,7 +55,7 @@ with sync_playwright() as p:
       localStorage.removeItem('datarex_documents');
     """)
 
-    page.click("#nav-documents"); page.wait_for_timeout(1200)
+    page.evaluate("showPage('documents')"); page.wait_for_timeout(1200)
     print(f"\n[1] Legacy recovery: rows={len(rows(page))}, names={names(page)}")
     assert "old-privacy-policy.pdf" in names(page), "legacy doc must be recovered"
 
@@ -92,7 +92,7 @@ with sync_playwright() as p:
     if not page.evaluate("state.isLoggedIn === true"):
         page.wait_for_selector("#demo-btn", timeout=10000, state="attached")
         page.evaluate("demoLogin()"); page.wait_for_timeout(800)
-    page.click("#nav-documents"); page.wait_for_timeout(1500)
+    page.evaluate("showPage('documents')"); page.wait_for_timeout(1500)
     after = names(page)
     print(f"[5] After reload:         rows={len(rows(page))}, names={after}")
     assert "old-privacy-policy.pdf" in after

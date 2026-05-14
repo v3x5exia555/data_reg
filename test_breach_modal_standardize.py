@@ -85,7 +85,7 @@ def demo_login(page):
 
 
 def open_breach_modal(page):
-    page.click("#nav-breachlog")
+    page.evaluate("showPage('breachlog')")
     page.wait_for_selector("#page-breachlog", timeout=5000)
     page.wait_for_timeout(400)
     page.click("text=Record Breach")

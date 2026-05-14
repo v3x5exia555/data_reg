@@ -8,134 +8,39 @@
       <div id="register-form-step">
         <div class="auth-header">
           <h2 class="auth-title">Create Account</h2>
-          <p class="auth-sub">Start your 14-day free trial</p>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label>Full Name</label>
-            <div class="input-wrap">
-              <span class="input-icon"><i class="fa-solid fa-user"></i></span>
-              <input type="text" id="register-name" class="form-input" placeholder="Your name" autocomplete="name">
-            </div>
-            <div class="error-msg" id="register-name-error">
-              <i class="fa-solid fa-circle-exclamation"></i> Please enter your name
-            </div>
+        <div class="form-group">
+          <label>Work Email</label>
+          <div class="input-wrap">
+            <span class="input-icon"><i class="fa-solid fa-envelope"></i></span>
+            <input type="email" id="register-email" class="form-input" placeholder="name@company.com" autocomplete="email">
           </div>
-
-          <div class="form-group">
-            <label>Work Email</label>
-            <div class="input-wrap">
-              <span class="input-icon"><i class="fa-solid fa-envelope"></i></span>
-              <input type="email" id="register-email" class="form-input" placeholder="name@company.com" autocomplete="email">
-            </div>
-            <div class="error-msg" id="register-email-error">
-              <i class="fa-solid fa-circle-exclamation"></i> Please enter a valid email
-            </div>
+          <div class="error-msg" id="register-email-error">
+            <i class="fa-solid fa-circle-exclamation"></i> Please enter a valid email
           </div>
         </div>
 
         <div class="form-group">
-          <label>Company Name</label>
+          <label>Password</label>
           <div class="input-wrap">
-            <span class="input-icon"><i class="fa-solid fa-building"></i></span>
-            <input type="text" id="register-company" class="form-input" placeholder="Your organization" autocomplete="organization">
+            <span class="input-icon"><i class="fa-solid fa-lock"></i></span>
+            <input type="password" id="register-password" class="form-input" placeholder="Min 8 characters" autocomplete="new-password" oninput="updatePasswordStrength(this.value)">
+            <button class="pw-toggle" onclick="togglePassword('register-password', this)" type="button" aria-label="Show password">
+              <i class="fa-solid fa-eye"></i>
+            </button>
           </div>
-          <div class="error-msg" id="register-company-error">
-            <i class="fa-solid fa-circle-exclamation"></i> Please enter your company name
+          <div class="password-strength">
+            <div class="strength-bars">
+              <div class="strength-bar" id="strength-bar-1"></div>
+              <div class="strength-bar" id="strength-bar-2"></div>
+              <div class="strength-bar" id="strength-bar-3"></div>
+              <div class="strength-bar" id="strength-bar-4"></div>
+            </div>
+            <span class="strength-text" id="strength-text">Enter a password</span>
           </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Industry</label>
-            <div class="input-wrap">
-              <span class="input-icon"><i class="fa-solid fa-industry"></i></span>
-              <select id="register-industry" class="form-input">
-                <option value="">Select industry</option>
-                <option value="Technology">Technology</option>
-                <option value="Finance">Finance &amp; Banking</option>
-                <option value="Healthcare">Healthcare</option>
-                <option value="Retail">Retail &amp; E-commerce</option>
-                <option value="Education">Education</option>
-                <option value="Manufacturing">Manufacturing</option>
-                <option value="Hospitality">Hospitality &amp; F&amp;B</option>
-                <option value="Professional Services">Professional Services</option>
-                <option value="Real Estate">Real Estate</option>
-                <option value="Government">Government &amp; Public</option>
-                <option value="Non-profit">Non-profit</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div class="error-msg" id="register-industry-error">
-              <i class="fa-solid fa-circle-exclamation"></i> Please select your industry
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Company Size</label>
-            <div class="input-wrap">
-              <span class="input-icon"><i class="fa-solid fa-users"></i></span>
-              <select id="register-size" class="form-input">
-                <option value="">Select size</option>
-                <option value="1-10">1 - 10</option>
-                <option value="11-50">11 - 50</option>
-                <option value="51-200">51 - 200</option>
-                <option value="201-500">201 - 500</option>
-                <option value="501-1000">501 - 1000</option>
-                <option value="1000+">1000+</option>
-              </select>
-            </div>
-            <div class="error-msg" id="register-size-error">
-              <i class="fa-solid fa-circle-exclamation"></i> Please select company size
-            </div>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>Business Registration No <span class="form-optional">(optional)</span></label>
-          <div class="input-wrap">
-            <span class="input-icon"><i class="fa-solid fa-id-card"></i></span>
-            <input type="text" id="register-reg-no" class="form-input" placeholder="e.g. 202001000001 (A)">
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Password</label>
-            <div class="input-wrap">
-              <span class="input-icon"><i class="fa-solid fa-lock"></i></span>
-              <input type="password" id="register-password" class="form-input" placeholder="Min 8 characters" autocomplete="new-password" oninput="updatePasswordStrength(this.value)">
-              <button class="pw-toggle" onclick="togglePassword('register-password', this)" type="button" aria-label="Show password">
-                <i class="fa-solid fa-eye"></i>
-              </button>
-            </div>
-            <div class="password-strength">
-              <div class="strength-bars">
-                <div class="strength-bar" id="strength-bar-1"></div>
-                <div class="strength-bar" id="strength-bar-2"></div>
-                <div class="strength-bar" id="strength-bar-3"></div>
-                <div class="strength-bar" id="strength-bar-4"></div>
-              </div>
-              <span class="strength-text" id="strength-text">Enter a password</span>
-            </div>
-            <div class="error-msg" id="register-password-error">
-              <i class="fa-solid fa-circle-exclamation"></i> Min 6 characters required
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Confirm Password</label>
-            <div class="input-wrap">
-              <span class="input-icon"><i class="fa-solid fa-lock"></i></span>
-              <input type="password" id="register-confirm" class="form-input" placeholder="Re-enter your password" autocomplete="new-password">
-              <button class="pw-toggle" onclick="togglePassword('register-confirm', this)" type="button" aria-label="Show password">
-                <i class="fa-solid fa-eye"></i>
-              </button>
-            </div>
-            <div class="error-msg" id="register-confirm-error">
-              <i class="fa-solid fa-circle-exclamation"></i> Passwords do not match
-            </div>
+          <div class="error-msg" id="register-password-error">
+            <i class="fa-solid fa-circle-exclamation"></i> Min 6 characters required
           </div>
         </div>
 

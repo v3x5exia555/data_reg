@@ -507,13 +507,13 @@ def test_retention_rules_select():
     data = response.json()
     print(f"✅ Test 28: Retention rules - Found {len(data)} record(s)")
 
-def test_activity_log_select():
-    """Test 29: Get activity log."""
-    url = f"{BASE_URL}/activity_log?select=*&limit=5"
+def test_system_logs_select():
+    """Test 29: Get system logs."""
+    url = f"{BASE_URL}/system_logs?select=*&limit=5"
     response = requests.get(url, headers=HEADERS)
-    assert response.status_code == 200, "Should get activity log"
+    assert response.status_code == 200, "Should get system logs"
     data = response.json()
-    print(f"✅ Test 29: Activity log - Found {len(data)} record(s)")
+    print(f"✅ Test 29: System logs - Found {len(data)} record(s)")
 
 def test_sessions_select():
     """Test 30: Get sessions."""
