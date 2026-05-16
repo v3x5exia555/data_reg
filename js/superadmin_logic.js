@@ -121,7 +121,33 @@ function renderAccountsList(accounts, seatUsage) {
     }).join('')}`;
 }
 
+// Single audit-write helper. One caller per destructive admin action.
+// Best-effort: a failed audit insert must NOT block the action (a tampering
+// Superadmin can skip the client insert anyway — DB-trigger enforcement is
+// the planned hardening, TODOS #8). RLS aal_insert requires
+// actor_user_id = auth.uid(), so we pass the real session uid.
+async function logAccessAudit(action, opts) {
+  opts = opts || {};
+  try {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('access_audit_log').insert({
+      actor_user_id: user.id,
+      actor_role: state.role || 'user',
+      action: action,
+      target_account_id: opts.targetAccountId || null,
+      target_user_id: opts.targetUserId || null,
+      detail: opts.detail || {}
+    });
+  } catch (e) {
+    console.warn('[audit] failed to write access_audit_log row', action, e);
+  }
+}
+
 function enterViewAs(accountId) {
+  logAccessAudit('viewas.enter', { targetAccountId: accountId });
   state.viewAsAccountId = accountId;
   localStorage.setItem('viewAsAccountId', accountId);
   if (typeof renderViewAsBanner === 'function') renderViewAsBanner();
@@ -129,6 +155,7 @@ function enterViewAs(accountId) {
 }
 
 function exitViewAs() {
+  logAccessAudit('viewas.exit', { targetAccountId: state.viewAsAccountId });
   state.viewAsAccountId = null;
   localStorage.removeItem('viewAsAccountId');
   if (typeof renderViewAsBanner === 'function') renderViewAsBanner();
@@ -158,13 +185,61 @@ async function createAccountFromForm(formEl) {
     showToast(out.error || 'Failed to create account', 'error');
     return;
   }
-  // Show credentials before sign-out so admin can note them
-  alert(`Account created!\n\nEmail: ${out.email}\nPassword: ${out.temp_password}\n\nShare these credentials with the new user.`);
   if (typeof closeModal === 'function') closeModal('modal-new-account');
-  // Sign out superadmin so the new account admin can log in immediately
-  try { await supabase.auth.signOut(); } catch (e) { console.error('Signout error', e); }
-  if (typeof clearSession === 'function') clearSession();
-  if (typeof goTo === 'function') goTo('screen-login');
+  // Copy-once reveal modal instead of a plaintext alert (no console.log of
+  // the credential). Sign-out is deferred until the admin confirms they saved
+  // it, so the modal stays readable while logged in.
+  showAccountCredentials(out.email, out.temp_password, async () => {
+    try { await supabase.auth.signOut(); } catch (e) { console.error('Signout error', e); }
+    if (typeof clearSession === 'function') clearSession();
+    if (typeof goTo === 'function') goTo('screen-login');
+  });
+}
+
+// Renders the credentials modal. Password masked by default; revealed on
+// demand; copied via clipboard; never logged. onContinue fires when the
+// admin confirms they've saved it.
+function showAccountCredentials(email, password, onContinue) {
+  const modal = document.getElementById('modal-account-credentials');
+  const emailEl = document.getElementById('cred-email');
+  const pwEl = document.getElementById('cred-password');
+  const revealBtn = document.getElementById('cred-reveal-btn');
+  const copyBtn = document.getElementById('cred-copy-btn');
+  const doneBtn = document.getElementById('cred-done-btn');
+  if (!modal || !emailEl || !pwEl || !doneBtn) {
+    // Fallback: cannot show modal — still complete the flow safely.
+    if (typeof onContinue === 'function') onContinue();
+    return;
+  }
+  emailEl.value = email;
+  pwEl.value = password;
+  pwEl.type = 'password';
+  if (revealBtn) {
+    revealBtn.textContent = 'Reveal';
+    revealBtn.onclick = () => {
+      const masked = pwEl.type === 'password';
+      pwEl.type = masked ? 'text' : 'password';
+      revealBtn.textContent = masked ? 'Hide' : 'Reveal';
+    };
+  }
+  if (copyBtn) {
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(password);
+        copyBtn.textContent = 'Copied';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      } catch (_) {
+        showToast('Copy failed — reveal and copy manually', 'error');
+      }
+    };
+  }
+  doneBtn.onclick = () => {
+    // Clear the secret out of the DOM before tearing the modal down.
+    pwEl.value = '';
+    if (typeof closeModal === 'function') closeModal('modal-account-credentials');
+    if (typeof onContinue === 'function') onContinue();
+  };
+  if (typeof openModal === 'function') openModal('modal-account-credentials');
 }
 
 function escapeHtml(s) {
@@ -228,6 +303,8 @@ async function updateAccountStatus(accountId, status) {
   const supabase = getSupabaseClient();
   const { error } = await supabase.from('accounts').update({ status }).eq('id', accountId);
   if (error) { showToast('Update failed', 'error'); return; }
+  await logAccessAudit(status === 'suspended' ? 'account.suspend' : 'account.reactivate',
+    { targetAccountId: accountId, detail: { status } });
   await loadAccounts();
 }
 
@@ -240,7 +317,10 @@ function openEditSeatsModal(accountId) {
   supabase.from('accounts').update({ seat_limit: n }).eq('id', accountId)
     .then(({ error }) => {
       if (error) showToast('Update failed', 'error');
-      else loadAccounts();
+      else {
+        logAccessAudit('account.seat_change', { targetAccountId: accountId, detail: { seat_limit: n } });
+        loadAccounts();
+      }
     });
 }
 
@@ -253,6 +333,9 @@ function openDeleteAccountModal(accountId) {
   supabase.from('accounts').delete().eq('id', accountId)
     .then(({ error }) => {
       if (error) showToast('Delete failed', 'error');
-      else loadAccounts();
+      else {
+        logAccessAudit('account.delete', { targetAccountId: accountId, detail: { name } });
+        loadAccounts();
+      }
     });
 }

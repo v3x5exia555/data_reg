@@ -132,6 +132,7 @@ const state = {
   vendors: [],
   trainingRecords: [],
   dpoRecords: [],
+  pendingProfileWrites: [],
   processingActivities: [],
   dpiaItems: [],
   breachLog: [],
@@ -172,6 +173,50 @@ const COMPLIANCE_YES_NO = ['yes', 'no'];
 const PROCESSING_ROLE_OPTIONS = ['Data Controller', 'Data Processor', 'Both'];
 const DATA_SUBJECT_VOLUME_OPTIONS = ['under-20000', '20000+'];
 const SENSITIVE_SUBJECT_VOLUME_OPTIONS = ['under-10000', '10000+'];
+const ISO_COUNTRIES = Array.isArray(window.DATAREX_ISO_COUNTRIES) ? window.DATAREX_ISO_COUNTRIES : [
+  ['MY', 'Malaysia'],
+  ['SG', 'Singapore'],
+  ['US', 'United States'],
+  ['GB', 'United Kingdom']
+];
+const ISO_COUNTRY_CODES = ISO_COUNTRIES.map(([code]) => code);
+const LEGACY_COUNTRY_TO_ISO = {
+  malaysia: 'MY',
+  singapore: 'SG',
+  indonesia: 'ID',
+  thailand: 'TH',
+  philippines: 'PH',
+  vietnam: 'VN',
+  'united states': 'US',
+  usa: 'US',
+  'united kingdom': 'GB',
+  uk: 'GB'
+};
+const PROFILE_IDENTITY_FIELDS = [
+  'company',
+  'industry',
+  'company-size',
+  'country',
+  'official-email',
+  'dpo-record',
+  'ssm-number',
+  'website',
+  'contact-number',
+  'business-address'
+];
+const PROFILE_SCOPE_FIELDS = [
+  'processing-role',
+  'sensitive-data',
+  'cross-border',
+  'vendors',
+  'systematic-monitoring',
+  'data-subject-volume',
+  'sensitive-subject-volume'
+];
+let profileAutosaveTimer = null;
+let savedScopeProfile = null;
+let proposedScopeProfile = null;
+let profileScopeTouched = false;
 
 async function loadAllPages() {
   const mainArea = document.getElementById('main-content-area');
@@ -280,6 +325,7 @@ function loadState() {
       if (parsed.documents) state.documents = parsed.documents;
       if (parsed.currentUserLevel) state.currentUserLevel = parsed.currentUserLevel;
       if (parsed.navPermissions) state.navPermissions = parsed.navPermissions;
+      if (Array.isArray(parsed.pendingProfileWrites)) state.pendingProfileWrites = parsed.pendingProfileWrites;
       // Restore multi-tenant role/account so page-refresh doesn't wipe them
       if (parsed.role)      state.role      = parsed.role;
       if (parsed.accountId) state.accountId = parsed.accountId;
@@ -288,6 +334,15 @@ function loadState() {
     } catch (e) {
       console.error('Failed to parse saved state', e);
     }
+  }
+  loadPendingWrites();
+  if (typeof getLocalDPORecords === 'function') {
+    state.dpoRecords = getLocalDPORecords();
+  } else {
+    try {
+      const localDpo = JSON.parse(localStorage.getItem('dpo_data') || '[]');
+      if (Array.isArray(localDpo)) state.dpoRecords = localDpo;
+    } catch (_) { /* best effort */ }
   }
   // Update UI
   const selectEl = document.getElementById('company-select');
@@ -301,7 +356,7 @@ function saveState() {
   // canonical store for those is `datarex_documents` (see writeLocalDocuments);
   // keeping them out of `dataRexState` prevents quota errors when there are
   // several uploads.
-  const { documents: _docs, ...rest } = state;
+  const { documents: _docs, pendingProfileWrites: _pendingProfileWrites, ...rest } = state;
   localStorage.setItem('dataRexState', JSON.stringify(rest));
   if (state.checklistMeta && Object.keys(state.checklistMeta).length) {
     localStorage.setItem('datarex_checklist_meta', JSON.stringify(state.checklistMeta));
@@ -337,11 +392,39 @@ function getDisplayCompanyName(preferredName = '') {
 }
 
 function isCompanyProfileIncomplete() {
-  const company = String(state.user?.company || state.company || '').trim();
-  const industry = String(state.user?.industry || '').trim();
-  const country = String(state.user?.country || '').trim();
-  const officialEmail = String(state.user?.officialEmail || '').trim();
-  return !company || !industry || !country || !isValidEmail(officialEmail);
+  return !computeProfileCompleteness(state.user, { includeDpo: false }).isComplete;
+}
+
+function normalizeCountryIso(value = '') {
+  const raw = String(value || '').trim();
+  const upper = raw.toUpperCase();
+  if (ISO_COUNTRY_CODES.includes(upper)) return upper;
+  return LEGACY_COUNTRY_TO_ISO[raw.toLowerCase()] || '';
+}
+
+function isValidCountryIso(value = '') {
+  return ISO_COUNTRY_CODES.includes(String(value || '').toUpperCase());
+}
+
+function computeProfileCompleteness(stateUser = state.user, options = {}) {
+  const includeDpo = options.includeDpo !== false;
+  const fields = [
+    ['Company', String(stateUser?.company || state.company || '').trim()],
+    ['Industry', REGULATED_INDUSTRIES.includes(String(stateUser?.industry || '').trim())],
+    ['Country', isValidCountryIso(stateUser?.country || stateUser?.countryIso || '')],
+    ['Official email', isValidEmail(String(stateUser?.officialEmail || '').trim())]
+  ];
+  if (includeDpo) fields.push(['DPO', Boolean(stateUser?.dpoRecordId)]);
+  const missingFields = fields.filter(([, value]) => !value).map(([label]) => label);
+  const requiredCount = fields.length;
+  const completedCount = requiredCount - missingFields.length;
+  return {
+    percent: Math.round((completedCount / requiredCount) * 100),
+    requiredCount,
+    completedCount,
+    missingFields,
+    isComplete: completedCount === requiredCount
+  };
 }
 
 function setInputValue(id, value) {
@@ -358,7 +441,6 @@ function setSelectValue(id, value, fallback = '') {
 
 function renderCompanyProfileFields(prefix) {
   setInputValue(`${prefix}-company`, state.user?.company || state.company || '');
-  setInputValue(`${prefix}-country`, state.user?.country || '');
   setInputValue(`${prefix}-official-email`, state.user?.officialEmail || '');
   setInputValue(`${prefix}-ssm-number`, state.user?.ssmNumber || state.user?.regNo || '');
   setInputValue(`${prefix}-website`, state.user?.website || '');
@@ -383,6 +465,21 @@ function renderCompanyProfileFields(prefix) {
     ].join('');
   }
 
+  const countrySelect = document.getElementById(`${prefix}-country`);
+  if (countrySelect) {
+    const currentCountry = normalizeCountryIso(state.user?.country || state.user?.countryIso || '');
+    countrySelect.innerHTML = [
+      '<option value="">Select country</option>',
+      ...ISO_COUNTRIES.map(([code, name]) => {
+        const selected = code === currentCountry ? ' selected' : '';
+        return `<option value="${code}"${selected}>${escapeHtmlForDashboard(name)}</option>`;
+      })
+    ].join('');
+    countrySelect.value = currentCountry;
+  }
+
+  renderDpoProfilePicker(prefix);
+
   setSelectValue(`${prefix}-processing-role`, state.user?.processingRole || '', '');
   setSelectValue(`${prefix}-sensitive-data`, state.user?.sensitiveData || 'no', 'no');
   setSelectValue(`${prefix}-cross-border`, state.user?.crossBorderTransfer || 'no', 'no');
@@ -390,6 +487,36 @@ function renderCompanyProfileFields(prefix) {
   setSelectValue(`${prefix}-systematic-monitoring`, state.user?.systematicMonitoring || 'no', 'no');
   setSelectValue(`${prefix}-data-subject-volume`, state.user?.dataSubjectVolume || 'under-20000', 'under-20000');
   setSelectValue(`${prefix}-sensitive-subject-volume`, state.user?.sensitiveSubjectVolume || 'under-10000', 'under-10000');
+}
+
+function renderDpoProfilePicker(prefix) {
+  const select = document.getElementById(`${prefix}-dpo-record`);
+  if (!select) return;
+  if ((!state.dpoRecords || state.dpoRecords.length === 0) && typeof getLocalDPORecords === 'function') {
+    state.dpoRecords = getLocalDPORecords();
+  }
+  if (!state.dpoRecords || state.dpoRecords.length === 0) {
+    try {
+      const localDpo = JSON.parse(localStorage.getItem('dpo_data') || '[]');
+      state.dpoRecords = Array.isArray(localDpo) ? localDpo : [];
+    } catch (_) {
+      state.dpoRecords = [];
+    }
+  }
+  const records = Array.isArray(state.dpoRecords) ? state.dpoRecords : [];
+  const current = state.user?.dpoRecordId || '';
+  select.innerHTML = [
+    '<option value="">No DPO selected</option>',
+    ...records.map(record => {
+      const id = String(record.id || '');
+      const label = [record.name || record.full_name || 'DPO', record.email].filter(Boolean).join(' — ');
+      const selected = id && id === current ? ' selected' : '';
+      return `<option value="${escapeHtmlForDashboard(id)}"${selected}>${escapeHtmlForDashboard(label)}</option>`;
+    })
+  ].join('');
+  select.value = records.some(record => String(record.id || '') === current) ? current : '';
+  const emptyLink = document.getElementById(`${prefix}-dpo-empty-link`);
+  if (emptyLink) emptyLink.hidden = records.length > 0;
 }
 
 function readCompanyProfileFields(prefix) {
@@ -406,8 +533,9 @@ function readCompanyProfileFields(prefix) {
     company: val('company'),
     industry: val('industry'),
     companySize: COMPANY_SIZE_OPTIONS.includes(companySizeRaw) ? companySizeRaw : '1-10',
-    country: val('country'),
+    country: normalizeCountryIso(val('country')),
     officialEmail: val('official-email'),
+    dpoRecordId: val('dpo-record'),
     ssmNumber: val('ssm-number'),
     website: val('website'),
     contactNumber: val('contact-number'),
@@ -435,6 +563,10 @@ function validateCompanyProfile(profile, statusId) {
     setCompanyProfileStatus(statusId, 'Country is required.', 'error');
     return false;
   }
+  if (!isValidCountryIso(profile.country)) {
+    setCompanyProfileStatus(statusId, 'Select a valid country.', 'error');
+    return false;
+  }
   if (!isValidEmail(profile.officialEmail)) {
     setCompanyProfileStatus(statusId, 'Official email is required.', 'error');
     return false;
@@ -451,6 +583,8 @@ function applyCompanyProfile(profile) {
     size: profile.companySize,
     country: profile.country,
     officialEmail: profile.officialEmail,
+    dpoRecordId: profile.dpoRecordId || '',
+    dpoAppointed: Boolean(profile.dpoRecordId),
     ssmNumber: profile.ssmNumber,
     regNo: profile.ssmNumber,
     website: profile.website,
@@ -463,7 +597,7 @@ function applyCompanyProfile(profile) {
     systematicMonitoring: profile.systematicMonitoring,
     dataSubjectVolume: profile.dataSubjectVolume,
     sensitiveSubjectVolume: profile.sensitiveSubjectVolume,
-    profileCompleted: true
+    profileCompleted: computeProfileCompleteness(profile, { includeDpo: false }).isComplete
   };
   state.company = profile.company;
 }
@@ -474,6 +608,10 @@ function renderProfilePage() {
 
   const status = document.getElementById('profile-save-status');
   renderCompanyProfileFields('profile');
+  initProfileTabs();
+  initProfileAutosave();
+  initScopePreview();
+  renderProfileCompletenessChip();
   if (status) {
     status.hidden = true;
     status.textContent = '';
@@ -493,6 +631,171 @@ function renderOnboardingProfilePage() {
     status.className = 'profile-save-status';
   }
 }
+
+function renderProfileCompletenessChip() {
+  const chip = document.getElementById('profile-completeness-chip');
+  if (!chip) return;
+  const completeness = computeProfileCompleteness();
+  chip.textContent = `${completeness.percent}% complete`;
+  chip.title = completeness.missingFields.length
+    ? `Missing: ${completeness.missingFields.join(', ')}`
+    : 'Profile complete';
+  chip.classList.toggle('is-complete', completeness.isComplete);
+}
+
+function initProfileTabs() {
+  const preferred = computeProfileCompleteness(state.user, { includeDpo: false }).isComplete
+    ? (state.user?.profileLastTab || 'identity')
+    : 'identity';
+  setProfileTab(preferred, { persist: false });
+}
+
+function setProfileTab(tab, options = {}) {
+  const active = tab === 'scope' ? 'scope' : 'identity';
+  const identityTab = document.getElementById('profile-tab-identity');
+  const scopeTab = document.getElementById('profile-tab-scope');
+  const identityPanel = document.getElementById('profile-identity-panel');
+  const scopePanel = document.getElementById('profile-scope-panel');
+  identityTab?.classList.toggle('active', active === 'identity');
+  scopeTab?.classList.toggle('active', active === 'scope');
+  if (identityPanel) identityPanel.hidden = active !== 'identity';
+  if (scopePanel) scopePanel.hidden = active !== 'scope';
+  if (options.persist !== false) {
+    state.user.profileLastTab = active;
+    persistCurrentUserProfile();
+    saveState();
+  }
+}
+
+function switchProfileTab(tab) {
+  if (tab !== 'scope' && isProfileScopeDirty()) {
+    const discard = confirm('Discard unsaved scope changes?');
+    if (!discard) return;
+    discardProfileScope();
+  }
+  setProfileTab(tab);
+}
+window.switchProfileTab = switchProfileTab;
+
+function initProfileAutosave() {
+  PROFILE_IDENTITY_FIELDS.forEach(field => {
+    const el = document.getElementById(`profile-${field}`);
+    if (!el || el.dataset.profileAutosaveBound === 'true') return;
+    el.dataset.profileAutosaveBound = 'true';
+    el.addEventListener('blur', () => {
+      clearTimeout(profileAutosaveTimer);
+      profileAutosaveTimer = setTimeout(() => saveProfileIdentityAutosave(), 500);
+    });
+  });
+}
+
+function saveProfileIdentityAutosave() {
+  const profile = readCompanyProfileFields('profile');
+  if (!validateCompanyProfile(profile, 'profile-save-status')) return false;
+  commitProfileSnapshot(profile, 'identity-autosave');
+  setProfileSaveStatus('Profile autosaved.', 'success');
+  return true;
+}
+
+function initScopePreview() {
+  savedScopeProfile = getCompanyComplianceProfile();
+  proposedScopeProfile = { ...savedScopeProfile };
+  profileScopeTouched = false;
+  PROFILE_SCOPE_FIELDS.forEach(field => {
+    const el = document.getElementById(`profile-${field}`);
+    if (!el || el.dataset.profileScopeBound === 'true') return;
+    el.dataset.profileScopeBound = 'true';
+    el.addEventListener('change', () => {
+      profileScopeTouched = true;
+      proposedScopeProfile = {
+        ...savedScopeProfile,
+        ...pickScopeFields(readCompanyProfileFields('profile'))
+      };
+      renderScopeImpactPreview();
+    });
+  });
+  renderScopeImpactPreview();
+}
+
+function pickScopeFields(profile) {
+  return {
+    country: profile.country,
+    industry: profile.industry,
+    processingRole: profile.processingRole,
+    sensitiveData: profile.sensitiveData,
+    crossBorderTransfer: profile.crossBorderTransfer,
+    usesVendors: profile.usesVendors,
+    systematicMonitoring: profile.systematicMonitoring,
+    dataSubjectVolume: profile.dataSubjectVolume,
+    sensitiveSubjectVolume: profile.sensitiveSubjectVolume
+  };
+}
+
+function isProfileScopeDirty() {
+  if (!savedScopeProfile || !proposedScopeProfile) return false;
+  return JSON.stringify(savedScopeProfile) !== JSON.stringify(proposedScopeProfile);
+}
+
+function getChecklistItemLabel(itemId) {
+  for (const section of CHECKLIST) {
+    const item = section.items.find(candidate => candidate.id === itemId);
+    if (item) return item.q || itemId;
+  }
+  return itemId;
+}
+
+function diffItemRules(oldRules = {}, newRules = {}) {
+  const oldIds = new Set(Object.keys(oldRules));
+  const newIds = new Set(Object.keys(newRules));
+  const addedItems = [...newIds].filter(id => !oldIds.has(id));
+  const removedItems = [...oldIds].filter(id => !newIds.has(id));
+  const evidenceAdded = Object.entries(newRules).filter(([id, rule]) => rule.evidenceRequired && !oldRules[id]?.evidenceRequired).length;
+  const evidenceRemoved = Object.entries(oldRules).filter(([id, rule]) => rule.evidenceRequired && !newRules[id]?.evidenceRequired).length;
+  const criticalAdded = Object.entries(newRules).filter(([id, rule]) => rule.critical && !oldRules[id]?.critical).length;
+  return { addedItems, removedItems, evidenceAdded, evidenceRemoved, criticalAdded };
+}
+
+function renderScopeImpactPreview() {
+  const preview = document.getElementById('profile-scope-preview');
+  const saveBtn = document.getElementById('profile-save-scope-btn');
+  if (!preview) return;
+  const dirty = isProfileScopeDirty();
+  if (saveBtn) saveBtn.disabled = !dirty;
+  if (!profileScopeTouched) {
+    preview.textContent = 'Toggle a scope item to see how your obligations change.';
+    return;
+  }
+  if (!dirty) {
+    preview.textContent = 'No changes from your saved scope.';
+    return;
+  }
+  try {
+    const oldEval = evaluateComplianceRules(savedScopeProfile);
+    const newEval = evaluateComplianceRules(proposedScopeProfile);
+    const delta = diffItemRules(oldEval.itemRules, newEval.itemRules);
+    const lines = [];
+    if (delta.addedItems.length) lines.push(`+${delta.addedItems.length} new obligations: ${delta.addedItems.map(getChecklistItemLabel).join(', ')}`);
+    if (delta.removedItems.length) lines.push(`-${delta.removedItems.length} obligations removed: ${delta.removedItems.map(getChecklistItemLabel).join(', ')}`);
+    if (delta.evidenceAdded) lines.push(`+${delta.evidenceAdded} evidence documents now required`);
+    if (delta.evidenceRemoved) lines.push(`-${delta.evidenceRemoved} evidence requirements removed`);
+    if (delta.criticalAdded) lines.push(`+${delta.criticalAdded} critical obligations added`);
+    preview.innerHTML = lines.length
+      ? `<ul>${lines.map(line => `<li>${escapeHtmlForDashboard(line)}</li>`).join('')}</ul>`
+      : 'No changes from your saved scope.';
+  } catch (err) {
+    console.error('Profile scope preview failed', err);
+    preview.textContent = 'Preview unavailable; you can still save.';
+  }
+}
+
+function discardProfileScope() {
+  renderCompanyProfileFields('profile');
+  savedScopeProfile = getCompanyComplianceProfile();
+  proposedScopeProfile = { ...savedScopeProfile };
+  profileScopeTouched = false;
+  renderScopeImpactPreview();
+}
+window.discardProfileScope = discardProfileScope;
 
 function setCompanyProfileStatus(statusId, message, type = 'error') {
   const status = document.getElementById(statusId);
@@ -520,6 +823,8 @@ function persistCurrentUserProfile() {
       match.companySize = state.user.companySize || '1-10';
       match.country = state.user.country || '';
       match.officialEmail = state.user.officialEmail || '';
+      match.dpoRecordId = state.user.dpoRecordId || '';
+      match.dpoAppointed = Boolean(state.user.dpoRecordId);
       match.ssmNumber = state.user.ssmNumber || '';
       match.regNo = state.user.regNo || state.user.ssmNumber || match.regNo || '';
       match.website = state.user.website || '';
@@ -532,7 +837,8 @@ function persistCurrentUserProfile() {
       match.systematicMonitoring = state.user.systematicMonitoring || 'no';
       match.dataSubjectVolume = state.user.dataSubjectVolume || 'under-20000';
       match.sensitiveSubjectVolume = state.user.sensitiveSubjectVolume || 'under-10000';
-      match.profileCompleted = !isCompanyProfileIncomplete();
+      match.profileCompleted = computeProfileCompleteness(state.user, { includeDpo: false }).isComplete;
+      match.profileLastTab = state.user.profileLastTab || 'identity';
       localStorage.setItem('datarex_users', JSON.stringify(users));
     }
   } catch (err) {
@@ -540,23 +846,43 @@ function persistCurrentUserProfile() {
   }
 }
 
-function saveProfileCompanyInfo() {
-  const profile = readCompanyProfileFields('profile');
-  if (!validateCompanyProfile(profile, 'profile-save-status')) return;
-
+function commitProfileSnapshot(profile, source = 'identity-autosave') {
   applyCompanyProfile(profile);
   saveState();
   persistCurrentUserProfile();
   updateActiveCompanyLabel(profile.company);
   const sidebarOrg = document.getElementById('sidebar-org');
   if (sidebarOrg) sidebarOrg.textContent = profile.company;
+  renderProfileCompletenessChip();
   renderDashboardOverview({
     recordsCount: Number(document.getElementById('dash-records-count')?.textContent || 0),
     dpoName: getDashboardDpoName()
   });
+  upsertProfile(profile, { source, changedFields: Object.keys(profile) });
+}
+
+function saveProfileCompanyInfo() {
+  const profile = readCompanyProfileFields('profile');
+  if (!validateCompanyProfile(profile, 'profile-save-status')) return;
+
+  commitProfileSnapshot(profile, 'identity-autosave');
   setProfileSaveStatus('Profile saved.', 'success');
   showToast('Profile saved.', 'success');
 }
+
+function saveProfileScope() {
+  const profile = readCompanyProfileFields('profile');
+  if (!validateCompanyProfile(profile, 'profile-save-status')) return false;
+  commitProfileSnapshot(profile, 'scope-save');
+  savedScopeProfile = pickScopeFields(profile);
+  proposedScopeProfile = { ...savedScopeProfile };
+  profileScopeTouched = true;
+  renderScopeImpactPreview();
+  setProfileSaveStatus('Scope saved.', 'success');
+  showToast('Scope saved.', 'success');
+  return true;
+}
+window.saveProfileScope = saveProfileScope;
 
 function saveOnboardingCompanyInfo() {
   const profile = readCompanyProfileFields('onboard-profile');
@@ -566,9 +892,130 @@ function saveOnboardingCompanyInfo() {
   state.isLoggedIn = true;
   saveState();
   persistCurrentUserProfile();
+  upsertProfile(profile, { source: 'onboarding', changedFields: Object.keys(profile) });
   setCompanyProfileStatus('onboard-save-status', 'Profile saved.', 'success');
   return true;
 }
+
+function getProfileUpsertPayload(snapshot = readCompanyProfileFields('profile'), changeContext = {}) {
+  const userId = state.user?.id;
+  const checklistState = {
+    company: snapshot.company,
+    industry: snapshot.industry,
+    companySize: snapshot.companySize,
+    country: snapshot.country,
+    officialEmail: snapshot.officialEmail,
+    ssmNumber: snapshot.ssmNumber,
+    website: snapshot.website,
+    contactNumber: snapshot.contactNumber,
+    businessAddress: snapshot.businessAddress,
+    processingRole: snapshot.processingRole,
+    sensitiveData: snapshot.sensitiveData,
+    crossBorderTransfer: snapshot.crossBorderTransfer,
+    usesVendors: snapshot.usesVendors,
+    systematicMonitoring: snapshot.systematicMonitoring,
+    dataSubjectVolume: snapshot.dataSubjectVolume,
+    sensitiveSubjectVolume: snapshot.sensitiveSubjectVolume,
+    dpoRecordId: snapshot.dpoRecordId || ''
+  };
+  return {
+    id: userId,
+    account_id: getEffectiveAccountId(),
+    country_iso: snapshot.country || null,
+    dpo_record_id: snapshot.dpoRecordId || null,
+    company_name: snapshot.company || null,
+    business_type: snapshot.industry || null,
+    checklist_state: checklistState,
+    updated_at: new Date().toISOString(),
+    _context: changeContext
+  };
+}
+
+function persistPendingWrites() {
+  try {
+    localStorage.setItem('dataRexPendingProfileWrites', JSON.stringify(state.pendingProfileWrites || []));
+  } catch (err) {
+    console.warn('Failed to persist pending profile writes', err);
+  }
+}
+
+function loadPendingWrites() {
+  try {
+    const queue = JSON.parse(localStorage.getItem('dataRexPendingProfileWrites') || '[]');
+    state.pendingProfileWrites = Array.isArray(queue) ? queue : [];
+  } catch (_) {
+    state.pendingProfileWrites = [];
+  }
+}
+
+function enqueuePendingWrite(payload) {
+  state.pendingProfileWrites = Array.isArray(state.pendingProfileWrites) ? state.pendingProfileWrites : [];
+  if (state.pendingProfileWrites.length >= 50) state.pendingProfileWrites.shift();
+  state.pendingProfileWrites.push({
+    id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `profile-write-${Date.now()}`,
+    payload,
+    attempts: 0,
+    lastError: '',
+    queuedAt: new Date().toISOString()
+  });
+  persistPendingWrites();
+}
+
+function classifyProfileSyncError(error = {}) {
+  const terminalCodes = new Set(['42501', '42P01', '23505', '23503', '23514', '42703']);
+  return terminalCodes.has(String(error.code || '')) ? 'terminal' : 'recoverable';
+}
+
+async function writeProfilePayloadToSupabase(payload) {
+  const supabase = getSupabaseClient();
+  if (!supabase || !isSupabaseConfigured() || !payload?.id) return { skipped: true };
+  const { _context, ...row } = payload;
+  const { error } = await supabase.from('user_profiles').upsert(row, { onConflict: 'id' });
+  if (error) throw error;
+  return { skipped: false };
+}
+
+async function drainPendingProfileWrites() {
+  const supabase = getSupabaseClient();
+  if (!supabase || !isSupabaseConfigured()) return;
+  const queue = Array.isArray(state.pendingProfileWrites) ? [...state.pendingProfileWrites] : [];
+  for (const item of queue) {
+    try {
+      const result = await writeProfilePayloadToSupabase(item.payload);
+      if (result.skipped) return;
+      state.pendingProfileWrites = state.pendingProfileWrites.filter(candidate => candidate.id !== item.id);
+      persistPendingWrites();
+    } catch (err) {
+      if (classifyProfileSyncError(err) === 'terminal') {
+        console.error('Profile sync terminal failure', err);
+        state.pendingProfileWrites = state.pendingProfileWrites.filter(candidate => candidate.id !== item.id);
+        persistPendingWrites();
+        showToast(`Profile sync failed — ${err.message || 'Contact support.'}`, 'error');
+        continue;
+      }
+      item.attempts = (item.attempts || 0) + 1;
+      item.lastError = err.message || String(err);
+      state.pendingProfileWrites = state.pendingProfileWrites.map(candidate => candidate.id === item.id ? item : candidate);
+      persistPendingWrites();
+      if (item.attempts >= 3) {
+        showToast(`Profile saved locally but couldn't sync to server. Will retry. (${item.attempts} attempts)`, 'warning');
+      }
+    }
+  }
+}
+window.drainPendingProfileWrites = drainPendingProfileWrites;
+
+function upsertProfile(snapshot, changeContext = {}) {
+  const payload = getProfileUpsertPayload(snapshot, changeContext);
+  if (!payload.id) return;
+  enqueuePendingWrite(payload);
+  drainPendingProfileWrites();
+}
+
+window.addEventListener('online', () => drainPendingProfileWrites());
+setInterval(() => {
+  if (state.pendingProfileWrites?.length) drainPendingProfileWrites();
+}, 60000);
 
 function getRoleDisplayName(role = state.role || state.currentUserLevel) {
   const labels = {
@@ -998,7 +1445,7 @@ const COMPLIANCE_RULE_DEFINITIONS = [
   {
     id: 'malaysia-pdpa',
     label: 'Malaysia PDPA',
-    applies: profile => String(profile.country || '').toLowerCase() === 'malaysia',
+    applies: profile => normalizeCountryIso(profile.country || '') === 'MY',
     itemIds: ['profile-complete', 'privacy-notice-created', 'privacy-notice-published', 'data-register-created', 'retention-schedule', 'access-controls'],
     criticalIds: ['privacy-notice-created', 'data-register-created'],
     evidenceRequiredIds: ['privacy-notice-created', 'data-register-created', 'retention-schedule', 'access-controls']
@@ -1046,7 +1493,7 @@ const COMPLIANCE_RULE_DEFINITIONS = [
   {
     id: 'breach-readiness',
     label: 'Breach notification readiness',
-    applies: profile => String(profile.country || '').toLowerCase() === 'malaysia',
+    applies: profile => normalizeCountryIso(profile.country || '') === 'MY',
     itemIds: ['breach-response-plan', 'breach-notification-template'],
     criticalIds: ['breach-response-plan'],
     evidenceRequiredIds: ['breach-response-plan', 'breach-notification-template']
@@ -1305,12 +1752,20 @@ function closeSidebar() {
 }
 
 // Pages that are always restricted from certain roles, regardless of nav config.
-const ROLE_HARD_BLOCKS = {
-  Accountadmin:  new Set(['companies', 'accounts', 'people']),
-  user:          new Set(['access', 'companies', 'accounts', 'people']),
-  security_user: new Set(['companies', 'accounts', 'people']),
-  useradmin:     new Set(['companies', 'accounts', 'people']),
-};
+// Derived from the single source of truth in js/role_capability.js (loaded
+// before app.js). The hardcoded fallback is kept only for the case where
+// role_capability.js failed to load — it must mirror ROLE_CAPABILITY exactly.
+const ROLE_HARD_BLOCKS = (typeof RoleCapability !== 'undefined'
+  && RoleCapability.computeRoleHardBlocks)
+  ? RoleCapability.computeRoleHardBlocks()
+  : {
+      Accountadmin:  new Set(['companies', 'accounts', 'people']),
+      user:          new Set(['access', 'companies', 'accounts', 'people']),
+      security_user: new Set(['companies', 'accounts', 'people']),
+      useradmin:     new Set(['companies', 'accounts', 'people']),
+    };
+// Exposed for the access-control test matrix (mirrors window.showPage etc).
+window.ROLE_HARD_BLOCKS = ROLE_HARD_BLOCKS;
 
 function showPage(pageId, navEl, noPush) {
   const pageAliases = { dpia: 'dpiapage', 'dpia-workflow': 'deica', deica_workflow: 'deica' };
@@ -1643,16 +2098,27 @@ async function doLogin() {
         industry: data.industry || '',
         companySize: data.companySize || data.size || '1-10',
         size: data.companySize || data.size || '1-10',
-        country: data.country || '',
+        country: normalizeCountryIso(data.country || data.country_iso || ''),
         officialEmail: data.officialEmail || '',
+        dpoRecordId: data.dpoRecordId || '',
+        dpoAppointed: Boolean(data.dpoRecordId),
         ssmNumber: data.ssmNumber || data.regNo || '',
         website: data.website || '',
         contactNumber: data.contactNumber || '',
         businessAddress: data.businessAddress || '',
+        processingRole: data.processingRole || '',
+        sensitiveData: data.sensitiveData || 'no',
+        crossBorderTransfer: data.crossBorderTransfer || 'no',
+        usesVendors: data.usesVendors || 'no',
+        systematicMonitoring: data.systematicMonitoring || 'no',
+        dataSubjectVolume: data.dataSubjectVolume || 'under-20000',
+        sensitiveSubjectVolume: data.sensitiveSubjectVolume || 'under-10000',
+        profileLastTab: data.profileLastTab || 'identity',
         profileCompleted: Boolean(data.profileCompleted),
         regNo: data.regNo || '',
         id: data.id || 'user-' + Date.now()
       };
+      if (typeof getLocalDPORecords === 'function') state.dpoRecords = getLocalDPORecords();
       saveState();
     }
 
@@ -1750,9 +2216,6 @@ async function doLogin() {
    ─────────────────────────────────────────────── */
 async function doLogout() {
   const supabase = getSupabaseClient();
-  if (supabase && isSupabaseConfigured()) {
-    try { await supabase.auth.signOut(); } catch (e) { console.error('Logout error:', e); }
-  }
   state.role = null;
   state.accountId = null;
   state.viewAsAccountId = null;
@@ -1760,7 +2223,11 @@ async function doLogout() {
   clearSession();
   goTo('screen-login');
   showSuccess('Logged out successfully');
+  if (supabase && isSupabaseConfigured()) {
+    supabase.auth.signOut().catch(e => console.error('Logout error:', e));
+  }
 }
+window.doLogout = doLogout;
 
 /* ───────────────────────────────────────────────
    ONBOARDING
@@ -1924,11 +2391,21 @@ async function doRegister() {
     companySize: size,
     country: '',
     officialEmail: '',
+    dpoRecordId: '',
+    dpoAppointed: false,
     ssmNumber: '',
     regNo,
     website: '',
     contactNumber: '',
     businessAddress: '',
+    processingRole: '',
+    sensitiveData: 'no',
+    crossBorderTransfer: 'no',
+    usesVendors: 'no',
+    systematicMonitoring: 'no',
+    dataSubjectVolume: 'under-20000',
+    sensitiveSubjectVolume: 'under-10000',
+    profileLastTab: 'identity',
     profileCompleted: false
   });
   localStorage.setItem('datarex_users', JSON.stringify(users));
@@ -1943,11 +2420,21 @@ async function doRegister() {
     size: size,
     country: '',
     officialEmail: '',
+    dpoRecordId: '',
+    dpoAppointed: false,
     ssmNumber: '',
     regNo: regNo,
     website: '',
     contactNumber: '',
     businessAddress: '',
+    processingRole: '',
+    sensitiveData: 'no',
+    crossBorderTransfer: 'no',
+    usesVendors: 'no',
+    systematicMonitoring: 'no',
+    dataSubjectVolume: 'under-20000',
+    sensitiveSubjectVolume: 'under-10000',
+    profileLastTab: 'identity',
     profileCompleted: false,
     id: newId
   };
@@ -2098,7 +2585,12 @@ async function loadDashboardFromSupabase() {
 }
 
 function getDashboardDpoName() {
+  const selectedDpo = state.user?.dpoRecordId
+    ? (state.dpoRecords || []).find(record => String(record.id || '') === String(state.user.dpoRecordId))
+    : null;
   const candidates = [
+    selectedDpo?.name,
+    selectedDpo?.dpo_name,
     state.dpoRecords?.[0]?.name,
     state.dpoRecords?.[0]?.dpo_name,
     state.dpo?.name,
@@ -2149,14 +2641,26 @@ function renderDashboardOverview({ recordsCount, dpoName }) {
 
   const reminderContainer = document.getElementById('onboarding-reminder-container');
   if (reminderContainer) {
-    if (!state.user?.profileCompleted) {
+    const identityComplete = computeProfileCompleteness(state.user, { includeDpo: false }).isComplete;
+    const dpoAppointed = Boolean(state.user?.dpoRecordId || state.user?.dpoAppointed);
+    if (!identityComplete) {
       reminderContainer.innerHTML = `
-        <div style="background: white; border: 1px solid #e5e7eb; border-left: 4px solid #3b82f6; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
+        <div id="dashboard-profile-prompt" style="background: white; border: 1px solid #e5e7eb; border-left: 4px solid #3b82f6; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
           <div style="flex: 1;">
             <h3 style="margin: 0 0 5px 0; color: #111827; font-size: 1.1em;">Finish your setup</h3>
             <p style="margin: 0; color: #6b7280; font-size: 0.95em;">Complete your company profile to get tailored PDPA guidance for your regulated sector.</p>
           </div>
           <button class="btn btn-primary" onclick="showPage('profile')" style="margin-left: 20px; white-space: nowrap;">Complete Profile</button>
+        </div>
+      `;
+    } else if (!dpoAppointed) {
+      reminderContainer.innerHTML = `
+        <div id="dashboard-dpo-prompt" style="background: white; border: 1px solid #e5e7eb; border-left: 4px solid #f59e0b; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="flex: 1;">
+            <h3 style="margin: 0 0 5px 0; color: #111827; font-size: 1.1em;">Appoint a DPO</h3>
+            <p style="margin: 0; color: #6b7280; font-size: 0.95em;">Link an appointed DPO so governance ownership is clear.</p>
+          </div>
+          <button class="btn btn-primary" onclick="showPage('dpo', document.getElementById('nav-dpo'))" style="margin-left: 20px; white-space: nowrap;">Appoint a DPO</button>
         </div>
       `;
     } else {

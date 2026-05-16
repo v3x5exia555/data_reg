@@ -107,7 +107,11 @@ serve(async (req) => {
         return json({ error: 'Not authorized for this account' }, 403);
       }
     }
-    return await manageUser(adminClient, body);
+    return await manageUser(adminClient, body, {
+      id: caller.id,
+      role: callerProfile.role,
+      account_id: callerProfile.account_id ?? null,
+    });
   }
   return json({ error: 'Unknown mode' }, 400);
 });
@@ -221,7 +225,11 @@ async function createUser(admin: ReturnType<typeof createClient>, body: UserMode
   }, 200);
 }
 
-async function manageUser(admin: ReturnType<typeof createClient>, body: ManageUserBody) {
+async function manageUser(
+  admin: ReturnType<typeof createClient>,
+  body: ManageUserBody,
+  actor: { id: string; role: string; account_id: string | null },
+) {
   const { user_id, action, new_password } = body;
 
   if (action === 'reset-password') {
@@ -276,6 +284,23 @@ async function manageUser(admin: ReturnType<typeof createClient>, body: ManageUs
     if (Object.keys(updates).length === 0) return json({ error: 'Nothing to update' }, 400);
     const { error } = await admin.from('user_profiles').update(updates).eq('id', user_id);
     if (error) return json({ error: error.message }, 500);
+    // Authoritative audit row for role changes — written server-side (service
+    // role) so a tampering client cannot skip it. Best-effort: a failed audit
+    // insert must not fail the user-facing update.
+    if (body.new_role) {
+      try {
+        await admin.from('access_audit_log').insert({
+          actor_user_id: actor.id,
+          actor_role: actor.role,
+          action: 'user.role_change',
+          target_account_id: actor.account_id,
+          target_user_id: user_id,
+          detail: { new_role: body.new_role },
+        });
+      } catch (e) {
+        console.warn('[audit] failed to write user.role_change row', e);
+      }
+    }
     return json({ ok: true }, 200);
   }
 

@@ -71,3 +71,31 @@
     </form>
   </div>
 </div>
+
+<!-- Copy-once credentials reveal (replaces the plaintext alert()).
+     Password is masked by default, revealed on demand, never console-logged. -->
+<div class="modal accounts-modal" id="modal-account-credentials" aria-hidden="true">
+  <div class="modal-card accounts-modal-card">
+    <header class="accounts-modal-head">
+      <div>
+        <h2>Account created</h2>
+        <p>Share these credentials with the new account admin. They are shown once.</p>
+      </div>
+    </header>
+    <div class="accounts-form">
+      <label>Email
+        <input id="cred-email" type="text" readonly />
+      </label>
+      <label>Temporary password
+        <span style="display:flex;gap:8px;align-items:center;">
+          <input id="cred-password" type="password" readonly value="" style="flex:1;" />
+          <button type="button" class="btn-secondary" id="cred-reveal-btn">Reveal</button>
+          <button type="button" class="btn-secondary" id="cred-copy-btn">Copy</button>
+        </span>
+      </label>
+      <footer class="accounts-form-footer">
+        <button type="button" class="btn-primary" id="cred-done-btn">I've saved it — continue</button>
+      </footer>
+    </div>
+  </div>
+</div>
